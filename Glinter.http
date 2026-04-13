@@ -1,0 +1,6 @@
+@Glinter_HostAddress = http://localhost:5160
+
+GET {{Glinter_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
