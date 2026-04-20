@@ -8,6 +8,33 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.4" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.6" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.6">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.6">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Modules\Stays\Application\Abstractions\" />
+    <Folder Include="Modules\Stays\Application\Bookings\Commands\" />
+    <Folder Include="Modules\Stays\Application\Bookings\Dtos\" />
+    <Folder Include="Modules\Stays\Application\Bookings\Queries\" />
+    <Folder Include="Modules\Stays\Application\Listings\Commands\" />
+    <Folder Include="Modules\Stays\Application\Listings\Dtos\" />
+    <Folder Include="Modules\Stays\Application\Listings\Queries\" />
+    <Folder Include="Modules\Stays\Application\Reviews\Commands\" />
+    <Folder Include="Modules\Stays\Application\Reviews\Dtos\" />
+    <Folder Include="Modules\Stays\Application\Reviews\Queries\" />
+    <Folder Include="Modules\Stays\Domain\Enums\" />
+    <Folder Include="Modules\Stays\Domain\ValueObjects\" />
+    <Folder Include="Modules\Stays\Infrastructure\DependencyInjection\" />
+    <Folder Include="Modules\Stays\Infrastructure\Persistence\Repositories\" />
   </ItemGroup>
 
 </Project>
