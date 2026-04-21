@@ -1,58 +1,32 @@
-using Glinter.Modules.Stays.Infrastructure.Persistence;
-using Microsoft.EntityFrameworkCore;
+using Glinter.Modules.IdentityAccess.Domain.Entities;
+using Glinter.Modules.IdentityAccess.Infrastructure.DependencyInjection;
+using Glinter.Modules.IdentityAccess.Infrastructure.Identity;
+using Microsoft.AspNetCore.Identity;
 
-namespace Glinter;
+var builder = WebApplication.CreateBuilder(args);
 
-public class Program
+builder.Services.AddIdentityAccessModule(builder.Configuration);
+
+builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+var app = builder.Build();
+
+app.UseSwagger();
+app.UseSwaggerUI();
+
+app.UseAuthentication();
+app.UseAuthorization();
+
+app.MapControllers();
+
+using (var scope = app.Services.CreateScope())
 {
-    public static void Main(string[] args)
-    {
-        var builder = WebApplication.CreateBuilder(args);
+    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<ApplicationRole>>();
+    var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
 
-        // Add services to the container.
-        builder.Services.AddAuthorization();
-        builder.Services.AddControllers();
-
-        builder.Services.AddDbContext<GlinterDbContext>(options =>
-            options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
-
-        // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-        builder.Services.AddOpenApi();
-
-        var app = builder.Build();
-
-        // Configure the HTTP request pipeline.
-        if (app.Environment.IsDevelopment())
-        {
-            app.MapOpenApi();
-        }
-
-        app.UseHttpsRedirection();
-
-        app.UseAuthorization();
-
-        app.MapControllers();
-
-        var summaries = new[]
-        {
-            "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-        };
-
-        app.MapGet("/weatherforecast", (HttpContext httpContext) =>
-            {
-                var forecast = Enumerable.Range(1, 5).Select(index =>
-                        new WeatherForecast
-                        {
-                            Date = DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-                            TemperatureC = Random.Shared.Next(-20, 55),
-                            Summary = summaries[Random.Shared.Next(summaries.Length)]
-                        })
-                    .ToArray();
-
-                return forecast;
-            })
-            .WithName("GetWeatherForecast");
-
-        app.Run();
-    }
+    await IdentitySeeder.SeedAsync(roleManager, userManager);
 }
+
+app.Run();
