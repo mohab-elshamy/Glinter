@@ -1,17 +1,27 @@
+using System.Reflection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
+using Microsoft.Extensions.Configuration;
 
 namespace Glinter.Modules.IdentityAccess.Infrastructure.Persistence;
 
-public class DesignTimeIdentityAccessDbContextFactory 
+public class DesignTimeIdentityAccessDbContextFactory
     : IDesignTimeDbContextFactory<IdentityAccessDbContext>
 {
     public IdentityAccessDbContext CreateDbContext(string[] args)
     {
-        var optionsBuilder = new DbContextOptionsBuilder<IdentityAccessDbContext>();
+        var configuration = new ConfigurationBuilder()
+            .SetBasePath(Directory.GetCurrentDirectory())
+            .AddJsonFile("appsettings.json", optional: true)
+            .AddJsonFile("appsettings.Development.json", optional: true)
+            .AddUserSecrets(Assembly.GetExecutingAssembly(), optional: true)
+            .AddEnvironmentVariables()
+            .Build();
 
-        var connectionString =
-            "Host=localhost;Port=5432;Database=glinter_db;Username=postgres;Password=3oza@2004";
+        var connectionString = configuration.GetConnectionString("DefaultConnection")
+                               ?? throw new InvalidOperationException("DefaultConnection not found.");
+
+        var optionsBuilder = new DbContextOptionsBuilder<IdentityAccessDbContext>();
 
         optionsBuilder.UseNpgsql(connectionString);
 

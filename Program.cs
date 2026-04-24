@@ -26,7 +26,14 @@ using (var scope = app.Services.CreateScope())
     var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<ApplicationRole>>();
     var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
 
-    await IdentitySeeder.SeedAsync(roleManager, userManager);
+    var adminSeedOptions = new AdminSeedOptions
+    {
+        Email = builder.Configuration["AdminSeed:Email"] ?? string.Empty,
+        Password = builder.Configuration["AdminSeed:Password"] ?? string.Empty,
+        FullName = builder.Configuration["AdminSeed:FullName"] ?? "System Admin"
+    };
+
+    await IdentitySeeder.SeedAsync(roleManager, userManager, adminSeedOptions);
 }
 
 app.Run();
