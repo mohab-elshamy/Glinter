@@ -21,20 +21,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Modules\Stays\Application\Abstractions\" />
-    <Folder Include="Modules\Stays\Application\Bookings\Commands\" />
-    <Folder Include="Modules\Stays\Application\Bookings\Dtos\" />
-    <Folder Include="Modules\Stays\Application\Bookings\Queries\" />
-    <Folder Include="Modules\Stays\Application\Listings\Commands\" />
-    <Folder Include="Modules\Stays\Application\Listings\Dtos\" />
-    <Folder Include="Modules\Stays\Application\Listings\Queries\" />
-    <Folder Include="Modules\Stays\Application\Reviews\Commands\" />
-    <Folder Include="Modules\Stays\Application\Reviews\Dtos\" />
-    <Folder Include="Modules\Stays\Application\Reviews\Queries\" />
     <Folder Include="Modules\Stays\Domain\Enums\" />
     <Folder Include="Modules\Stays\Domain\ValueObjects\" />
-    <Folder Include="Modules\Stays\Infrastructure\DependencyInjection\" />
-    <Folder Include="Modules\Stays\Infrastructure\Persistence\Repositories\" />
   </ItemGroup>
 
 </Project>

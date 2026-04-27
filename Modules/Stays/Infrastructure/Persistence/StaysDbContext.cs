@@ -3,9 +3,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Glinter.Modules.Stays.Infrastructure.Persistence;
 
-public class GlinterDbContext : DbContext
+public class StaysDbContext : DbContext
 {
-    public GlinterDbContext(DbContextOptions<GlinterDbContext> options) : base(options)
+    public StaysDbContext(DbContextOptions<StaysDbContext> options) : base(options)
     {
     }
 
@@ -16,7 +16,7 @@ public class GlinterDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.ApplyConfigurationsFromAssembly(typeof(GlinterDbContext).Assembly);
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(StaysDbContext).Assembly);
         base.OnModelCreating(modelBuilder);
     }
 }
