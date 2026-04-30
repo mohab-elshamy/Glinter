@@ -11,4 +11,6 @@ public class Interest
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 
     public ICollection<BuddyInterest> BuddyInterests { get; set; } = new List<BuddyInterest>();
+
+    public ICollection<TravelerInterest> TravelerInterests { get; set; } = new List<TravelerInterest>();
 }

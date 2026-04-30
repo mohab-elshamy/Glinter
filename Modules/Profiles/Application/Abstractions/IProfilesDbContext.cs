@@ -17,6 +17,8 @@ public interface IProfilesDbContext
 
     DbSet<BuddyInterest> BuddyInterests { get; }
 
+    DbSet<TravelerInterest> TravelerInterests { get; }
+
     DbSet<UserFollow> UserFollows { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);

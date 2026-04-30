@@ -30,6 +30,8 @@ public class GetUserProfileByIdQueryHandler
             cancellationToken);
 
         var travelerProfile = await _profilesDbContext.TravelerProfiles
+            .Include(x => x.Interests)
+            .ThenInclude(x => x.Interest)
             .FirstOrDefaultAsync(x => x.UserId == query.UserId, cancellationToken);
 
         if (travelerProfile is not null)

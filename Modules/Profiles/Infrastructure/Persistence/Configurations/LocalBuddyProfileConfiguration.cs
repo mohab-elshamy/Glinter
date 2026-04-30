@@ -37,5 +37,8 @@ public class LocalBuddyProfileConfiguration : IEntityTypeConfiguration<LocalBudd
             .HasConversion<string>()
             .HasMaxLength(50)
             .HasDefaultValue(VerificationStatus.Pending);
+        
+        builder.Property(x => x.ProfileImageUrl)
+            .HasMaxLength(1000);
     }
 }

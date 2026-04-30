@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Mvc;
 using Glinter.Modules.Profiles.Application.Profiles.Queries.GetFollowStatus;
 using Glinter.Modules.Profiles.Application.Profiles.Commands.UpsertHotelOwnerProfile;
 using Glinter.Modules.Profiles.Application.Profiles.Commands.UpsertExperienceProviderProfile;
+using Glinter.Modules.Profiles.Application.Profiles.Commands.UpdateProfileImage;
 
 namespace Glinter.Modules.Profiles.Presentation.Controllers;
 
@@ -27,6 +28,7 @@ public class ProfilesController : ControllerBase
     private readonly GetFollowStatusQueryHandler _getFollowStatusQueryHandler;
     private readonly UpsertHotelOwnerProfileCommandHandler _upsertHotelOwnerProfileCommandHandler;
     private readonly UpsertExperienceProviderProfileCommandHandler _upsertExperienceProviderProfileCommandHandler;
+    private readonly UpdateProfileImageCommandHandler _updateProfileImageCommandHandler;
 
     public ProfilesController(
         UpsertTravelerProfileCommandHandler upsertTravelerProfileCommandHandler,
@@ -36,7 +38,8 @@ public class ProfilesController : ControllerBase
         GetMyProfileQueryHandler getMyProfileQueryHandler,
         FollowUserCommandHandler followUserCommandHandler,
         UnfollowUserCommandHandler unfollowUserCommandHandler,
-        GetFollowStatusQueryHandler getFollowStatusQueryHandler)
+        GetFollowStatusQueryHandler getFollowStatusQueryHandler,
+        UpdateProfileImageCommandHandler updateProfileImageCommandHandler)
     {
         _upsertTravelerProfileCommandHandler = upsertTravelerProfileCommandHandler;
         _upsertLocalBuddyProfileCommandHandler = upsertLocalBuddyProfileCommandHandler;
@@ -46,6 +49,7 @@ public class ProfilesController : ControllerBase
         _followUserCommandHandler = followUserCommandHandler;
         _unfollowUserCommandHandler = unfollowUserCommandHandler;
         _getFollowStatusQueryHandler = getFollowStatusQueryHandler;
+        _updateProfileImageCommandHandler = updateProfileImageCommandHandler;
     }
 
     [HttpGet("me")]
@@ -85,7 +89,8 @@ public class ProfilesController : ControllerBase
                     Nationality = request.Nationality,
                     PreferredBudgetLevel = request.PreferredBudgetLevel,
                     TravelStyle = request.TravelStyle,
-                    PreferredInterests = request.PreferredInterests
+                    PreferredInterests = request.PreferredInterests,
+                    InterestIds = request.InterestIds
                 },
                 cancellationToken);
 
@@ -267,6 +272,36 @@ public class ProfilesController : ControllerBase
         catch (UnauthorizedAccessException ex)
         {
             return Unauthorized(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+    
+    [HttpPatch("image")]
+    public async Task<IActionResult> UpdateProfileImage(
+        [FromBody] UpdateProfileImageRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _updateProfileImageCommandHandler.HandleAsync(
+                new UpdateProfileImageCommand
+                {
+                    ProfileImageUrl = request.ProfileImageUrl
+                },
+                cancellationToken);
+
+            return Ok(result);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { message = ex.Message });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
         }
         catch (InvalidOperationException ex)
         {

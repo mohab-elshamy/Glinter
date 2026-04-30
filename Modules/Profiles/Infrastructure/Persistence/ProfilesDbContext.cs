@@ -23,6 +23,8 @@ public class ProfilesDbContext : DbContext, IProfilesDbContext
 
     public DbSet<BuddyInterest> BuddyInterests => Set<BuddyInterest>();
 
+    public DbSet<TravelerInterest> TravelerInterests => Set<TravelerInterest>();
+
     public DbSet<UserFollow> UserFollows => Set<UserFollow>();
 
     protected override void OnModelCreating(ModelBuilder builder)

@@ -18,7 +18,11 @@ public class TravelerProfile
 
     public string? PreferredInterests { get; set; }
 
+    public string? ProfileImageUrl { get; set; }
+
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 
     public DateTime? UpdatedAtUtc { get; set; }
+
+    public ICollection<TravelerInterest> Interests { get; set; } = new List<TravelerInterest>();
 }

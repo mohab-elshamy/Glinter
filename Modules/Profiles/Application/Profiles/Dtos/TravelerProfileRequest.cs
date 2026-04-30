@@ -13,4 +13,6 @@ public class TravelerProfileRequest
     public string? TravelStyle { get; set; }
 
     public string? PreferredInterests { get; set; }
+
+    public List<Guid> InterestIds { get; set; } = [];
 }

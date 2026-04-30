@@ -33,5 +33,8 @@ public class TravelerProfileConfiguration : IEntityTypeConfiguration<TravelerPro
 
         builder.Property(x => x.PreferredInterests)
             .HasMaxLength(1000);
+        
+        builder.Property(x => x.ProfileImageUrl)
+            .HasMaxLength(1000);
     }
 }

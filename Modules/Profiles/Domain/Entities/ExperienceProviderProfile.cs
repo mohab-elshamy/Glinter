@@ -13,6 +13,8 @@ public class ExperienceProviderProfile
     public string? PhoneNumber { get; set; }
 
     public string? Description { get; set; }
+    
+    public string? ProfileImageUrl { get; set; }
 
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 
