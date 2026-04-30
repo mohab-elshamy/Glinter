@@ -16,6 +16,7 @@ using Glinter.Modules.Profiles.Application.Profiles.Commands.UpsertHotelOwnerPro
 using Glinter.Modules.Profiles.Application.Profiles.Commands.UpsertExperienceProviderProfile;
 using Glinter.Modules.Profiles.Application.Common.Services;
 using Glinter.Modules.Profiles.Application.Profiles.Commands.UpdateProfileImage;
+using Glinter.Modules.Profiles.Application.Profiles.Commands.UpdateLocalBuddyVerification;
 
 namespace Glinter.Modules.Profiles.Infrastructure.DependencyInjection;
 
@@ -47,6 +48,7 @@ public static class ProfilesModule
         services.AddScoped<UpsertExperienceProviderProfileCommandHandler>();
         services.AddScoped<ProfileFollowStatsService>();
         services.AddScoped<UpdateProfileImageCommandHandler>();
+        services.AddScoped<UpdateLocalBuddyVerificationCommandHandler>();
         
         return services;
     }
