@@ -4,6 +4,7 @@ using Glinter.Modules.Profiles.Application.Common.Mapping;
 using Glinter.Modules.Profiles.Application.Profiles.Dtos;
 using Glinter.Modules.Profiles.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+using Glinter.Modules.Profiles.Application.Common.Services;
 
 namespace Glinter.Modules.Profiles.Application.Profiles.Commands.UpsertExperienceProviderProfile;
 
@@ -12,16 +13,19 @@ public class UpsertExperienceProviderProfileCommandHandler
     private readonly IProfilesDbContext _profilesDbContext;
     private readonly ICurrentUserService _currentUserService;
     private readonly UpsertExperienceProviderProfileCommandValidator _validator = new();
-
+    private readonly ProfileFollowStatsService _profileFollowStatsService;
+    
     public UpsertExperienceProviderProfileCommandHandler(
         IProfilesDbContext profilesDbContext,
-        ICurrentUserService currentUserService)
+        ICurrentUserService currentUserService,
+        ProfileFollowStatsService profileFollowStatsService)
     {
         _profilesDbContext = profilesDbContext;
         _currentUserService = currentUserService;
+        _profileFollowStatsService = profileFollowStatsService;
     }
 
-    public async Task<ProfileResponse> HandleAsync(
+    public async Task<ExperienceProviderProfileResponse> HandleAsync(
         UpsertExperienceProviderProfileCommand command,
         CancellationToken cancellationToken = default)
     {
@@ -62,7 +66,13 @@ public class UpsertExperienceProviderProfileCommandHandler
         }
 
         await _profilesDbContext.SaveChangesAsync(cancellationToken);
-
-        return ProfilesMappings.ToProfileResponse(profile);
+        
+        var stats = await _profileFollowStatsService.GetCountsAsync(
+            profile.UserId,
+            cancellationToken);
+        return ProfilesMappings.ToExperienceProviderProfileResponse(
+            profile,
+            stats.FollowersCount,
+            stats.FollowingCount);
     }
 }

@@ -4,6 +4,7 @@ using Glinter.Modules.Profiles.Application.Common.Mapping;
 using Glinter.Modules.Profiles.Application.Profiles.Dtos;
 using Glinter.Modules.Profiles.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+using Glinter.Modules.Profiles.Application.Common.Services;
 
 namespace Glinter.Modules.Profiles.Application.Profiles.Commands.UpsertLocalBuddyProfile;
 
@@ -12,16 +13,19 @@ public class UpsertLocalBuddyProfileCommandHandler
     private readonly IProfilesDbContext _profilesDbContext;
     private readonly ICurrentUserService _currentUserService;
     private readonly UpsertLocalBuddyProfileCommandValidator _validator = new();
+    private readonly ProfileFollowStatsService _profileFollowStatsService;
 
     public UpsertLocalBuddyProfileCommandHandler(
         IProfilesDbContext profilesDbContext,
-        ICurrentUserService currentUserService)
+        ICurrentUserService currentUserService,
+        ProfileFollowStatsService profileFollowStatsService)
     {
         _profilesDbContext = profilesDbContext;
         _currentUserService = currentUserService;
+        _profileFollowStatsService = profileFollowStatsService;
     }
 
-    public async Task<ProfileResponse> HandleAsync(
+    public async Task<LocalBuddyProfileResponse> HandleAsync(
         UpsertLocalBuddyProfileCommand command,
         CancellationToken cancellationToken = default)
     {
@@ -99,7 +103,14 @@ public class UpsertLocalBuddyProfileCommandHandler
         }
 
         await _profilesDbContext.SaveChangesAsync(cancellationToken);
+        
+        var stats = await _profileFollowStatsService.GetCountsAsync(
+            profile.UserId,
+            cancellationToken);
 
-        return ProfilesMappings.ToProfileResponse(profile);
+        return ProfilesMappings.ToLocalBuddyProfileResponse(
+            profile,
+            stats.FollowersCount,
+            stats.FollowingCount);
     }
 }

@@ -14,6 +14,7 @@ using Glinter.Modules.Profiles.Application.Profiles.Commands.UnfollowUser;
 using Glinter.Modules.Profiles.Application.Profiles.Queries.GetFollowStatus;
 using Glinter.Modules.Profiles.Application.Profiles.Commands.UpsertHotelOwnerProfile;
 using Glinter.Modules.Profiles.Application.Profiles.Commands.UpsertExperienceProviderProfile;
+using Glinter.Modules.Profiles.Application.Common.Services;
 
 namespace Glinter.Modules.Profiles.Infrastructure.DependencyInjection;
 
@@ -43,6 +44,7 @@ public static class ProfilesModule
         services.AddScoped<GetFollowStatusQueryHandler>();
         services.AddScoped<UpsertHotelOwnerProfileCommandHandler>();
         services.AddScoped<UpsertExperienceProviderProfileCommandHandler>();
+        services.AddScoped<ProfileFollowStatsService>();
         
         return services;
     }

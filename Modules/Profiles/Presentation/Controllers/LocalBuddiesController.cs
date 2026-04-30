@@ -1,3 +1,4 @@
+using Glinter.Modules.Profiles.Application.Profiles.Dtos;
 using Glinter.Modules.Profiles.Application.Profiles.Queries.GetLocalBuddies;
 using Glinter.Modules.Profiles.Application.Profiles.Queries.GetUserProfileById;
 using Microsoft.AspNetCore.Mvc;
@@ -22,12 +23,18 @@ public class LocalBuddiesController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetLocalBuddies(
         [FromQuery] string? city,
-        CancellationToken cancellationToken)
+        [FromQuery] string? search,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10,
+        CancellationToken cancellationToken = default)
     {
         var result = await _getLocalBuddiesQueryHandler.HandleAsync(
             new GetLocalBuddiesQuery
             {
-                City = city
+                City = city,
+                Search = search,
+                Page = page,
+                PageSize = pageSize
             },
             cancellationToken);
 
@@ -48,7 +55,7 @@ public class LocalBuddiesController : ControllerBase
                 },
                 cancellationToken);
 
-            if (result.ProfileType != "LocalBuddy")
+            if (result is not LocalBuddyProfileResponse)
                 return NotFound(new { message = "Local buddy profile not found." });
 
             return Ok(result);

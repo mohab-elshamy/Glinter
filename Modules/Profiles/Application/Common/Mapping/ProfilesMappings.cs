@@ -5,31 +5,37 @@ namespace Glinter.Modules.Profiles.Application.Common.Mapping;
 
 public static class ProfilesMappings
 {
-    public static ProfileResponse ToProfileResponse(TravelerProfile profile)
+    public static TravelerProfileResponse ToTravelerProfileResponse(
+        TravelerProfile profile,
+        int followersCount = 0,
+        int followingCount = 0)
     {
-        return new ProfileResponse
+        return new TravelerProfileResponse
         {
             ProfileId = profile.Id,
             UserId = profile.UserId,
-            ProfileType = "Traveler",
             DisplayName = profile.DisplayName,
             Bio = profile.Bio,
             Nationality = profile.Nationality,
             PreferredBudgetLevel = profile.PreferredBudgetLevel,
             TravelStyle = profile.TravelStyle,
             PreferredInterests = profile.PreferredInterests,
+            FollowersCount = followersCount,
+            FollowingCount = followingCount,
             CreatedAtUtc = profile.CreatedAtUtc,
             UpdatedAtUtc = profile.UpdatedAtUtc
         };
     }
 
-    public static ProfileResponse ToProfileResponse(LocalBuddyProfile profile)
+    public static LocalBuddyProfileResponse ToLocalBuddyProfileResponse(
+        LocalBuddyProfile profile,
+        int followersCount = 0,
+        int followingCount = 0)
     {
-        return new ProfileResponse
+        return new LocalBuddyProfileResponse
         {
             ProfileId = profile.Id,
             UserId = profile.UserId,
-            ProfileType = "LocalBuddy",
             DisplayName = profile.DisplayName,
             Bio = profile.Bio,
             City = profile.City,
@@ -40,38 +46,48 @@ public static class ProfilesMappings
             Interests = profile.Interests
                 .Select(x => ToInterestResponse(x.Interest))
                 .ToList(),
+            FollowersCount = followersCount,
+            FollowingCount = followingCount,
             CreatedAtUtc = profile.CreatedAtUtc,
             UpdatedAtUtc = profile.UpdatedAtUtc
         };
     }
 
-    public static ProfileResponse ToProfileResponse(HotelOwnerProfile profile)
+    public static HotelOwnerProfileResponse ToHotelOwnerProfileResponse(
+        HotelOwnerProfile profile,
+        int followersCount = 0,
+        int followingCount = 0)
     {
-        return new ProfileResponse
+        return new HotelOwnerProfileResponse
         {
             ProfileId = profile.Id,
             UserId = profile.UserId,
-            ProfileType = "HotelOwner",
             BusinessName = profile.BusinessName,
             ContactPersonName = profile.ContactPersonName,
             PhoneNumber = profile.PhoneNumber,
             Description = profile.Description,
+            FollowersCount = followersCount,
+            FollowingCount = followingCount,
             CreatedAtUtc = profile.CreatedAtUtc,
             UpdatedAtUtc = profile.UpdatedAtUtc
         };
     }
 
-    public static ProfileResponse ToProfileResponse(ExperienceProviderProfile profile)
+    public static ExperienceProviderProfileResponse ToExperienceProviderProfileResponse(
+        ExperienceProviderProfile profile,
+        int followersCount = 0,
+        int followingCount = 0)
     {
-        return new ProfileResponse
+        return new ExperienceProviderProfileResponse
         {
             ProfileId = profile.Id,
             UserId = profile.UserId,
-            ProfileType = "ExperienceProvider",
             BusinessName = profile.BusinessName,
             ContactPersonName = profile.ContactPersonName,
             PhoneNumber = profile.PhoneNumber,
             Description = profile.Description,
+            FollowersCount = followersCount,
+            FollowingCount = followingCount,
             CreatedAtUtc = profile.CreatedAtUtc,
             UpdatedAtUtc = profile.UpdatedAtUtc
         };
@@ -86,7 +102,10 @@ public static class ProfilesMappings
         };
     }
 
-    public static LocalBuddyListItemResponse ToLocalBuddyListItemResponse(LocalBuddyProfile profile)
+    public static LocalBuddyListItemResponse ToLocalBuddyListItemResponse(
+        LocalBuddyProfile profile,
+        int followersCount = 0,
+        int followingCount = 0)
     {
         return new LocalBuddyListItemResponse
         {
@@ -101,7 +120,9 @@ public static class ProfilesMappings
             VerificationStatus = profile.VerificationStatus.ToString(),
             Interests = profile.Interests
                 .Select(x => ToInterestResponse(x.Interest))
-                .ToList()
+                .ToList(),
+            FollowersCount = followersCount,
+            FollowingCount = followingCount
         };
     }
 }

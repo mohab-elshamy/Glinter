@@ -4,6 +4,7 @@ using Glinter.Modules.Profiles.Application.Common.Mapping;
 using Glinter.Modules.Profiles.Application.Profiles.Dtos;
 using Glinter.Modules.Profiles.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+using Glinter.Modules.Profiles.Application.Common.Services;
 
 namespace Glinter.Modules.Profiles.Application.Profiles.Commands.UpsertHotelOwnerProfile;
 
@@ -12,16 +13,19 @@ public class UpsertHotelOwnerProfileCommandHandler
     private readonly IProfilesDbContext _profilesDbContext;
     private readonly ICurrentUserService _currentUserService;
     private readonly UpsertHotelOwnerProfileCommandValidator _validator = new();
+    private readonly ProfileFollowStatsService _profileFollowStatsService;
 
     public UpsertHotelOwnerProfileCommandHandler(
         IProfilesDbContext profilesDbContext,
-        ICurrentUserService currentUserService)
+        ICurrentUserService currentUserService,
+        ProfileFollowStatsService profileFollowStatsService)
     {
         _profilesDbContext = profilesDbContext;
         _currentUserService = currentUserService;
+        _profileFollowStatsService = profileFollowStatsService;
     }
 
-    public async Task<ProfileResponse> HandleAsync(
+    public async Task<HotelOwnerProfileResponse> HandleAsync(
         UpsertHotelOwnerProfileCommand command,
         CancellationToken cancellationToken = default)
     {
@@ -62,7 +66,13 @@ public class UpsertHotelOwnerProfileCommandHandler
         }
 
         await _profilesDbContext.SaveChangesAsync(cancellationToken);
+        
+        var stats = await _profileFollowStatsService.GetCountsAsync(
+            profile.UserId,
+            cancellationToken);
 
-        return ProfilesMappings.ToProfileResponse(profile);
-    }
+        return ProfilesMappings.ToHotelOwnerProfileResponse(
+            profile,
+            stats.FollowersCount,
+            stats.FollowingCount);    }
 }
