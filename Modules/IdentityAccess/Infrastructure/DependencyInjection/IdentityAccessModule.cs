@@ -12,8 +12,6 @@ using Glinter.Modules.IdentityAccess.Infrastructure.Security;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using Glinter.Modules.IdentityAccess.Application.Auth.Commands.AssignRole;
 using Glinter.Modules.IdentityAccess.Application.Auth.Commands.ChangeUserStatus;

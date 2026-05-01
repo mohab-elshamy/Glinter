@@ -1,11 +1,14 @@
 using Glinter.Modules.IdentityAccess.Domain.Entities;
 using Glinter.Modules.IdentityAccess.Infrastructure.DependencyInjection;
 using Glinter.Modules.IdentityAccess.Infrastructure.Identity;
+using Glinter.Modules.Profiles.Infrastructure.DependencyInjection;
+using Glinter.Modules.Profiles.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddIdentityAccessModule(builder.Configuration);
+builder.Services.AddProfilesModule(builder.Configuration);
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -34,6 +37,13 @@ using (var scope = app.Services.CreateScope())
     };
 
     await IdentitySeeder.SeedAsync(roleManager, userManager, adminSeedOptions);
+}
+
+using (var scope = app.Services.CreateScope())
+{
+    var profilesDbContext = scope.ServiceProvider.GetRequiredService<ProfilesDbContext>();
+
+    await ProfilesSeeder.SeedAsync(profilesDbContext);
 }
 
 app.Run();
