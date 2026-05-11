@@ -13,35 +13,29 @@ public class StayConfiguration : IEntityTypeConfiguration<Stay>
         builder.HasKey(x => x.Id);
 
         builder.Property(x => x.Name)
-            .HasMaxLength(200)
-            .IsRequired();
+            .IsRequired()
+            .HasMaxLength(200);
 
         builder.Property(x => x.Description)
+            .IsRequired()
             .HasMaxLength(2000);
 
         builder.Property(x => x.Address)
+            .IsRequired()
             .HasMaxLength(500);
 
-        builder.Property(x => x.Currency)
-            .HasMaxLength(10)
-            .IsRequired();
-
         builder.Property(x => x.PricePerNight)
-            .HasColumnType("numeric(18,2)");
+            .HasPrecision(18, 2);
 
-        builder.HasMany(x => x.Bookings)
-            .WithOne(x => x.Stay)
-            .HasForeignKey(x => x.StayId)
-            .OnDelete(DeleteBehavior.Cascade);
+        builder.Property(x => x.Currency)
+            .IsRequired()
+            .HasMaxLength(10);
 
-        builder.HasMany(x => x.Reviews)
-            .WithOne(x => x.Stay)
-            .HasForeignKey(x => x.StayId)
-            .OnDelete(DeleteBehavior.Cascade);
-
-        builder.HasMany(x => x.Tags)
-            .WithOne(x => x.Stay)
-            .HasForeignKey(x => x.StayId)
-            .OnDelete(DeleteBehavior.Cascade);
+        builder.HasIndex(x => new
+        {
+            x.OwnerProfileId,
+            x.Name,
+            x.Address
+        }).IsUnique();
     }
 }

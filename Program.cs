@@ -3,14 +3,32 @@ using Glinter.Modules.IdentityAccess.Infrastructure.DependencyInjection;
 using Glinter.Modules.IdentityAccess.Infrastructure.Identity;
 using Glinter.Modules.Profiles.Infrastructure.DependencyInjection;
 using Glinter.Modules.Profiles.Infrastructure.Persistence;
+using Glinter.Modules.Stays.Infrastructure.DependencyInjection;
+using Glinter.Modules.Stays.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Module 1: IdentityAccess
 builder.Services.AddIdentityAccessModule(builder.Configuration);
+
+// Module 2: Profiles
 builder.Services.AddProfilesModule(builder.Configuration);
 
-builder.Services.AddControllers();
+// Module 4: Stays
+builder.Services.AddDbContext<StaysDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+builder.Services.AddStaysModule();
+
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
+    });
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 

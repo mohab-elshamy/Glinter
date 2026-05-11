@@ -13,9 +13,13 @@ public class StayReviewConfiguration : IEntityTypeConfiguration<StayReview>
         builder.HasKey(x => x.Id);
 
         builder.Property(x => x.Comment)
+            .IsRequired()
             .HasMaxLength(2000);
 
-        builder.Property(x => x.Rating)
-            .IsRequired();
+        builder.HasIndex(x => new
+        {
+            x.StayId,
+            x.TravelerProfileId
+        }).IsUnique();
     }
 }
