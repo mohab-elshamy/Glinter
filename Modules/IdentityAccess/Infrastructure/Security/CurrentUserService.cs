@@ -13,21 +13,36 @@ public class CurrentUserService : ICurrentUserService
         _httpContextAccessor = httpContextAccessor;
     }
 
+    private ClaimsPrincipal? User => _httpContextAccessor.HttpContext?.User;
+
+    public bool IsAuthenticated =>
+        User?.Identity?.IsAuthenticated == true;
+
     public Guid? UserId
     {
         get
         {
-            var value = _httpContextAccessor.HttpContext?.User.FindFirstValue(ClaimTypes.NameIdentifier);
-            return Guid.TryParse(value, out var id) ? id : null;
+            var userIdValue =
+                User?.FindFirstValue(ClaimTypes.NameIdentifier)
+                ?? User?.FindFirstValue("sub")
+                ?? User?.FindFirstValue("userId");
+
+            return Guid.TryParse(userIdValue, out var userId)
+                ? userId
+                : null;
         }
     }
 
-    public string? Email => _httpContextAccessor.HttpContext?.User.FindFirstValue(ClaimTypes.Email);
+    public string? Email =>
+        User?.FindFirstValue(ClaimTypes.Email)
+        ?? User?.FindFirstValue("email");
 
-    public bool IsAuthenticated =>
-        _httpContextAccessor.HttpContext?.User.Identity?.IsAuthenticated ?? false;
-
-    public IReadOnlyList<string> Roles =>
-        _httpContextAccessor.HttpContext?.User.FindAll(ClaimTypes.Role).Select(x => x.Value).ToList()
+    public IReadOnlyCollection<string> Roles =>
+        User?
+            .FindAll(ClaimTypes.Role)
+            .Select(x => x.Value)
+            .Concat(User.FindAll("role").Select(x => x.Value))
+            .Distinct()
+            .ToList()
         ?? [];
 }

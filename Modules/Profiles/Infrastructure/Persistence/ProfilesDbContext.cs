@@ -27,10 +27,13 @@ public class ProfilesDbContext : DbContext, IProfilesDbContext
 
     public DbSet<UserFollow> UserFollows => Set<UserFollow>();
 
-    protected override void OnModelCreating(ModelBuilder builder)
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        base.OnModelCreating(builder);
+        base.OnModelCreating(modelBuilder);
 
-        builder.ApplyConfigurationsFromAssembly(typeof(ProfilesDbContext).Assembly);
+        modelBuilder.ApplyConfigurationsFromAssembly(
+            typeof(ProfilesDbContext).Assembly,
+            type => type.Namespace != null &&
+                    type.Namespace.StartsWith("Glinter.Modules.Profiles.Infrastructure.Persistence.Configurations"));
     }
 }

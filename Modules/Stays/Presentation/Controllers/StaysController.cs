@@ -1,9 +1,8 @@
-﻿using Glinter.Modules.Stays.Application.Listings.Commands;
+﻿using Microsoft.AspNetCore.Authorization;
+using Glinter.Modules.Stays.Application.Listings.Commands;
 using Glinter.Modules.Stays.Application.Listings.Dtos;
 using Glinter.Modules.Stays.Application.Listings.Queries;
 using Microsoft.AspNetCore.Mvc;
-using Glinter.Modules.Stays.Application.Listings.Dtos;
-using Glinter.Modules.Stays.Application.Listings.Queries;
 namespace Glinter.Modules.Stays.Presentation.Controllers;
 
 [ApiController]
@@ -22,15 +21,17 @@ public class StaysController : ControllerBase
         GetAllStaysHandler getAllStaysHandler,
         GetStayByIdHandler getStayByIdHandler,
         UpdateStayHandler updateStayHandler,
+        GetStaysByAreaHandler getStaysByAreaHandler,
         SetStayActiveStatusHandler setStayActiveStatusHandler)
     {
         _createStayHandler = createStayHandler;
         _getAllStaysHandler = getAllStaysHandler;
         _getStayByIdHandler = getStayByIdHandler;
         _updateStayHandler = updateStayHandler;
+        _getStaysByAreaHandler = getStaysByAreaHandler;
         _setStayActiveStatusHandler = setStayActiveStatusHandler;
     }
-
+    [Authorize]
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateStayRequestDto request, CancellationToken cancellationToken)
     {
@@ -38,7 +39,7 @@ public class StaysController : ControllerBase
         {
             var command = new CreateStayCommand
             {
-                OwnerProfileId = request.OwnerProfileId,
+                
                 AreaId = request.AreaId,
                 Name = request.Name,
                 Description = request.Description,

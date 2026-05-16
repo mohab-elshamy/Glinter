@@ -1,12 +1,10 @@
 ﻿using Glinter.Modules.Stays.Application.Abstractions;
-using Glinter.Modules.Stays.Application.Listings.Commands;
-using Glinter.Modules.Stays.Application.Listings.Queries;
-using Glinter.Modules.Stays.Infrastructure.Persistence.Repositories;
-using Microsoft.Extensions.DependencyInjection;
+
+
 using Glinter.Modules.Stays.Application.Bookings.Commands;
-using Glinter.Modules.Stays.Infrastructure.Persistence.Repositories;
+
 using Glinter.Modules.Stays.Application.Bookings.Queries;
-using Glinter.Modules.Stays.Application.Bookings.Commands;
+
 namespace Glinter.Modules.Stays.Infrastructure.DependencyInjection;
 using Glinter.Modules.Stays.Application.Listings.Commands;
 using Glinter.Modules.Stays.Application.Reviews.Commands;

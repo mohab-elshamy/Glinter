@@ -1,9 +1,9 @@
 ﻿using Glinter.Modules.Stays.Application.Reviews.Commands;
 using Glinter.Modules.Stays.Application.Reviews.Dtos;
 using Glinter.Modules.Stays.Application.Reviews.Queries;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Glinter.Modules.Stays.Application.Reviews.Commands;
-using Glinter.Modules.Stays.Application.Reviews.Dtos;
+
 namespace Glinter.Modules.Stays.Presentation.Controllers;
 
 [ApiController]
@@ -27,6 +27,7 @@ public class StayReviewController : ControllerBase
         _deleteStayReviewHandler = deleteStayReviewHandler;
     }
 
+    [Authorize]
     [HttpPost]
     public async Task<IActionResult> CreateReview(
         Guid stayId,
@@ -38,7 +39,6 @@ public class StayReviewController : ControllerBase
             var command = new CreateStayReviewCommand
             {
                 StayId = stayId,
-                TravelerProfileId = request.TravelerProfileId,
                 Rating = request.Rating,
                 Comment = request.Comment
             };
@@ -51,6 +51,10 @@ public class StayReviewController : ControllerBase
             return NotFound(new { message = ex.Message });
         }
         catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
         {
             return BadRequest(new { message = ex.Message });
         }
@@ -74,7 +78,8 @@ public class StayReviewController : ControllerBase
             return NotFound(new { message = ex.Message });
         }
     }
-    
+
+    [Authorize]
     [HttpPut("~/api/stay-reviews/{reviewId:guid}")]
     public async Task<IActionResult> UpdateReview(
         Guid reviewId,
@@ -86,7 +91,6 @@ public class StayReviewController : ControllerBase
             var command = new UpdateStayReviewCommand
             {
                 ReviewId = reviewId,
-                TravelerProfileId = request.TravelerProfileId,
                 Rating = request.Rating,
                 Comment = request.Comment
             };
@@ -102,20 +106,23 @@ public class StayReviewController : ControllerBase
         {
             return BadRequest(new { message = ex.Message });
         }
+        catch (UnauthorizedAccessException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
-    
+
+    [Authorize]
     [HttpDelete("~/api/stay-reviews/{reviewId:guid}")]
     public async Task<IActionResult> DeleteReview(
         Guid reviewId,
-        [FromBody] DeleteStayReviewRequest request,
         CancellationToken cancellationToken)
     {
         try
         {
             var command = new DeleteStayReviewCommand
             {
-                ReviewId = reviewId,
-                TravelerProfileId = request.TravelerProfileId
+                ReviewId = reviewId
             };
 
             var deleted = await _deleteStayReviewHandler.HandleAsync(command, cancellationToken);
@@ -129,10 +136,9 @@ public class StayReviewController : ControllerBase
         {
             return BadRequest(new { message = ex.Message });
         }
-    }
-    
-    public class DeleteStayReviewRequest
-    {
-        public Guid TravelerProfileId { get; set; }
+        catch (UnauthorizedAccessException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 }

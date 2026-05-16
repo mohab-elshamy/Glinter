@@ -1,6 +1,7 @@
 ﻿using Glinter.Modules.Stays.Application.Bookings.Commands;
 using Glinter.Modules.Stays.Application.Bookings.Dtos;
 using Glinter.Modules.Stays.Application.Bookings.Queries;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Glinter.Modules.Stays.Presentation.Controllers;
@@ -22,9 +23,10 @@ public class StayBookingController : ControllerBase
         _getStayBookingsHandler = getStayBookingsHandler;
         _cancelStayBookingHandler = cancelStayBookingHandler;
     }
-
-    [HttpPost]
-    public async Task<IActionResult> CreateBooking(
+    
+    [Authorize]
+    [HttpPost("/api/stays/{stayId:guid}/bookings")]
+    public async Task<IActionResult> Create(
         Guid stayId,
         [FromBody] CreateStayBookingRequestDto request,
         CancellationToken cancellationToken)
@@ -34,13 +36,13 @@ public class StayBookingController : ControllerBase
             var command = new CreateStayBookingCommand
             {
                 StayId = stayId,
-                TravelerProfileId = request.TravelerProfileId,
                 CheckInDate = request.CheckInDate,
                 CheckOutDate = request.CheckOutDate,
                 GuestCount = request.GuestCount
             };
 
             var result = await _createStayBookingHandler.HandleAsync(command, cancellationToken);
+
             return Ok(result);
         }
         catch (KeyNotFoundException ex)
@@ -48,6 +50,10 @@ public class StayBookingController : ControllerBase
             return NotFound(new { message = ex.Message });
         }
         catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
         {
             return BadRequest(new { message = ex.Message });
         }

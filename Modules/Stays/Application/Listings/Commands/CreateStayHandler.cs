@@ -1,20 +1,47 @@
 ﻿using Glinter.Modules.Stays.Application.Abstractions;
 using Glinter.Modules.Stays.Application.Listings.Dtos;
 using Glinter.Modules.Stays.Domain.Entities;
+using Glinter.Modules.IdentityAccess.Application.Abstractions;
+using Glinter.Modules.Profiles.Application.Abstractions;
 
 namespace Glinter.Modules.Stays.Application.Listings.Commands;
 
 public class CreateStayHandler
 {
     private readonly IStayRepository _stayRepository;
-
-    public CreateStayHandler(IStayRepository stayRepository)
+    private readonly ICurrentUserService _currentUserService;
+    private readonly IProfilesReadService _profilesReadService;
+    public CreateStayHandler(IStayRepository stayRepository, ICurrentUserService currentUserService,IProfilesReadService profilesReadService )
     {
         _stayRepository = stayRepository;
+        _currentUserService = currentUserService;
+        _profilesReadService = profilesReadService;
+        
     }
 
     public async Task<StayResponseDto> HandleAsync(CreateStayCommand command, CancellationToken cancellationToken = default)
     {
+        
+        
+        
+        
+        if (!_currentUserService.IsAuthenticated || _currentUserService.UserId is null)
+        {
+            throw new UnauthorizedAccessException("User is not authenticated.");
+        }
+
+        var currentUserId = _currentUserService.UserId.Value;
+
+        var ownerProfileId = await _profilesReadService
+            .GetHotelOwnerProfileIdByUserIdAsync(currentUserId, cancellationToken);
+
+        if (ownerProfileId is null)
+        {
+            throw new UnauthorizedAccessException("Only hotel owners can create stays.");
+        }
+        
+        
+        
         if (string.IsNullOrWhiteSpace(command.Name))
             throw new ArgumentException("Stay name is required.");
 
@@ -28,7 +55,7 @@ public class CreateStayHandler
         var normalizedAddress = command.Address?.Trim() ?? string.Empty;
 
         var alreadyExists = await _stayRepository.ExistsAsync(
-            command.OwnerProfileId,
+            ownerProfileId.Value,
             normalizedName,
             normalizedAddress,
             cancellationToken);
@@ -39,13 +66,13 @@ public class CreateStayHandler
         var stay = new Stay
         {
             Id = Guid.NewGuid(),
-            OwnerProfileId = command.OwnerProfileId,
+            OwnerProfileId = ownerProfileId.Value,
             AreaId = command.AreaId,
-            Name = normalizedName,
-            Description = command.Description?.Trim() ?? string.Empty,
-            Address = normalizedAddress,
+            Name = command.Name,
+            Description = command.Description ?? string.Empty,
+            Address = command.Address ?? string.Empty,
             PricePerNight = command.PricePerNight,
-            Currency = string.IsNullOrWhiteSpace(command.Currency) ? "EGP" : command.Currency.Trim(),
+            Currency = command.Currency ?? "EGP",
             MaxGuests = command.MaxGuests,
             Latitude = command.Latitude,
             Longitude = command.Longitude,

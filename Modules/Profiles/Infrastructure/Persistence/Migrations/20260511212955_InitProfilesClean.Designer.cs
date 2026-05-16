@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Glinter.Modules.Profiles.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(ProfilesDbContext))]
-    [Migration("20260430222633_AddTravelerInterests")]
-    partial class AddTravelerInterests
+    [Migration("20260511212955_InitProfilesClean")]
+    partial class InitProfilesClean
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -66,6 +66,10 @@ namespace Glinter.Modules.Profiles.Infrastructure.Persistence.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
+                    b.Property<string>("ProfileImageUrl")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
                     b.Property<DateTime?>("UpdatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -105,6 +109,10 @@ namespace Glinter.Modules.Profiles.Infrastructure.Persistence.Migrations
                     b.Property<string>("PhoneNumber")
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
+
+                    b.Property<string>("ProfileImageUrl")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
 
                     b.Property<DateTime?>("UpdatedAtUtc")
                         .HasColumnType("timestamp with time zone");
@@ -173,6 +181,10 @@ namespace Glinter.Modules.Profiles.Infrastructure.Persistence.Migrations
                     b.Property<string>("Languages")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
+
+                    b.Property<string>("ProfileImageUrl")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
 
                     b.Property<decimal>("Rating")
                         .HasPrecision(3, 2)
@@ -247,6 +259,10 @@ namespace Glinter.Modules.Profiles.Infrastructure.Persistence.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
 
+                    b.Property<string>("ProfileImageUrl")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
                     b.Property<string>("TravelStyle")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
@@ -279,154 +295,6 @@ namespace Glinter.Modules.Profiles.Infrastructure.Persistence.Migrations
                     b.HasKey("FollowerUserId", "FollowedUserId");
 
                     b.ToTable("user_follows", (string)null);
-                });
-
-            modelBuilder.Entity("Glinter.Modules.Stays.Domain.Entities.Stay", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Address")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<Guid>("AreaId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Currency")
-                        .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
-
-                    b.Property<double>("Latitude")
-                        .HasColumnType("double precision");
-
-                    b.Property<double>("Longitude")
-                        .HasColumnType("double precision");
-
-                    b.Property<int>("MaxGuests")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<Guid>("OwnerProfileId")
-                        .HasColumnType("uuid");
-
-                    b.Property<decimal>("PricePerNight")
-                        .HasColumnType("numeric(18,2)");
-
-                    b.Property<DateTime?>("UpdatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("stays", (string)null);
-                });
-
-            modelBuilder.Entity("Glinter.Modules.Stays.Domain.Entities.StayBooking", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateOnly>("CheckInDate")
-                        .HasColumnType("date");
-
-                    b.Property<DateOnly>("CheckOutDate")
-                        .HasColumnType("date");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("GuestCount")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<Guid>("StayId")
-                        .HasColumnType("uuid");
-
-                    b.Property<decimal>("TotalPrice")
-                        .HasColumnType("numeric(18,2)");
-
-                    b.Property<Guid>("TravelerProfileId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("StayId");
-
-                    b.ToTable("stay_bookings", (string)null);
-                });
-
-            modelBuilder.Entity("Glinter.Modules.Stays.Domain.Entities.StayReview", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Comment")
-                        .IsRequired()
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("Rating")
-                        .HasColumnType("integer");
-
-                    b.Property<Guid>("StayId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("TravelerProfileId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("StayId");
-
-                    b.ToTable("stay_reviews", (string)null);
-                });
-
-            modelBuilder.Entity("Glinter.Modules.Stays.Domain.Entities.StayTag", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<Guid>("StayId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("StayId");
-
-                    b.ToTable("stay_tags", (string)null);
                 });
 
             modelBuilder.Entity("Glinter.Modules.Profiles.Domain.Entities.BuddyInterest", b =>
@@ -467,39 +335,6 @@ namespace Glinter.Modules.Profiles.Infrastructure.Persistence.Migrations
                     b.Navigation("TravelerProfile");
                 });
 
-            modelBuilder.Entity("Glinter.Modules.Stays.Domain.Entities.StayBooking", b =>
-                {
-                    b.HasOne("Glinter.Modules.Stays.Domain.Entities.Stay", "Stay")
-                        .WithMany("Bookings")
-                        .HasForeignKey("StayId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Stay");
-                });
-
-            modelBuilder.Entity("Glinter.Modules.Stays.Domain.Entities.StayReview", b =>
-                {
-                    b.HasOne("Glinter.Modules.Stays.Domain.Entities.Stay", "Stay")
-                        .WithMany("Reviews")
-                        .HasForeignKey("StayId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Stay");
-                });
-
-            modelBuilder.Entity("Glinter.Modules.Stays.Domain.Entities.StayTag", b =>
-                {
-                    b.HasOne("Glinter.Modules.Stays.Domain.Entities.Stay", "Stay")
-                        .WithMany("Tags")
-                        .HasForeignKey("StayId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Stay");
-                });
-
             modelBuilder.Entity("Glinter.Modules.Profiles.Domain.Entities.Interest", b =>
                 {
                     b.Navigation("BuddyInterests");
@@ -515,15 +350,6 @@ namespace Glinter.Modules.Profiles.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("Glinter.Modules.Profiles.Domain.Entities.TravelerProfile", b =>
                 {
                     b.Navigation("Interests");
-                });
-
-            modelBuilder.Entity("Glinter.Modules.Stays.Domain.Entities.Stay", b =>
-                {
-                    b.Navigation("Bookings");
-
-                    b.Navigation("Reviews");
-
-                    b.Navigation("Tags");
                 });
 #pragma warning restore 612, 618
         }

@@ -1,4 +1,6 @@
-﻿using Glinter.Modules.Stays.Application.Abstractions;
+﻿using Glinter.Modules.IdentityAccess.Application.Abstractions;
+using Glinter.Modules.Profiles.Application.Abstractions;
+using Glinter.Modules.Stays.Application.Abstractions;
 using Glinter.Modules.Stays.Application.Bookings.Dtos;
 using Glinter.Modules.Stays.Domain.Entities;
 
@@ -8,19 +10,44 @@ public class CreateStayBookingHandler
 {
     private readonly IStayRepository _stayRepository;
     private readonly IStayBookingRepository _stayBookingRepository;
+    private readonly ICurrentUserService _currentUserService;
+    private readonly IProfilesReadService _profilesReadService;
 
     public CreateStayBookingHandler(
         IStayRepository stayRepository,
-        IStayBookingRepository stayBookingRepository)
+        IStayBookingRepository stayBookingRepository,
+        ICurrentUserService currentUserService,
+        IProfilesReadService profilesReadService)
     {
         _stayRepository = stayRepository;
         _stayBookingRepository = stayBookingRepository;
+        _currentUserService = currentUserService;
+        _profilesReadService = profilesReadService;
     }
 
     public async Task<StayBookingResponseDto> HandleAsync(
         CreateStayBookingCommand command,
         CancellationToken cancellationToken = default)
+    
+    
     {
+        if (!_currentUserService.IsAuthenticated || _currentUserService.UserId is null)
+        {
+            throw new UnauthorizedAccessException("User is not authenticated.");
+        }
+
+        var currentUserId = _currentUserService.UserId.Value;
+
+        var travelerProfileId = await _profilesReadService
+            .GetTravelerProfileIdByUserIdAsync(currentUserId, cancellationToken);
+
+        if (travelerProfileId is null)
+        {
+            throw new UnauthorizedAccessException("Only travelers can book stays.");
+        }
+        
+        
+        
         if (command.GuestCount <= 0)
             throw new ArgumentException("GuestCount must be greater than 0.");
         var today = DateOnly.FromDateTime(DateTime.UtcNow.Date);
@@ -44,7 +71,7 @@ public class CreateStayBookingHandler
 
         var alreadyExists = await _stayBookingRepository.ExistsAsync(
             command.StayId,
-            command.TravelerProfileId,
+            travelerProfileId.Value,
             command.CheckInDate,
             command.CheckOutDate,
             cancellationToken);
@@ -72,7 +99,7 @@ public class CreateStayBookingHandler
         {
             Id = Guid.NewGuid(),
             StayId = stay.Id,
-            TravelerProfileId = command.TravelerProfileId,
+            TravelerProfileId = travelerProfileId.Value,
             CheckInDate = command.CheckInDate,
             CheckOutDate = command.CheckOutDate,
             GuestCount = command.GuestCount,
