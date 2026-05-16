@@ -1,4 +1,6 @@
 using System.Text.Json.Serialization;
+using Glinter.Modules.Experiences.Infrastructure.DependencyInjection;
+using Glinter.Modules.Experiences.Infrastructure.Persistence;
 using Glinter.Modules.IdentityAccess.Domain.Entities;
 using Glinter.Modules.IdentityAccess.Infrastructure.DependencyInjection;
 using Glinter.Modules.IdentityAccess.Infrastructure.Identity;
@@ -22,6 +24,9 @@ builder.Services.AddDbContext<StaysDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 builder.Services.AddStaysModule();
+
+// Module 5: Experiences
+builder.Services.AddExperiencesModule(builder.Configuration);
 
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
@@ -54,8 +59,13 @@ using (var scope = app.Services.CreateScope())
 using (var scope = app.Services.CreateScope())
 {
     var profilesDbContext = scope.ServiceProvider.GetRequiredService<ProfilesDbContext>();
-
     await ProfilesSeeder.SeedAsync(profilesDbContext);
+}
+
+using (var scope = app.Services.CreateScope())
+{
+    var experiencesDbContext = scope.ServiceProvider.GetRequiredService<ExperiencesDbContext>();
+    await ExperiencesSeeder.SeedAsync(experiencesDbContext);
 }
 
 app.Run();
