@@ -4,6 +4,12 @@ using Glinter.Modules.Experiences.Infrastructure.Persistence.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Glinter.Modules.Experiences.Application.Experiences.Commands.CreateExperience;
+using Glinter.Modules.Experiences.Application.Experiences.Commands.SetExperienceActiveStatus;
+using Glinter.Modules.Experiences.Application.Experiences.Commands.UpdateExperience;
+using Glinter.Modules.Experiences.Application.Experiences.Queries.GetAllExperiences;
+using Glinter.Modules.Experiences.Application.Experiences.Queries.GetExperienceById;
+using Glinter.Modules.Experiences.Infrastructure.Services;
 
 namespace Glinter.Modules.Experiences.Infrastructure.DependencyInjection;
 
@@ -34,7 +40,20 @@ public static class ExperiencesModule
         services.AddScoped<IExperienceReviewRepository, ExperienceReviewRepository>();
         services.AddScoped<IExperienceCategoryRepository, ExperienceCategoryRepository>();
         services.AddScoped<IVibeRepository, VibeRepository>();
+        
+        services.AddScoped<IExperienceProfileResolver, ExperienceProfileResolver>();
 
+        services.AddScoped<CreateExperienceCommandValidator>();
+        services.AddScoped<CreateExperienceCommandHandler>();
+
+        services.AddScoped<UpdateExperienceCommandValidator>();
+        services.AddScoped<UpdateExperienceCommandHandler>();
+
+        services.AddScoped<SetExperienceActiveStatusCommandValidator>();
+        services.AddScoped<SetExperienceActiveStatusCommandHandler>();
+
+        services.AddScoped<GetAllExperiencesQueryHandler>();
+        services.AddScoped<GetExperienceByIdQueryHandler>();
         return services;
     }
 }
