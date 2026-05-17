@@ -10,6 +10,10 @@ using Glinter.Modules.Experiences.Application.Experiences.Commands.UpdateExperie
 using Glinter.Modules.Experiences.Application.Experiences.Queries.GetAllExperiences;
 using Glinter.Modules.Experiences.Application.Experiences.Queries.GetExperienceById;
 using Glinter.Modules.Experiences.Infrastructure.Services;
+using Glinter.Modules.Experiences.Application.Experiences.Commands.CreateExperienceAvailability;
+using Glinter.Modules.Experiences.Application.Experiences.Commands.DeactivateExperienceAvailability;
+using Glinter.Modules.Experiences.Application.Experiences.Queries.GetExperienceAvailability;
+using Glinter.Modules.Experiences.Application.Experiences.Commands.ActivateExperienceAvailability;
 
 namespace Glinter.Modules.Experiences.Infrastructure.DependencyInjection;
 
@@ -40,20 +44,24 @@ public static class ExperiencesModule
         services.AddScoped<IExperienceReviewRepository, ExperienceReviewRepository>();
         services.AddScoped<IExperienceCategoryRepository, ExperienceCategoryRepository>();
         services.AddScoped<IVibeRepository, VibeRepository>();
-        
+        services.AddHttpContextAccessor();
         services.AddScoped<IExperienceProfileResolver, ExperienceProfileResolver>();
-
         services.AddScoped<CreateExperienceCommandValidator>();
         services.AddScoped<CreateExperienceCommandHandler>();
-
         services.AddScoped<UpdateExperienceCommandValidator>();
         services.AddScoped<UpdateExperienceCommandHandler>();
-
         services.AddScoped<SetExperienceActiveStatusCommandValidator>();
         services.AddScoped<SetExperienceActiveStatusCommandHandler>();
-
         services.AddScoped<GetAllExperiencesQueryHandler>();
         services.AddScoped<GetExperienceByIdQueryHandler>();
+        services.AddScoped<CreateExperienceAvailabilityCommandValidator>();
+        services.AddScoped<CreateExperienceAvailabilityCommandHandler>();
+        services.AddScoped<DeactivateExperienceAvailabilityCommandValidator>();
+        services.AddScoped<DeactivateExperienceAvailabilityCommandHandler>();
+        services.AddScoped<GetExperienceAvailabilityQueryHandler>();
+        services.AddScoped<ActivateExperienceAvailabilityCommandValidator>();
+        services.AddScoped<ActivateExperienceAvailabilityCommandHandler>();
+        
         return services;
     }
 }

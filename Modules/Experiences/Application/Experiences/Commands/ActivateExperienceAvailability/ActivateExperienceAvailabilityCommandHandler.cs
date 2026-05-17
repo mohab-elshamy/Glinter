@@ -2,20 +2,20 @@ using Glinter.Modules.Experiences.Application.Abstractions;
 using Glinter.Modules.Experiences.Application.Common.Mapping;
 using Glinter.Modules.Experiences.Application.Experiences.Dtos;
 
-namespace Glinter.Modules.Experiences.Application.Experiences.Commands.DeactivateExperienceAvailability;
+namespace Glinter.Modules.Experiences.Application.Experiences.Commands.ActivateExperienceAvailability;
 
-public class DeactivateExperienceAvailabilityCommandHandler
+public class ActivateExperienceAvailabilityCommandHandler
 {
     private readonly IExperienceRepository _experienceRepository;
     private readonly IExperienceAvailabilityRepository _availabilityRepository;
     private readonly IExperienceProfileResolver _profileResolver;
-    private readonly DeactivateExperienceAvailabilityCommandValidator _validator;
+    private readonly ActivateExperienceAvailabilityCommandValidator _validator;
 
-    public DeactivateExperienceAvailabilityCommandHandler(
+    public ActivateExperienceAvailabilityCommandHandler(
         IExperienceRepository experienceRepository,
         IExperienceAvailabilityRepository availabilityRepository,
         IExperienceProfileResolver profileResolver,
-        DeactivateExperienceAvailabilityCommandValidator validator)
+        ActivateExperienceAvailabilityCommandValidator validator)
     {
         _experienceRepository = experienceRepository;
         _availabilityRepository = availabilityRepository;
@@ -24,7 +24,7 @@ public class DeactivateExperienceAvailabilityCommandHandler
     }
 
     public async Task<ExperienceAvailabilityResponseDto?> HandleAsync(
-        DeactivateExperienceAvailabilityCommand command,
+        ActivateExperienceAvailabilityCommand command,
         CancellationToken cancellationToken = default)
     {
         _validator.Validate(command);
@@ -52,10 +52,41 @@ public class DeactivateExperienceAvailabilityCommandHandler
 
         if (experience.ProviderProfileId != providerProfileId)
         {
-            throw new UnauthorizedAccessException("You can deactivate availability only for your own experiences.");
+            throw new UnauthorizedAccessException("You can activate availability only for your own experiences.");
         }
 
-        availability.IsActive = false;
+        if (!experience.IsActive)
+        {
+            throw new InvalidOperationException("Cannot activate availability for an inactive experience.");
+        }
+
+        if (availability.StartTimeUtc <= DateTime.UtcNow)
+        {
+            throw new InvalidOperationException("Cannot activate an availability slot in the past.");
+        }
+
+        if (availability.BookedCount > availability.Capacity)
+        {
+            throw new InvalidOperationException("Availability booked count cannot be greater than capacity.");
+        }
+
+        if (availability.IsActive)
+        {
+            return ExperiencesMappings.ToAvailabilityResponse(availability);
+        }
+
+        var hasOverlap = await _availabilityRepository.HasOverlapAsync(
+            availability.ExperienceId,
+            availability.StartTimeUtc,
+            availability.EndTimeUtc,
+            cancellationToken);
+
+        if (hasOverlap)
+        {
+            throw new InvalidOperationException("Cannot activate this slot because it overlaps with another active slot.");
+        }
+
+        availability.IsActive = true;
 
         await _availabilityRepository.UpdateAsync(availability, cancellationToken);
 
