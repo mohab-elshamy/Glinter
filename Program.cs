@@ -8,6 +8,9 @@ using Glinter.Modules.Stays.Infrastructure.DependencyInjection;
 using Glinter.Modules.Stays.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Glinter.Modules.LocationCatalog.Infrastructure.DependencyInjection;
+using Glinter.Modules.LocationCatalog.Infrastructure.Persistence;
+using Glinter.Modules.LocationCatalog.Infrastructure.Persistence.Seeders;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -16,6 +19,9 @@ builder.Services.AddIdentityAccessModule(builder.Configuration);
 
 // Module 2: Profiles
 builder.Services.AddProfilesModule(builder.Configuration);
+
+// Module 3:Location Catalog 
+builder.Services.AddLocationCatalogModule(builder.Configuration);
 
 // Module 4: Stays
 builder.Services.AddDbContext<StaysDbContext>(options =>
@@ -30,6 +36,13 @@ builder.Services.AddControllers()
     });
 
 var app = builder.Build();
+using (var scope = app.Services.CreateScope())
+{
+    var locationCatalogDbContext = scope.ServiceProvider
+        .GetRequiredService<LocationCatalogDbContext>();
+
+    await LocationCatalogSeeder.SeedAsync(locationCatalogDbContext);
+}
 
 app.UseAuthentication();
 app.UseAuthorization();
