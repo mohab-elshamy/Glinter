@@ -31,15 +31,18 @@ public class StaysController : ControllerBase
         _getStaysByAreaHandler = getStaysByAreaHandler;
         _setStayActiveStatusHandler = setStayActiveStatusHandler;
     }
-    [Authorize]
+    
+    
+    [Authorize(Roles = "HotelOwner")]
     [HttpPost]
-    public async Task<IActionResult> Create([FromBody] CreateStayRequestDto request, CancellationToken cancellationToken)
+    public async Task<IActionResult> Create(
+        [FromBody] CreateStayRequestDto request,
+        CancellationToken cancellationToken)
     {
         try
         {
             var command = new CreateStayCommand
             {
-                
                 AreaId = request.AreaId,
                 Name = request.Name,
                 Description = request.Description,
@@ -53,11 +56,20 @@ public class StaysController : ControllerBase
             };
 
             var result = await _createStayHandler.HandleAsync(command, cancellationToken);
+
             return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
         }
         catch (ArgumentException ex)
         {
             return BadRequest(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
         }
     }
 

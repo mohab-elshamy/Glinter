@@ -3,6 +3,7 @@ using Glinter.Modules.Stays.Application.Listings.Dtos;
 using Glinter.Modules.Stays.Domain.Entities;
 using Glinter.Modules.IdentityAccess.Application.Abstractions;
 using Glinter.Modules.Profiles.Application.Abstractions;
+using Glinter.Modules.LocationCatalog.Application.Abstractions;
 
 namespace Glinter.Modules.Stays.Application.Listings.Commands;
 
@@ -11,18 +12,31 @@ public class CreateStayHandler
     private readonly IStayRepository _stayRepository;
     private readonly ICurrentUserService _currentUserService;
     private readonly IProfilesReadService _profilesReadService;
-    public CreateStayHandler(IStayRepository stayRepository, ICurrentUserService currentUserService,IProfilesReadService profilesReadService )
+    private readonly ILocationCatalogReadService _locationCatalogReadService;
+    
+    public CreateStayHandler(
+        IStayRepository stayRepository,
+        ICurrentUserService currentUserService,
+        IProfilesReadService profilesReadService,
+        ILocationCatalogReadService locationCatalogReadService)
     {
         _stayRepository = stayRepository;
         _currentUserService = currentUserService;
         _profilesReadService = profilesReadService;
-        
+        _locationCatalogReadService = locationCatalogReadService;
     }
 
     public async Task<StayResponseDto> HandleAsync(CreateStayCommand command, CancellationToken cancellationToken = default)
     {
         
-        
+        var areaExists = await _locationCatalogReadService.AreaExistsAsync(
+            command.AreaId,
+            cancellationToken);
+
+        if (!areaExists)
+        {
+            throw new InvalidOperationException("Invalid areaId. The selected area does not exist.");
+        }
         
         
         if (!_currentUserService.IsAuthenticated || _currentUserService.UserId is null)
@@ -37,7 +51,7 @@ public class CreateStayHandler
 
         if (ownerProfileId is null)
         {
-            throw new UnauthorizedAccessException("Only hotel owners can create stays.");
+            throw new UnauthorizedAccessException("Hotel owner profile is required before creating stays.");
         }
         
         
