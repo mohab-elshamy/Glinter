@@ -1,11 +1,12 @@
-using Glinter.Modules.Experiences.Application.Experiences.Commands.CreateExperienceAvailability;
+using Glinter.Modules.Experiences.Application.Common.Mapping;
+using Glinter.Modules.Experiences.Application.Experiences.Commands.ActivateExperienceAvailability;
 using Glinter.Modules.Experiences.Application.Experiences.Commands.DeactivateExperienceAvailability;
 using Glinter.Modules.Experiences.Application.Experiences.Dtos;
 using Glinter.Modules.Experiences.Application.Experiences.Queries.GetExperienceAvailability;
+using Glinter.Modules.Experiences.Application.Experiences.Commands.CreateExperienceAvailability;
 using Glinter.Modules.IdentityAccess.Domain.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Glinter.Modules.Experiences.Application.Experiences.Commands.ActivateExperienceAvailability;
 
 namespace Glinter.Modules.Experiences.Presentation.Controllers;
 
@@ -14,9 +15,9 @@ public class ExperienceAvailabilityController : ControllerBase
 {
     private readonly CreateExperienceAvailabilityCommandHandler _createAvailabilityHandler;
     private readonly DeactivateExperienceAvailabilityCommandHandler _deactivateAvailabilityHandler;
-    private readonly GetExperienceAvailabilityQueryHandler _getAvailabilityHandler;
     private readonly ActivateExperienceAvailabilityCommandHandler _activateAvailabilityHandler;
-    
+    private readonly GetExperienceAvailabilityQueryHandler _getAvailabilityHandler;
+
     public ExperienceAvailabilityController(
         CreateExperienceAvailabilityCommandHandler createAvailabilityHandler,
         DeactivateExperienceAvailabilityCommandHandler deactivateAvailabilityHandler,
@@ -66,13 +67,7 @@ public class ExperienceAvailabilityController : ControllerBase
         try
         {
             var result = await _createAvailabilityHandler.HandleAsync(
-                new CreateExperienceAvailabilityCommand
-                {
-                    ExperienceId = experienceId,
-                    StartTimeUtc = request.StartTimeUtc,
-                    EndTimeUtc = request.EndTimeUtc,
-                    Capacity = request.Capacity
-                },
+                request.ToCommand(experienceId),
                 cancellationToken);
 
             if (result == null)
@@ -84,6 +79,42 @@ public class ExperienceAvailabilityController : ControllerBase
                 nameof(GetByExperienceId),
                 new { experienceId = result.ExperienceId },
                 result);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+        }
+    }
+
+    [Authorize(Roles = RoleNames.ExperienceProvider)]
+    [HttpPatch("api/experience-availability/{availabilityId:guid}/activate")]
+    public async Task<ActionResult<ExperienceAvailabilityResponseDto>> Activate(
+        Guid availabilityId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _activateAvailabilityHandler.HandleAsync(
+                new ActivateExperienceAvailabilityCommand
+                {
+                    AvailabilityId = availabilityId
+                },
+                cancellationToken);
+
+            if (result == null)
+            {
+                return NotFound(new { message = "Availability slot was not found." });
+            }
+
+            return Ok(result);
         }
         catch (ArgumentException ex)
         {
@@ -122,42 +153,6 @@ public class ExperienceAvailabilityController : ControllerBase
             return Ok(result);
         }
         catch (ArgumentException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
-        }
-    }
-    
-    [Authorize(Roles = RoleNames.ExperienceProvider)]
-    [HttpPatch("api/experience-availability/{availabilityId:guid}/activate")]
-    public async Task<ActionResult<ExperienceAvailabilityResponseDto>> Activate(
-        Guid availabilityId,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            var result = await _activateAvailabilityHandler.HandleAsync(
-                new ActivateExperienceAvailabilityCommand
-                {
-                    AvailabilityId = availabilityId
-                },
-                cancellationToken);
-
-            if (result == null)
-            {
-                return NotFound(new { message = "Availability slot was not found." });
-            }
-
-            return Ok(result);
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-        catch (InvalidOperationException ex)
         {
             return BadRequest(new { message = ex.Message });
         }

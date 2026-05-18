@@ -1,9 +1,10 @@
+using Glinter.Modules.Experiences.Application.Common.Mapping;
 using Glinter.Modules.Experiences.Application.Experiences.Commands.CreateExperience;
 using Glinter.Modules.Experiences.Application.Experiences.Commands.SetExperienceActiveStatus;
 using Glinter.Modules.Experiences.Application.Experiences.Commands.UpdateExperience;
 using Glinter.Modules.Experiences.Application.Experiences.Dtos;
-using Glinter.Modules.Experiences.Application.Experiences.Queries.GetAllExperiences;
 using Glinter.Modules.Experiences.Application.Experiences.Queries.GetExperienceById;
+using Glinter.Modules.Experiences.Application.Experiences.Queries.GetAllExperiences;
 using Glinter.Modules.IdentityAccess.Domain.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -41,18 +42,9 @@ public class ExperiencesController : ControllerBase
     {
         try
         {
-            var query = new GetAllExperiencesQuery
-            {
-                AreaId = request.AreaId,
-                CategoryId = request.CategoryId,
-                MinPrice = request.MinPrice,
-                MaxPrice = request.MaxPrice,
-                Guests = request.Guests,
-                VibeId = request.VibeId,
-                Tag = request.Tag
-            };
-
-            var result = await _getAllExperiencesHandler.HandleAsync(query, cancellationToken);
+            var result = await _getAllExperiencesHandler.HandleAsync(
+                request.ToQuery(),
+                cancellationToken);
 
             return Ok(result);
         }
@@ -97,24 +89,9 @@ public class ExperiencesController : ControllerBase
     {
         try
         {
-            var command = new CreateExperienceCommand
-            {
-                CategoryId = request.CategoryId,
-                AreaId = request.AreaId,
-                Title = request.Title,
-                Description = request.Description,
-                LocationName = request.LocationName,
-                PricePerPerson = request.PricePerPerson,
-                Currency = request.Currency,
-                DurationMinutes = request.DurationMinutes,
-                MaxGuests = request.MaxGuests,
-                Latitude = request.Latitude,
-                Longitude = request.Longitude,
-                VibeIds = request.VibeIds,
-                Tags = request.Tags
-            };
-
-            var result = await _createExperienceHandler.HandleAsync(command, cancellationToken);
+            var result = await _createExperienceHandler.HandleAsync(
+                request.ToCommand(),
+                cancellationToken);
 
             return CreatedAtAction(
                 nameof(GetById),
@@ -144,25 +121,9 @@ public class ExperiencesController : ControllerBase
     {
         try
         {
-            var command = new UpdateExperienceCommand
-            {
-                Id = id,
-                CategoryId = request.CategoryId,
-                AreaId = request.AreaId,
-                Title = request.Title,
-                Description = request.Description,
-                LocationName = request.LocationName,
-                PricePerPerson = request.PricePerPerson,
-                Currency = request.Currency,
-                DurationMinutes = request.DurationMinutes,
-                MaxGuests = request.MaxGuests,
-                Latitude = request.Latitude,
-                Longitude = request.Longitude,
-                VibeIds = request.VibeIds,
-                Tags = request.Tags
-            };
-
-            var result = await _updateExperienceHandler.HandleAsync(command, cancellationToken);
+            var result = await _updateExperienceHandler.HandleAsync(
+                request.ToCommand(id),
+                cancellationToken);
 
             if (result == null)
             {

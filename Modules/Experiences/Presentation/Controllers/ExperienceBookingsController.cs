@@ -1,3 +1,4 @@
+using Glinter.Modules.Experiences.Application.Common.Mapping;
 using Glinter.Modules.Experiences.Application.Experiences.Commands.CancelExperienceBooking;
 using Glinter.Modules.Experiences.Application.Experiences.Commands.CompleteExperienceBooking;
 using Glinter.Modules.Experiences.Application.Experiences.Commands.CreateExperienceBooking;
@@ -39,12 +40,7 @@ public class ExperienceBookingsController : ControllerBase
         try
         {
             var result = await _createBookingHandler.HandleAsync(
-                new CreateExperienceBookingCommand
-                {
-                    ExperienceId = experienceId,
-                    AvailabilityId = request.AvailabilityId,
-                    GuestsCount = request.GuestsCount
-                },
+                request.ToCommand(experienceId),
                 cancellationToken);
 
             if (result == null)
