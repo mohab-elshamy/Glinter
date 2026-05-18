@@ -3,6 +3,7 @@ using System;
 using Glinter.Modules.LocationCatalog.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Glinter.Modules.LocationCatalog.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(LocationCatalogDbContext))]
-    partial class LocationCatalogDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260518195355_AddDistrictSafetySignals")]
+    partial class AddDistrictSafetySignals
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -134,60 +137,6 @@ namespace Glinter.Modules.LocationCatalog.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("districts", (string)null);
-                });
-
-            modelBuilder.Entity("Glinter.Modules.LocationCatalog.Domain.Entities.DistrictIndex", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("ComputedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("DistrictId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("PriceExplanation")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<string>("PriceLevel")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<double?>("PriceScore")
-                        .HasColumnType("double precision");
-
-                    b.Property<string>("SafetyExplanation")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<string>("SafetyLevel")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<double>("SafetyScore")
-                        .HasColumnType("double precision");
-
-                    b.Property<string>("ServicesExplanation")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<string>("ServicesLevel")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<double?>("ServicesScore")
-                        .HasColumnType("double precision");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("DistrictId")
-                        .IsUnique();
-
-                    b.ToTable("district_indices", (string)null);
                 });
 
             modelBuilder.Entity("Glinter.Modules.LocationCatalog.Domain.Entities.DistrictSafetySignal", b =>
@@ -320,17 +269,6 @@ namespace Glinter.Modules.LocationCatalog.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Governorate");
-                });
-
-            modelBuilder.Entity("Glinter.Modules.LocationCatalog.Domain.Entities.DistrictIndex", b =>
-                {
-                    b.HasOne("Glinter.Modules.LocationCatalog.Domain.Entities.District", "District")
-                        .WithOne()
-                        .HasForeignKey("Glinter.Modules.LocationCatalog.Domain.Entities.DistrictIndex", "DistrictId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("District");
                 });
 
             modelBuilder.Entity("Glinter.Modules.LocationCatalog.Domain.Entities.DistrictSafetySignal", b =>

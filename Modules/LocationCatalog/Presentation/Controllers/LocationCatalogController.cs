@@ -1,5 +1,7 @@
 ﻿using Glinter.Modules.LocationCatalog.Application.Locations;
 using Microsoft.AspNetCore.Mvc;
+using Glinter.Modules.LocationCatalog.Application.Safety.Dtos;
+using Glinter.Modules.LocationCatalog.Application.Safety.Services;
 
 namespace Glinter.Modules.LocationCatalog.Presentation.Controllers;
 
@@ -13,6 +15,11 @@ public sealed class LocationCatalogController : ControllerBase
     private readonly GetAreasByDistrictQueryHandler _getAreasByDistrictQueryHandler;
     private readonly SearchAreasQueryHandler _searchAreasQueryHandler;
     private readonly GetAreaByIdQueryHandler _getAreaByIdQueryHandler;
+    private readonly SearchDistrictsQueryHandler _searchDistrictsQueryHandler;
+    private readonly DistrictSafetySignalService _districtSafetySignalService;
+    private readonly DistrictSafetyScoreService _districtSafetyScoreService;
+    private readonly GetDistrictIndexByDistrictQueryHandler _getDistrictIndexByDistrictQueryHandler;
+    private readonly GetGovernorateDistrictIndicesQueryHandler _getGovernorateDistrictIndicesQueryHandler;
 
     public LocationCatalogController(
         GetCountriesQueryHandler getCountriesQueryHandler,
@@ -20,7 +27,13 @@ public sealed class LocationCatalogController : ControllerBase
         GetDistrictsByGovernorateQueryHandler getDistrictsByGovernorateQueryHandler,
         GetAreasByDistrictQueryHandler getAreasByDistrictQueryHandler,
         SearchAreasQueryHandler searchAreasQueryHandler,
-        GetAreaByIdQueryHandler getAreaByIdQueryHandler)
+        GetAreaByIdQueryHandler getAreaByIdQueryHandler,
+        SearchDistrictsQueryHandler searchDistrictsQueryHandler,
+        DistrictSafetySignalService districtSafetySignalService,
+        DistrictSafetyScoreService districtSafetyScoreService,
+        GetDistrictIndexByDistrictQueryHandler getDistrictIndexByDistrictQueryHandler,
+        GetGovernorateDistrictIndicesQueryHandler getGovernorateDistrictIndicesQueryHandler
+        )
     {
         _getCountriesQueryHandler = getCountriesQueryHandler;
         _getGovernoratesByCountryQueryHandler = getGovernoratesByCountryQueryHandler;
@@ -28,6 +41,11 @@ public sealed class LocationCatalogController : ControllerBase
         _getAreasByDistrictQueryHandler = getAreasByDistrictQueryHandler;
         _searchAreasQueryHandler = searchAreasQueryHandler;
         _getAreaByIdQueryHandler = getAreaByIdQueryHandler;
+        _searchDistrictsQueryHandler = searchDistrictsQueryHandler;
+        _districtSafetySignalService = districtSafetySignalService;
+        _districtSafetyScoreService = districtSafetyScoreService;
+        _getDistrictIndexByDistrictQueryHandler = getDistrictIndexByDistrictQueryHandler;
+        _getGovernorateDistrictIndicesQueryHandler = getGovernorateDistrictIndicesQueryHandler;
     }
 
     [HttpGet("countries")]
@@ -89,6 +107,104 @@ public sealed class LocationCatalogController : ControllerBase
         {
             return NotFound("Area was not found.");
         }
+
+        return Ok(result);
+    }
+    [HttpGet("districts/search")]
+    public async Task<IActionResult> SearchDistricts(
+        [FromQuery] string? query,
+        CancellationToken cancellationToken)
+    {
+        var result = await _searchDistrictsQueryHandler.HandleAsync(query, cancellationToken);
+
+        return Ok(result);
+    }
+    
+    [HttpPost("districts/{districtId:guid}/safety-signals/analyze")]
+    public async Task<IActionResult> AnalyzeDistrictSafetySignal(
+        Guid districtId,
+        [FromBody] AnalyzeDistrictSafetySignalRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _districtSafetySignalService.AnalyzeAndSaveAsync(
+                districtId,
+                request,
+                cancellationToken);
+
+            return Ok(result);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+    [HttpGet("districts/{districtId:guid}/safety-score")]
+    public async Task<IActionResult> GetDistrictSafetyScore(
+        Guid districtId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _districtSafetyScoreService.CalculateAsync(
+                districtId,
+                cancellationToken);
+
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+    }
+    [HttpPost("districts/{districtId:guid}/safety-score/recalculate")]
+    public async Task<IActionResult> RecalculateDistrictSafetyScore(
+        Guid districtId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _districtSafetyScoreService.CalculateAndSaveAsync(
+                districtId,
+                cancellationToken);
+
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+    }
+    [HttpGet("districts/{districtId:guid}/indices")]
+    public async Task<IActionResult> GetDistrictIndices(
+        Guid districtId,
+        CancellationToken cancellationToken)
+    {
+        var result = await _getDistrictIndexByDistrictQueryHandler.HandleAsync(
+            districtId,
+            cancellationToken);
+
+        if (result is null)
+        {
+            return NotFound(new { message = "District indices were not found. Recalculate the district score first." });
+        }
+
+        return Ok(result);
+    }
+
+    [HttpGet("governorates/{governorateId:guid}/district-indices")]
+    public async Task<IActionResult> GetGovernorateDistrictIndices(
+        Guid governorateId,
+        CancellationToken cancellationToken)
+    {
+        var result = await _getGovernorateDistrictIndicesQueryHandler.HandleAsync(
+            governorateId,
+            cancellationToken);
 
         return Ok(result);
     }

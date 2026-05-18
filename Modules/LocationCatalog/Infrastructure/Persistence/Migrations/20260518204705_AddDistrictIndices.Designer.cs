@@ -3,6 +3,7 @@ using System;
 using Glinter.Modules.LocationCatalog.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Glinter.Modules.LocationCatalog.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(LocationCatalogDbContext))]
-    partial class LocationCatalogDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260518204705_AddDistrictIndices")]
+    partial class AddDistrictIndices
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

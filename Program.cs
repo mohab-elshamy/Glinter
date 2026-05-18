@@ -11,6 +11,7 @@ using Microsoft.EntityFrameworkCore;
 using Glinter.Modules.LocationCatalog.Infrastructure.DependencyInjection;
 using Glinter.Modules.LocationCatalog.Infrastructure.Persistence;
 using Glinter.Modules.LocationCatalog.Infrastructure.Persistence.Seeders;
+using Glinter.Modules.LocationCatalog.Infrastructure.Persistence.Import;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -42,6 +43,15 @@ using (var scope = app.Services.CreateScope())
         .GetRequiredService<LocationCatalogDbContext>();
 
     await LocationCatalogSeeder.SeedAsync(locationCatalogDbContext);
+
+    var hdxCsvPath = Path.Combine(
+        app.Environment.ContentRootPath,
+        "Data",
+        "egy_admin3.csv");
+
+    await HdxLocationCatalogImporter.ImportAsync(
+        locationCatalogDbContext,
+        hdxCsvPath);
 }
 
 app.UseAuthentication();

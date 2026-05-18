@@ -111,3 +111,8 @@ node_modules/
 *.temp
 *.swp
 *.bak
+Data/*.csv
+Data/*.gpkg
+Data/*.qmd
+Data/*.zip
+Data/*.gdb

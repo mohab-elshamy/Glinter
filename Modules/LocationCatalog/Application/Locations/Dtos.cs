@@ -47,3 +47,57 @@ public sealed record AreaDetailsResponse(
     Guid CountryId,
     string CountryNameEn
 );
+public sealed record AreaSearchResponse(
+    Guid AreaId,
+    string AreaNameEn,
+    string? AreaNameAr,
+    string DisplayName,
+    Guid DistrictId,
+    string DistrictNameEn,
+    string? DistrictNameAr,
+    Guid GovernorateId,
+    string GovernorateNameEn,
+    string? GovernorateNameAr,
+    Guid CountryId,
+    string CountryNameEn,
+    string? CountryNameAr,
+    double? Latitude,
+    double? Longitude
+);
+
+public sealed record DistrictSearchResponse(
+    Guid DistrictId,
+    string DistrictNameEn,
+    string? DistrictNameAr,
+    string DisplayName,
+    Guid GovernorateId,
+    string GovernorateNameEn,
+    string? GovernorateNameAr,
+    Guid CountryId,
+    string CountryNameEn,
+    string? CountryNameAr
+);
+public sealed record DistrictIndexResponse(
+    Guid DistrictId,
+    string DistrictNameEn,
+    string? DistrictNameAr,
+    string DisplayName,
+    Guid GovernorateId,
+    string GovernorateNameEn,
+    string? GovernorateNameAr,
+    Guid CountryId,
+    string CountryNameEn,
+    string? CountryNameAr,
+    double? Latitude,
+    double? Longitude,
+    double SafetyScore,
+    string SafetyLevel,
+    string? SafetyExplanation,
+    double? PriceScore,
+    string? PriceLevel,
+    string? PriceExplanation,
+    double? ServicesScore,
+    string? ServicesLevel,
+    string? ServicesExplanation,
+    DateTime ComputedAtUtc
+);
