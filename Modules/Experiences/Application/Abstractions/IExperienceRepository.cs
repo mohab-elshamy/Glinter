@@ -37,4 +37,8 @@ public interface IExperienceRepository
         CancellationToken cancellationToken = default);
 
     Task UpdateAsync(Experience experience, CancellationToken cancellationToken = default);
+    
+    Task<List<Experience>> GetByProviderProfileIdAsync(
+        Guid providerProfileId,
+        CancellationToken cancellationToken = default);
 }

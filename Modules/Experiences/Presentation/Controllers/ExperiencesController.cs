@@ -8,6 +8,7 @@ using Glinter.Modules.Experiences.Application.Experiences.Queries.GetAllExperien
 using Glinter.Modules.IdentityAccess.Domain.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Glinter.Modules.Experiences.Application.Experiences.Queries.GetMyExperiences;
 
 namespace Glinter.Modules.Experiences.Presentation.Controllers;
 
@@ -20,19 +21,22 @@ public class ExperiencesController : ControllerBase
     private readonly SetExperienceActiveStatusCommandHandler _setExperienceActiveStatusHandler;
     private readonly GetAllExperiencesQueryHandler _getAllExperiencesHandler;
     private readonly GetExperienceByIdQueryHandler _getExperienceByIdHandler;
+    private readonly GetMyExperiencesQueryHandler _getMyExperiencesHandler;
 
     public ExperiencesController(
         CreateExperienceCommandHandler createExperienceHandler,
         UpdateExperienceCommandHandler updateExperienceHandler,
         SetExperienceActiveStatusCommandHandler setExperienceActiveStatusHandler,
         GetAllExperiencesQueryHandler getAllExperiencesHandler,
-        GetExperienceByIdQueryHandler getExperienceByIdHandler)
+        GetExperienceByIdQueryHandler getExperienceByIdHandler,
+        GetMyExperiencesQueryHandler getMyExperiencesHandler)
     {
         _createExperienceHandler = createExperienceHandler;
         _updateExperienceHandler = updateExperienceHandler;
         _setExperienceActiveStatusHandler = setExperienceActiveStatusHandler;
         _getAllExperiencesHandler = getAllExperiencesHandler;
         _getExperienceByIdHandler = getExperienceByIdHandler;
+        _getMyExperiencesHandler = getMyExperiencesHandler;
     }
 
     [HttpGet]
@@ -49,6 +53,25 @@ public class ExperiencesController : ControllerBase
             return Ok(result);
         }
         catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+    
+    [Authorize(Roles = RoleNames.ExperienceProvider)]
+    [HttpGet("my")]
+    public async Task<ActionResult<List<ExperienceSummaryDto>>> GetMyExperiences(
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _getMyExperiencesHandler.HandleAsync(
+                new GetMyExperiencesQuery(),
+                cancellationToken);
+
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
         {
             return BadRequest(new { message = ex.Message });
         }

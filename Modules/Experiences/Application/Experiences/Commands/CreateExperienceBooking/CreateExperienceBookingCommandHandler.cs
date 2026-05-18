@@ -111,8 +111,10 @@ public class CreateExperienceBookingCommandHandler
 
         availability.BookedCount += command.GuestsCount;
 
-        await _availabilityRepository.UpdateAsync(availability, cancellationToken);
-        await _bookingRepository.AddAsync(booking, cancellationToken);
+        await _bookingRepository.AddBookingAndUpdateAvailabilityAsync(
+            booking,
+            availability,
+            cancellationToken);
 
         return ExperiencesMappings.ToBookingResponse(booking);
     }

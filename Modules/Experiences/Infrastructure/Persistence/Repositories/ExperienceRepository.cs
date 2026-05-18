@@ -170,4 +170,19 @@ public class ExperienceRepository : IExperienceRepository
         _context.Experiences.Update(experience);
         await _context.SaveChangesAsync(cancellationToken);
     }
+    
+    public async Task<List<Experience>> GetByProviderProfileIdAsync(
+        Guid providerProfileId,
+        CancellationToken cancellationToken = default)
+    {
+        return await _context.Experiences
+            .AsNoTracking()
+            .Include(x => x.Category)
+            .Include(x => x.Tags)
+            .Include(x => x.ExperienceVibes)
+            .ThenInclude(x => x.Vibe)
+            .Where(x => x.ProviderProfileId == providerProfileId)
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .ToListAsync(cancellationToken);
+    }
 }

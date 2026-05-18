@@ -1,3 +1,4 @@
+using Glinter.Modules.Experiences.Application.Common.Mapping;
 using Glinter.Modules.Experiences.Application.Experiences.Commands.CreateExperienceReview;
 using Glinter.Modules.Experiences.Application.Experiences.Commands.DeleteExperienceReview;
 using Glinter.Modules.Experiences.Application.Experiences.Commands.UpdateExperienceReview;
@@ -66,12 +67,7 @@ public class ExperienceReviewsController : ControllerBase
         try
         {
             var result = await _createReviewHandler.HandleAsync(
-                new CreateExperienceReviewCommand
-                {
-                    ExperienceId = experienceId,
-                    Rating = request.Rating,
-                    Comment = request.Comment
-                },
+                request.ToCommand(experienceId),
                 cancellationToken);
 
             if (result == null)
@@ -104,12 +100,7 @@ public class ExperienceReviewsController : ControllerBase
         try
         {
             var result = await _updateReviewHandler.HandleAsync(
-                new UpdateExperienceReviewCommand
-                {
-                    ReviewId = reviewId,
-                    Rating = request.Rating,
-                    Comment = request.Comment
-                },
+                request.ToCommand(reviewId),
                 cancellationToken);
 
             if (result == null)

@@ -64,13 +64,17 @@ public class CancelExperienceBookingCommandHandler
             booking.AvailabilityId,
             cancellationToken);
 
-        if (availability != null)
+        if (availability == null)
         {
-            availability.BookedCount = Math.Max(0, availability.BookedCount - booking.GuestsCount);
-            await _availabilityRepository.UpdateAsync(availability, cancellationToken);
+            throw new InvalidOperationException("Availability slot was not found.");
         }
 
-        await _bookingRepository.UpdateAsync(booking, cancellationToken);
+        availability.BookedCount = Math.Max(0, availability.BookedCount - booking.GuestsCount);
+
+        await _bookingRepository.UpdateBookingAndAvailabilityAsync(
+            booking,
+            availability,
+            cancellationToken);
 
         return ExperiencesMappings.ToBookingResponse(booking);
     }

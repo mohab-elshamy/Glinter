@@ -29,4 +29,18 @@ public interface IExperienceBookingRepository
         CancellationToken cancellationToken = default);
 
     Task UpdateAsync(ExperienceBooking booking, CancellationToken cancellationToken = default);
+
+    Task AddBookingAndUpdateAvailabilityAsync(
+        ExperienceBooking booking,
+        ExperienceAvailability availability,
+        CancellationToken cancellationToken = default);
+
+    Task UpdateBookingAndAvailabilityAsync(
+        ExperienceBooking booking,
+        ExperienceAvailability availability,
+        CancellationToken cancellationToken = default);
+    
+    Task<List<ExperienceBooking>> GetByTravelerProfileIdAsync(
+        Guid travelerProfileId,
+        CancellationToken cancellationToken = default);
 }

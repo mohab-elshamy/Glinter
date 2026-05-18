@@ -24,6 +24,8 @@ using Glinter.Modules.Experiences.Application.Experiences.Commands.DeleteExperie
 using Glinter.Modules.Experiences.Application.Experiences.Queries.GetExperienceReviews;
 using Glinter.Modules.Experiences.Application.Experiences.Queries.GetExperienceCategories;
 using Glinter.Modules.Experiences.Application.Experiences.Queries.GetVibes;
+using Glinter.Modules.Experiences.Application.Experiences.Queries.GetMyExperiences;
+using Glinter.Modules.Experiences.Application.Experiences.Queries.GetMyExperienceBookings;
 
 namespace Glinter.Modules.Experiences.Infrastructure.DependencyInjection;
 
@@ -95,6 +97,11 @@ public static class ExperiencesModule
         
         services.AddScoped<GetExperienceCategoriesQueryHandler>();
         services.AddScoped<GetVibesQueryHandler>();
+        
+        services.AddScoped<GetMyExperiencesQueryHandler>();
+        
+        services.AddScoped<GetMyExperienceBookingsQueryHandler>();
+        
         return services;
     }
 }
