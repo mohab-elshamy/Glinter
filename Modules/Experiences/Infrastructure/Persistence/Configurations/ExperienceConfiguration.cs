@@ -51,6 +51,14 @@ public class ExperienceConfiguration : IEntityTypeConfiguration<Experience>
 
         builder.Property(x => x.IsActive)
             .IsRequired();
+        
+        builder.Property(x => x.ApprovalStatus)
+            .HasConversion<string>()
+            .HasMaxLength(30)
+            .IsRequired();
+
+        builder.Property(x => x.ModerationNotes)
+            .HasMaxLength(1000);
 
         builder.Property(x => x.CreatedAtUtc)
             .IsRequired();

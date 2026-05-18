@@ -26,6 +26,8 @@ using Glinter.Modules.Experiences.Application.Experiences.Queries.GetExperienceC
 using Glinter.Modules.Experiences.Application.Experiences.Queries.GetVibes;
 using Glinter.Modules.Experiences.Application.Experiences.Queries.GetMyExperiences;
 using Glinter.Modules.Experiences.Application.Experiences.Queries.GetMyExperienceBookings;
+using Glinter.Modules.Experiences.Application.Experiences.Commands.SetExperienceApprovalStatus;
+using Glinter.Modules.Experiences.Application.Experiences.Queries.GetAdminExperiences;
 
 namespace Glinter.Modules.Experiences.Infrastructure.DependencyInjection;
 
@@ -101,6 +103,11 @@ public static class ExperiencesModule
         services.AddScoped<GetMyExperiencesQueryHandler>();
         
         services.AddScoped<GetMyExperienceBookingsQueryHandler>();
+        
+        services.AddScoped<GetAdminExperiencesQueryHandler>();
+
+        services.AddScoped<SetExperienceApprovalStatusCommandValidator>();
+        services.AddScoped<SetExperienceApprovalStatusCommandHandler>();
         
         return services;
     }

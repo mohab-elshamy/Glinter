@@ -22,7 +22,7 @@ public class GetExperienceByIdQueryHandler
             throw new ArgumentException("Experience Id is required.");
         }
 
-        var experience = await _experienceRepository.GetByIdAsync(
+        var experience = await _experienceRepository.GetPublishedByIdAsync(
             query.Id,
             cancellationToken);
 

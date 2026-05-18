@@ -1,6 +1,7 @@
 using Glinter.Modules.Experiences.Application.Abstractions;
 using Glinter.Modules.Experiences.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+using Glinter.Modules.Experiences.Domain.Enums;
 
 namespace Glinter.Modules.Experiences.Infrastructure.Persistence.Repositories;
 
@@ -54,7 +55,7 @@ public class ExperienceRepository : IExperienceRepository
             .Include(x => x.Tags)
             .Include(x => x.ExperienceVibes)
                 .ThenInclude(x => x.Vibe)
-            .Where(x => x.IsActive)
+            .Where(x => x.IsActive && x.ApprovalStatus == ExperienceApprovalStatus.Approved)
             .AsQueryable();
 
         if (areaId.HasValue)
@@ -182,6 +183,51 @@ public class ExperienceRepository : IExperienceRepository
             .Include(x => x.ExperienceVibes)
             .ThenInclude(x => x.Vibe)
             .Where(x => x.ProviderProfileId == providerProfileId)
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .ToListAsync(cancellationToken);
+    }
+    
+    public async Task<Experience?> GetPublishedByIdAsync(
+        Guid id,
+        CancellationToken cancellationToken = default)
+    {
+        return await _context.Experiences
+            .AsNoTracking()
+            .Include(x => x.Category)
+            .Include(x => x.Tags)
+            .Include(x => x.ExperienceVibes)
+            .ThenInclude(x => x.Vibe)
+            .FirstOrDefaultAsync(
+                x => x.Id == id &&
+                     x.IsActive &&
+                     x.ApprovalStatus == ExperienceApprovalStatus.Approved,
+                cancellationToken);
+    }
+    
+    public async Task<List<Experience>> GetForAdminAsync(
+        ExperienceApprovalStatus? approvalStatus,
+        bool? isActive,
+        CancellationToken cancellationToken = default)
+    {
+        var query = _context.Experiences
+            .AsNoTracking()
+            .Include(x => x.Category)
+            .Include(x => x.Tags)
+            .Include(x => x.ExperienceVibes)
+            .ThenInclude(x => x.Vibe)
+            .AsQueryable();
+
+        if (approvalStatus.HasValue)
+        {
+            query = query.Where(x => x.ApprovalStatus == approvalStatus.Value);
+        }
+
+        if (isActive.HasValue)
+        {
+            query = query.Where(x => x.IsActive == isActive.Value);
+        }
+
+        return await query
             .OrderByDescending(x => x.CreatedAtUtc)
             .ToListAsync(cancellationToken);
     }

@@ -1,5 +1,7 @@
 namespace Glinter.Modules.Experiences.Domain.Entities;
 
+using Glinter.Modules.Experiences.Domain.Enums;
+
 public class Experience
 {
     public Guid Id { get; set; }
@@ -29,6 +31,12 @@ public class Experience
     public double Longitude { get; set; }
 
     public bool IsActive { get; set; } = true;
+    
+    public ExperienceApprovalStatus ApprovalStatus { get; set; } = ExperienceApprovalStatus.Pending;
+
+    public string? ModerationNotes { get; set; }
+
+    public DateTime? ModeratedAtUtc { get; set; }
 
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 

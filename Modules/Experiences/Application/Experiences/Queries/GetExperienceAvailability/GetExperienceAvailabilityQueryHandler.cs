@@ -1,6 +1,7 @@
 using Glinter.Modules.Experiences.Application.Abstractions;
 using Glinter.Modules.Experiences.Application.Common.Mapping;
 using Glinter.Modules.Experiences.Application.Experiences.Dtos;
+using Glinter.Modules.Experiences.Domain.Enums;
 
 namespace Glinter.Modules.Experiences.Application.Experiences.Queries.GetExperienceAvailability;
 
@@ -31,6 +32,11 @@ public class GetExperienceAvailabilityQueryHandler
             cancellationToken);
 
         if (experience == null)
+        {
+            return null;
+        }
+        
+        if (!experience.IsActive || experience.ApprovalStatus != ExperienceApprovalStatus.Approved)
         {
             return null;
         }

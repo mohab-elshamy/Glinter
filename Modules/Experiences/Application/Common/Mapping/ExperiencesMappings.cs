@@ -53,6 +53,9 @@ public static class ExperiencesMappings
             Latitude = experience.Latitude,
             Longitude = experience.Longitude,
             IsActive = experience.IsActive,
+            ApprovalStatus = experience.ApprovalStatus.ToString(),
+            ModerationNotes = experience.ModerationNotes,
+            ModeratedAtUtc = experience.ModeratedAtUtc,
             CreatedAtUtc = experience.CreatedAtUtc,
             UpdatedAtUtc = experience.UpdatedAtUtc,
             Vibes = experience.ExperienceVibes
@@ -81,6 +84,8 @@ public static class ExperiencesMappings
             DurationMinutes = experience.DurationMinutes,
             MaxGuests = experience.MaxGuests,
             IsActive = experience.IsActive,
+            ApprovalStatus = experience.ApprovalStatus.ToString(),
+            ModerationNotes = experience.ModerationNotes,
             Vibes = experience.ExperienceVibes
                 .Where(x => x.Vibe != null)
                 .Select(x => x.Vibe!.Name)

@@ -31,6 +31,12 @@ public class ExperienceResponseDto
     public double Longitude { get; set; }
 
     public bool IsActive { get; set; }
+    
+    public string ApprovalStatus { get; set; } = string.Empty;
+
+    public string? ModerationNotes { get; set; }
+
+    public DateTime? ModeratedAtUtc { get; set; }
 
     public DateTime CreatedAtUtc { get; set; }
 

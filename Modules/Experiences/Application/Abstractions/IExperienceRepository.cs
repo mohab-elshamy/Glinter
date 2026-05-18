@@ -1,4 +1,5 @@
 using Glinter.Modules.Experiences.Domain.Entities;
+using Glinter.Modules.Experiences.Domain.Enums;
 
 namespace Glinter.Modules.Experiences.Application.Abstractions;
 
@@ -40,5 +41,14 @@ public interface IExperienceRepository
     
     Task<List<Experience>> GetByProviderProfileIdAsync(
         Guid providerProfileId,
+        CancellationToken cancellationToken = default);
+    
+    Task<Experience?> GetPublishedByIdAsync(
+        Guid id,
+        CancellationToken cancellationToken = default);
+
+    Task<List<Experience>> GetForAdminAsync(
+        ExperienceApprovalStatus? approvalStatus,
+        bool? isActive,
         CancellationToken cancellationToken = default);
 }

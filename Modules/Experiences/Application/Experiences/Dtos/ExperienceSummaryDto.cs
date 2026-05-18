@@ -25,6 +25,10 @@ public class ExperienceSummaryDto
     public int MaxGuests { get; set; }
 
     public bool IsActive { get; set; }
+    
+    public string ApprovalStatus { get; set; } = string.Empty;
+
+    public string? ModerationNotes { get; set; }
 
     public List<string> Vibes { get; set; } = new();
 

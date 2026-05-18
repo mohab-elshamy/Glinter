@@ -46,9 +46,9 @@ public class CreateExperienceBookingCommandHandler
             return null;
         }
 
-        if (!experience.IsActive)
+        if (!experience.IsActive || experience.ApprovalStatus != ExperienceApprovalStatus.Approved)
         {
-            throw new InvalidOperationException("Cannot book an inactive experience.");
+            throw new InvalidOperationException("Cannot book an experience that is not active and approved.");
         }
 
         if (command.GuestsCount > experience.MaxGuests)
