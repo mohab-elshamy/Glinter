@@ -54,19 +54,31 @@ public sealed class DistrictSafetySignalService
         {
             Id = Guid.NewGuid(),
             DistrictId = districtId,
-            SourceType = string.IsNullOrWhiteSpace(request.SourceType)
-                ? "Manual"
-                : request.SourceType.Trim(),
-            Title = request.Title.Trim(),
-            Content = request.Content.Trim(),
-            SourceUrl = request.SourceUrl,
-            RiskCategory = aiResult.RiskCategory,
-            Severity = aiResult.Severity,
+
+            SourceType = Truncate(
+                string.IsNullOrWhiteSpace(request.SourceType)
+                    ? "Manual"
+                    : request.SourceType.Trim(),
+                100),
+
+            Title = Truncate(request.Title.Trim(), 500),
+
+            Content = Truncate(request.Content.Trim(), 4000),
+
+            SourceUrl = TruncateNullable(request.SourceUrl, 1000),
+
+            RiskCategory = Truncate(aiResult.RiskCategory, 100),
+
+            Severity = Truncate(aiResult.Severity, 50),
+
             Confidence = aiResult.Confidence,
             SentimentScore = aiResult.SentimentScore,
             IsSafetyRelevant = aiResult.IsSafetyRelevant,
-            AiSummary = aiResult.Summary,
-            RawAiJson = JsonSerializer.Serialize(aiResult),
+
+            AiSummary = Truncate(aiResult.Summary, 1000),
+
+            RawAiJson = Truncate(JsonSerializer.Serialize(aiResult), 4000),
+
             PublishedAtUtc = request.PublishedAtUtc ?? DateTime.UtcNow,
             AnalyzedAtUtc = DateTime.UtcNow
         };
@@ -89,5 +101,33 @@ public sealed class DistrictSafetySignalService
             signal.PublishedAtUtc,
             signal.AnalyzedAtUtc
         );
+    }
+    
+    private static string Truncate(string? value, int maxLength)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        var trimmed = value.Trim();
+
+        return trimmed.Length <= maxLength
+            ? trimmed
+            : trimmed[..maxLength];
+    }
+
+    private static string? TruncateNullable(string? value, int maxLength)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var trimmed = value.Trim();
+
+        return trimmed.Length <= maxLength
+            ? trimmed
+            : trimmed[..maxLength];
     }
 }

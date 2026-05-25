@@ -9,6 +9,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
+
 namespace Glinter.Modules.LocationCatalog.Infrastructure.DependencyInjection;
 
 public static class LocationCatalogModule
@@ -63,7 +64,40 @@ public static class LocationCatalogModule
 
         services.AddScoped<DistrictSafetySignalService>();
         services.AddScoped<DistrictSafetyScoreService>();
+        
+        
+        services.Configure<NewsApiOptions>(configuration.GetSection("NewsApi"));
+        services.AddHttpClient<NewsApiNewsProvider>((provider, client) =>
+        {
+            var options = provider.GetRequiredService<IOptions<NewsApiOptions>>().Value;
+
+            var baseUrl = string.IsNullOrWhiteSpace(options.BaseUrl)
+                ? "https://newsapi.org/v2/"
+                : options.BaseUrl;
+
+            client.BaseAddress = new Uri(baseUrl.EndsWith("/") ? baseUrl : $"{baseUrl}/");
+            client.Timeout = TimeSpan.FromSeconds(30);
+        });
+
+        services.AddScoped<INewsProvider>(provider =>
+            provider.GetRequiredService<GoogleNewsRssProvider>());
+
+        services.AddScoped<DistrictNewsImportService>();
+        services.Configure<GoogleNewsRssOptions>(
+            configuration.GetSection("GoogleNewsRss"));
+
+        services.AddHttpClient<GoogleNewsRssProvider>((provider, client) =>
+        {
+            var options = provider
+                .GetRequiredService<IOptions<GoogleNewsRssOptions>>()
+                .Value;
+
+            client.BaseAddress = new Uri("https://news.google.com/");
+            client.Timeout = TimeSpan.FromSeconds(30);
+        });
 
         return services;
     }
+    
+    
 }

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Glinter.Modules.LocationCatalog.Application.Safety.Dtos;
 using Glinter.Modules.LocationCatalog.Application.Safety.Services;
 
+
 namespace Glinter.Modules.LocationCatalog.Presentation.Controllers;
 
 [ApiController]
@@ -20,6 +21,7 @@ public sealed class LocationCatalogController : ControllerBase
     private readonly DistrictSafetyScoreService _districtSafetyScoreService;
     private readonly GetDistrictIndexByDistrictQueryHandler _getDistrictIndexByDistrictQueryHandler;
     private readonly GetGovernorateDistrictIndicesQueryHandler _getGovernorateDistrictIndicesQueryHandler;
+    private readonly DistrictNewsImportService _districtNewsImportService;
 
     public LocationCatalogController(
         GetCountriesQueryHandler getCountriesQueryHandler,
@@ -32,7 +34,8 @@ public sealed class LocationCatalogController : ControllerBase
         DistrictSafetySignalService districtSafetySignalService,
         DistrictSafetyScoreService districtSafetyScoreService,
         GetDistrictIndexByDistrictQueryHandler getDistrictIndexByDistrictQueryHandler,
-        GetGovernorateDistrictIndicesQueryHandler getGovernorateDistrictIndicesQueryHandler
+        GetGovernorateDistrictIndicesQueryHandler getGovernorateDistrictIndicesQueryHandler,
+        DistrictNewsImportService districtNewsImportService
         )
     {
         _getCountriesQueryHandler = getCountriesQueryHandler;
@@ -46,6 +49,7 @@ public sealed class LocationCatalogController : ControllerBase
         _districtSafetyScoreService = districtSafetyScoreService;
         _getDistrictIndexByDistrictQueryHandler = getDistrictIndexByDistrictQueryHandler;
         _getGovernorateDistrictIndicesQueryHandler = getGovernorateDistrictIndicesQueryHandler;
+        _districtNewsImportService = districtNewsImportService;
     }
 
     [HttpGet("countries")]
@@ -207,5 +211,29 @@ public sealed class LocationCatalogController : ControllerBase
             cancellationToken);
 
         return Ok(result);
+    }
+    [HttpPost("districts/{districtId:guid}/news/import")]
+    public async Task<IActionResult> ImportDistrictNews(
+        Guid districtId,
+        [FromBody] ImportDistrictNewsRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _districtNewsImportService.ImportAsync(
+                districtId,
+                request,
+                cancellationToken);
+
+            return Ok(result);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 }
