@@ -20,6 +20,7 @@ using Glinter.Modules.IdentityAccess.Application.Auth.Queries.GetUsers;
 using Glinter.Modules.IdentityAccess.Application.Auth.Queries.GetRoles;
 
 
+
 namespace Glinter.Modules.IdentityAccess.Infrastructure.DependencyInjection;
 
 public static class IdentityAccessModule
@@ -33,7 +34,9 @@ public static class IdentityAccessModule
 
         services.AddDbContext<IdentityAccessDbContext>(options =>
             options.UseNpgsql(connectionString));
-
+        services.AddHttpContextAccessor();
+        services.AddScoped<ICurrentUserService, CurrentUserService>();
+        
         services.AddScoped<IIdentityAccessDbContext>(sp =>
             sp.GetRequiredService<IdentityAccessDbContext>());
 

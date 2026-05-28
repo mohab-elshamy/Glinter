@@ -1,111 +1,179 @@
-﻿using Glinter.Modules.Stays.Domain.Entities;
-using Glinter.Modules.Stays.Infrastructure.Persistence;
+﻿using Microsoft.AspNetCore.Authorization;
+using Glinter.Modules.Stays.Application.Listings.Commands;
+using Glinter.Modules.Stays.Application.Listings.Dtos;
+using Glinter.Modules.Stays.Application.Listings.Queries;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-
 namespace Glinter.Modules.Stays.Presentation.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
 public class StaysController : ControllerBase
 {
-    private readonly GlinterDbContext _dbContext;
-
-    public StaysController(GlinterDbContext dbContext)
+    
+    private readonly CreateStayHandler _createStayHandler;
+    private readonly GetAllStaysHandler _getAllStaysHandler;
+    private readonly GetStayByIdHandler _getStayByIdHandler;
+    private readonly UpdateStayHandler _updateStayHandler;
+    private readonly GetStaysByAreaHandler _getStaysByAreaHandler;
+    private readonly SetStayActiveStatusHandler _setStayActiveStatusHandler;
+    public StaysController(
+        CreateStayHandler createStayHandler,
+        GetAllStaysHandler getAllStaysHandler,
+        GetStayByIdHandler getStayByIdHandler,
+        UpdateStayHandler updateStayHandler,
+        GetStaysByAreaHandler getStaysByAreaHandler,
+        SetStayActiveStatusHandler setStayActiveStatusHandler)
     {
-        _dbContext = dbContext;
+        _createStayHandler = createStayHandler;
+        _getAllStaysHandler = getAllStaysHandler;
+        _getStayByIdHandler = getStayByIdHandler;
+        _updateStayHandler = updateStayHandler;
+        _getStaysByAreaHandler = getStaysByAreaHandler;
+        _setStayActiveStatusHandler = setStayActiveStatusHandler;
+    }
+    [Authorize]
+    [HttpPost]
+    public async Task<IActionResult> Create([FromBody] CreateStayRequestDto request, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var command = new CreateStayCommand
+            {
+                
+                AreaId = request.AreaId,
+                Name = request.Name,
+                Description = request.Description,
+                Address = request.Address,
+                PricePerNight = request.PricePerNight,
+                Currency = request.Currency,
+                MaxGuests = request.MaxGuests,
+                Latitude = request.Latitude,
+                Longitude = request.Longitude,
+                Tags = request.Tags
+            };
+
+            var result = await _createStayHandler.HandleAsync(command, cancellationToken);
+            return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll(
+        [FromQuery] GetStaysRequestDto request,
+        CancellationToken cancellationToken)
     {
-        var stays = await _dbContext.Stays
-            .Include(x => x.Tags)
-            .Include(x => x.Reviews)
-            .OrderByDescending(x => x.CreatedAtUtc)
-            .ToListAsync();
+        try
+        {
+            var query = new GetAllStaysQuery
+            {
+                AreaId = request.AreaId,
+                MinPrice = request.MinPrice,
+                MaxPrice = request.MaxPrice,
+                Guests = request.Guests,
+                Tag = request.Tag
+            };
 
-        return Ok(stays);
+            var result = await _getAllStaysHandler.HandleAsync(query, cancellationToken);
+
+            return Ok(result);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     [HttpGet("{id:guid}")]
-    public async Task<IActionResult> GetById(Guid id)
+    public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
     {
-        var stay = await _dbContext.Stays
-            .Include(x => x.Tags)
-            .Include(x => x.Reviews)
-            .FirstOrDefaultAsync(x => x.Id == id);
+        var result = await _getStayByIdHandler.HandleAsync(new GetStayByIdQuery { Id = id }, cancellationToken);
 
-        if (stay is null)
+        if (result is null)
             return NotFound(new { message = "Stay not found." });
 
-        return Ok(stay);
+        return Ok(result);
     }
-
-    [HttpPost]
-    public async Task<IActionResult> Create([FromBody] CreateStayRequest request)
+    
+    [HttpPut("{id:guid}")]
+    public async Task<IActionResult> Update(Guid id, [FromBody] UpdateStayRequestDto request, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(request.Name))
-            return BadRequest(new { message = "Name is required." });
-
-        if (request.PricePerNight <= 0)
-            return BadRequest(new { message = "PricePerNight must be greater than 0." });
-
-        if (request.MaxGuests <= 0)
-            return BadRequest(new { message = "MaxGuests must be greater than 0." });
-
-        var stay = new Stay
+        try
         {
-            Id = Guid.NewGuid(),
-            OwnerProfileId = request.OwnerProfileId,
-            AreaId = request.AreaId,
-            Name = request.Name.Trim(),
-            Description = request.Description?.Trim() ?? string.Empty,
-            Address = request.Address?.Trim() ?? string.Empty,
-            PricePerNight = request.PricePerNight,
-            Currency = string.IsNullOrWhiteSpace(request.Currency) ? "EGP" : request.Currency.Trim(),
-            MaxGuests = request.MaxGuests,
-            Latitude = request.Latitude,
-            Longitude = request.Longitude,
-            IsActive = true,
-            CreatedAtUtc = DateTime.UtcNow
+            var command = new UpdateStayCommand
+            {
+                Id = id,
+                Name = request.Name,
+                Description = request.Description,
+                Address = request.Address,
+                PricePerNight = request.PricePerNight,
+                Currency = request.Currency,
+                MaxGuests = request.MaxGuests,
+                Latitude = request.Latitude,
+                Longitude = request.Longitude,
+                Tags = request.Tags
+            };
+
+            var result = await _updateStayHandler.HandleAsync(command, cancellationToken);
+
+            if (result is null)
+                return NotFound(new { message = "Stay not found." });
+
+            return Ok(result);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+    [HttpGet("by-area/{areaId:guid}")]
+    public async Task<IActionResult> GetByArea(Guid areaId, CancellationToken cancellationToken)
+    {
+        var query = new GetStaysByAreaQuery
+        {
+            AreaId = areaId
         };
 
-        if (request.Tags is not null && request.Tags.Count > 0)
-        {
-            stay.Tags = request.Tags
-                .Where(t => !string.IsNullOrWhiteSpace(t))
-                .Select(t => new StayTag
-                {
-                    Id = Guid.NewGuid(),
-                    StayId = stay.Id,
-                    Name = t.Trim()
-                })
-                .ToList();
-        }
+        var result = await _getStaysByAreaHandler.HandleAsync(query, cancellationToken);
 
-        _dbContext.Stays.Add(stay);
-        await _dbContext.SaveChangesAsync();
-
-        return CreatedAtAction(nameof(GetById), new { id = stay.Id }, stay);
+        return Ok(result);
     }
-}
+    
+    [HttpPatch("{id:guid}/deactivate")]
+    public async Task<IActionResult> Deactivate(Guid id, CancellationToken cancellationToken)
+    {
+        var command = new SetStayActiveStatusCommand
+        {
+            StayId = id,
+            IsActive = false
+        };
 
-public class CreateStayRequest
-{
-    public Guid OwnerProfileId { get; set; }
-    public Guid AreaId { get; set; }
+        var result = await _setStayActiveStatusHandler.HandleAsync(command, cancellationToken);
 
-    public string Name { get; set; } = string.Empty;
-    public string? Description { get; set; }
-    public string? Address { get; set; }
+        if (result is null)
+            return NotFound(new { message = "Stay not found." });
 
-    public decimal PricePerNight { get; set; }
-    public string Currency { get; set; } = "EGP";
-    public int MaxGuests { get; set; }
+        return Ok(result);
+    }
+    
+    [HttpPatch("{id:guid}/activate")]
+    public async Task<IActionResult> Activate(Guid id, CancellationToken cancellationToken)
+    {
+        var command = new SetStayActiveStatusCommand
+        {
+            StayId = id,
+            IsActive = true
+        };
 
-    public double Latitude { get; set; }
-    public double Longitude { get; set; }
+        var result = await _setStayActiveStatusHandler.HandleAsync(command, cancellationToken);
 
-    public List<string>? Tags { get; set; }
+        if (result is null)
+            return NotFound(new { message = "Stay not found." });
+
+        return Ok(result);
+    }
+    
 }

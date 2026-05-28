@@ -12,11 +12,19 @@ public class StayBookingConfiguration : IEntityTypeConfiguration<StayBooking>
 
         builder.HasKey(x => x.Id);
 
-        builder.Property(x => x.Status)
-            .HasMaxLength(50)
-            .IsRequired();
-
         builder.Property(x => x.TotalPrice)
-            .HasColumnType("numeric(18,2)");
+            .HasPrecision(18, 2);
+
+        builder.Property(x => x.Status)
+            .IsRequired()
+            .HasMaxLength(50);
+
+        builder.HasIndex(x => new
+        {
+            x.StayId,
+            x.TravelerProfileId,
+            x.CheckInDate,
+            x.CheckOutDate
+        }).IsUnique();
     }
 }

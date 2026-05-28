@@ -10,7 +10,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 namespace Glinter.Shared.Infrastructure.Persistence.Migrations
 {
-    [DbContext(typeof(GlinterDbContext))]
+    [DbContext(typeof(StaysDbContext))]
     partial class GlinterDbContextModelSnapshot : ModelSnapshot
     {
         protected override void BuildModel(ModelBuilder modelBuilder)
@@ -70,12 +70,16 @@ namespace Glinter.Shared.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<decimal>("PricePerNight")
+                        .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
 
                     b.Property<DateTime?>("UpdatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("OwnerProfileId", "Name", "Address")
+                        .IsUnique();
 
                     b.ToTable("stays", (string)null);
                 });
@@ -107,6 +111,7 @@ namespace Glinter.Shared.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<decimal>("TotalPrice")
+                        .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
 
                     b.Property<Guid>("TravelerProfileId")
@@ -114,7 +119,8 @@ namespace Glinter.Shared.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("StayId");
+                    b.HasIndex("StayId", "TravelerProfileId", "CheckInDate", "CheckOutDate")
+                        .IsUnique();
 
                     b.ToTable("stay_bookings", (string)null);
                 });
@@ -144,7 +150,8 @@ namespace Glinter.Shared.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("StayId");
+                    b.HasIndex("StayId", "TravelerProfileId")
+                        .IsUnique();
 
                     b.ToTable("stay_reviews", (string)null);
                 });

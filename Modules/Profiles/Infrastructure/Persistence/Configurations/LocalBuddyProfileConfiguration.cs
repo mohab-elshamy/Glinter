@@ -1,5 +1,4 @@
 using Glinter.Modules.Profiles.Domain.Entities;
-using Glinter.Modules.Profiles.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -36,8 +35,8 @@ public class LocalBuddyProfileConfiguration : IEntityTypeConfiguration<LocalBudd
         builder.Property(x => x.VerificationStatus)
             .HasConversion<string>()
             .HasMaxLength(50)
-            .HasDefaultValue(VerificationStatus.Pending);
-        
+            .IsRequired();
+
         builder.Property(x => x.ProfileImageUrl)
             .HasMaxLength(1000);
     }

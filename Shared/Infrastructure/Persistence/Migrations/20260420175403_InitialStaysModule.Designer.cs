@@ -11,7 +11,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 namespace Glinter.Shared.Infrastructure.Persistence.Migrations
 {
-    [DbContext(typeof(GlinterDbContext))]
+    [DbContext(typeof(StaysDbContext))]
     [Migration("20260420175403_InitialStaysModule")]
     partial class InitialStaysModule
     {
