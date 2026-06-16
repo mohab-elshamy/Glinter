@@ -111,3 +111,6 @@ node_modules/
 *.temp
 *.swp
 *.bak
+
+appsettings.json
+appsettings.Development.json
