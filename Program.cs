@@ -35,7 +35,7 @@ builder.Services.AddControllers()
         options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
     });
 
-
+#region Swagger Configurations
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -70,6 +70,7 @@ builder.Services.AddSwaggerGen(options =>
         }
     });
 });
+#endregion
 
 var app = builder.Build();
 
