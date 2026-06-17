@@ -6,6 +6,7 @@ using Glinter.Modules.IdentityAccess.Infrastructure.DependencyInjection;
 using Glinter.Modules.IdentityAccess.Infrastructure.Identity;
 using Glinter.Modules.Profiles.Infrastructure.DependencyInjection;
 using Glinter.Modules.Profiles.Infrastructure.Persistence;
+using Glinter.Modules.Regions.Infrastructure.DependencyInjection;
 using Glinter.Modules.Stays.Infrastructure.DependencyInjection;
 using Glinter.Modules.Stays.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
@@ -28,6 +29,9 @@ builder.Services.AddStaysModule();
 
 // Module 5: Experiences
 builder.Services.AddExperiencesModule(builder.Configuration);
+
+// Module 6: Regions (Administrative Boundaries)
+builder.Services.AddRegionsModule(builder.Configuration);
 
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
