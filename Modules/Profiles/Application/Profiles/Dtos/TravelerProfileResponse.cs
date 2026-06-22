@@ -19,7 +19,7 @@ public class TravelerProfileResponse
     public string? TravelStyle { get; set; }
 
     public string? PreferredInterests { get; set; }
-    
+
     public string? ProfileImageUrl { get; set; }
 
     public List<InterestResponse> Interests { get; set; } = [];

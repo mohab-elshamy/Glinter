@@ -4,7 +4,7 @@ public class UpdateExperienceRequestDto
 {
     public Guid CategoryId { get; set; }
 
-    public Guid AreaId { get; set; }
+    public int Adm3Gid { get; set; }
 
     public string Title { get; set; } = string.Empty;
 

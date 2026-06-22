@@ -14,7 +14,7 @@ public class ExperienceConfiguration : IEntityTypeConfiguration<Experience>
 
         builder.HasIndex(x => x.ProviderProfileId);
         builder.HasIndex(x => x.CategoryId);
-        builder.HasIndex(x => x.AreaId);
+        builder.HasIndex(x => x.Adm3Gid);
         builder.HasIndex(x => x.IsActive);
 
         builder.Property(x => x.Title)
@@ -51,7 +51,7 @@ public class ExperienceConfiguration : IEntityTypeConfiguration<Experience>
 
         builder.Property(x => x.IsActive)
             .IsRequired();
-        
+
         builder.Property(x => x.ApprovalStatus)
             .HasConversion<string>()
             .HasMaxLength(30)

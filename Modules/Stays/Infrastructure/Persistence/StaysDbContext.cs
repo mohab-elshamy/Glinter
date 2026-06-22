@@ -15,12 +15,12 @@ public class StaysDbContext : DbContext
     public DbSet<StayTag> StayTags => Set<StayTag>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
-{
-    base.OnModelCreating(modelBuilder);
+    {
+        base.OnModelCreating(modelBuilder);
 
-    modelBuilder.ApplyConfigurationsFromAssembly(
-        typeof(StaysDbContext).Assembly,
-        type => type.Namespace != null &&
-                type.Namespace.StartsWith("Glinter.Modules.Stays.Infrastructure.Persistence.Configurations"));
-}
+        modelBuilder.ApplyConfigurationsFromAssembly(
+            typeof(StaysDbContext).Assembly,
+            type => type.Namespace != null &&
+                    type.Namespace.StartsWith("Glinter.Modules.Stays.Infrastructure.Persistence.Configurations"));
+    }
 }

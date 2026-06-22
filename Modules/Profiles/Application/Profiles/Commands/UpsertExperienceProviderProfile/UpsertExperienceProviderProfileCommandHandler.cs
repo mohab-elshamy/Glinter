@@ -14,7 +14,7 @@ public class UpsertExperienceProviderProfileCommandHandler
     private readonly ICurrentUserService _currentUserService;
     private readonly UpsertExperienceProviderProfileCommandValidator _validator = new();
     private readonly ProfileFollowStatsService _profileFollowStatsService;
-    
+
     public UpsertExperienceProviderProfileCommandHandler(
         IProfilesDbContext profilesDbContext,
         ICurrentUserService currentUserService,
@@ -66,7 +66,7 @@ public class UpsertExperienceProviderProfileCommandHandler
         }
 
         await _profilesDbContext.SaveChangesAsync(cancellationToken);
-        
+
         var stats = await _profileFollowStatsService.GetCountsAsync(
             profile.UserId,
             cancellationToken);

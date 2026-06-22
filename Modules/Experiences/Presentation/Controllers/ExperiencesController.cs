@@ -57,7 +57,7 @@ public class ExperiencesController : ControllerBase
             return BadRequest(new { message = ex.Message });
         }
     }
-    
+
     [Authorize(Roles = RoleNames.ExperienceProvider)]
     [HttpGet("my")]
     public async Task<ActionResult<List<ExperienceSummaryDto>>> GetMyExperiences(

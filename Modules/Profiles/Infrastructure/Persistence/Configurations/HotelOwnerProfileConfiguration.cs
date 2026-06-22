@@ -27,7 +27,7 @@ public class HotelOwnerProfileConfiguration : IEntityTypeConfiguration<HotelOwne
 
         builder.Property(x => x.Description)
             .HasMaxLength(1000);
-        
+
         builder.Property(x => x.ProfileImageUrl)
             .HasMaxLength(1000);
     }

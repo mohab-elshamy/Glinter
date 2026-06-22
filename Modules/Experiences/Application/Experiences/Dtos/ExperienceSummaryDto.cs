@@ -10,7 +10,9 @@ public class ExperienceSummaryDto
 
     public string? CategoryName { get; set; }
 
-    public Guid AreaId { get; set; }
+    public int Adm3Gid { get; set; }
+
+    public Glinter.Modules.Regions.Application.DTOs.RegionReferenceDto? Region { get; set; }
 
     public string Title { get; set; } = string.Empty;
 
@@ -25,7 +27,7 @@ public class ExperienceSummaryDto
     public int MaxGuests { get; set; }
 
     public bool IsActive { get; set; }
-    
+
     public string ApprovalStatus { get; set; } = string.Empty;
 
     public string? ModerationNotes { get; set; }

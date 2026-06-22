@@ -192,7 +192,7 @@ public class ProfilesController : ControllerBase
             return BadRequest(new { message = ex.Message });
         }
     }
-    
+
     [HttpGet("users/{userId:guid}/follow-status")]
     public async Task<IActionResult> GetFollowStatus(
         Guid userId,
@@ -218,7 +218,7 @@ public class ProfilesController : ControllerBase
             return BadRequest(new { message = ex.Message });
         }
     }
-    
+
     [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = RoleNames.HotelOwner)]
     [HttpPut("hotel-owner")]
     public async Task<IActionResult> UpsertHotelOwnerProfile(
@@ -278,7 +278,7 @@ public class ProfilesController : ControllerBase
             return BadRequest(new { message = ex.Message });
         }
     }
-    
+
     [HttpPatch("image")]
     public async Task<IActionResult> UpdateProfileImage(
         [FromBody] UpdateProfileImageRequest request,

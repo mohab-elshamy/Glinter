@@ -10,8 +10,8 @@ public class UpdateExperienceCommandValidator
         if (command.CategoryId == Guid.Empty)
             throw new ArgumentException("CategoryId is required.");
 
-        if (command.AreaId == Guid.Empty)
-            throw new ArgumentException("AreaId is required.");
+        if (command.Adm3Gid <= 0)
+            throw new ArgumentException("Adm3Gid is required.");
 
         if (string.IsNullOrWhiteSpace(command.Title))
             throw new ArgumentException("Title is required.");

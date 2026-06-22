@@ -39,7 +39,7 @@ public interface IExperienceBookingRepository
         ExperienceBooking booking,
         ExperienceAvailability availability,
         CancellationToken cancellationToken = default);
-    
+
     Task<List<ExperienceBooking>> GetByTravelerProfileIdAsync(
         Guid travelerProfileId,
         CancellationToken cancellationToken = default);

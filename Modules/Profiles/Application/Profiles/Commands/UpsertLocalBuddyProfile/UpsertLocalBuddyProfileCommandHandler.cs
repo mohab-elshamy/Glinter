@@ -103,7 +103,7 @@ public class UpsertLocalBuddyProfileCommandHandler
         }
 
         await _profilesDbContext.SaveChangesAsync(cancellationToken);
-        
+
         var stats = await _profileFollowStatsService.GetCountsAsync(
             profile.UserId,
             cancellationToken);

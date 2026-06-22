@@ -50,7 +50,7 @@ public class Adm3Dto
 {
     public int Gid { get; set; }
     public int Adm2Gid { get; set; }
-    public string NameEn { get; set; } = string.Empty;
+    public string? NameEn { get; set; }
     public string? NameAr { get; set; }
     public string Pcode { get; set; } = string.Empty;
     public string? ImageUrl { get; set; }

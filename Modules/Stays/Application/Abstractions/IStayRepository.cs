@@ -11,15 +11,15 @@ public interface IStayRepository
     Task<Stay> UpdateAsync(Stay stay, CancellationToken cancellationToken = default);
 
     Task<Stay?> GetForUpdateAsync(Guid id, CancellationToken cancellationToken = default);
-    Task<List<Stay>> GetByAreaIdAsync(Guid areaId, CancellationToken cancellationToken = default);
+    Task<List<Stay>> GetByAdm3GidAsync(int adm3Gid, CancellationToken cancellationToken = default);
 
     Task ReplaceTagsAsync(
         Guid stayId,
         IEnumerable<string> tags,
         CancellationToken cancellationToken = default);
-    
+
     Task<List<Stay>> GetFilteredAsync(
-        Guid? areaId,
+        int? adm3Gid,
         decimal? minPrice,
         decimal? maxPrice,
         int? guests,

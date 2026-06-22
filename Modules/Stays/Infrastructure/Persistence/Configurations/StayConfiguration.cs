@@ -12,6 +12,8 @@ public class StayConfiguration : IEntityTypeConfiguration<Stay>
 
         builder.HasKey(x => x.Id);
 
+        builder.HasIndex(x => x.Adm3Gid);
+
         builder.Property(x => x.Name)
             .IsRequired()
             .HasMaxLength(200);

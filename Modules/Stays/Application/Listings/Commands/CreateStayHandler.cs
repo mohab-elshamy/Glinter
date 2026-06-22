@@ -11,20 +11,27 @@ public class CreateStayHandler
     private readonly IStayRepository _stayRepository;
     private readonly ICurrentUserService _currentUserService;
     private readonly IProfilesReadService _profilesReadService;
-    public CreateStayHandler(IStayRepository stayRepository, ICurrentUserService currentUserService,IProfilesReadService profilesReadService )
+    private readonly Glinter.Modules.Regions.Application.Abstractions.IRegionReferenceService _regionReferenceService;
+
+    public CreateStayHandler(
+        IStayRepository stayRepository,
+        ICurrentUserService currentUserService,
+        IProfilesReadService profilesReadService,
+        Glinter.Modules.Regions.Application.Abstractions.IRegionReferenceService regionReferenceService)
     {
         _stayRepository = stayRepository;
         _currentUserService = currentUserService;
         _profilesReadService = profilesReadService;
-        
+        _regionReferenceService = regionReferenceService;
+
     }
 
     public async Task<StayResponseDto> HandleAsync(CreateStayCommand command, CancellationToken cancellationToken = default)
     {
-        
-        
-        
-        
+
+
+
+
         if (!_currentUserService.IsAuthenticated || _currentUserService.UserId is null)
         {
             throw new UnauthorizedAccessException("User is not authenticated.");
@@ -39,9 +46,9 @@ public class CreateStayHandler
         {
             throw new UnauthorizedAccessException("Only hotel owners can create stays.");
         }
-        
-        
-        
+
+
+
         if (string.IsNullOrWhiteSpace(command.Name))
             throw new ArgumentException("Stay name is required.");
 
@@ -50,6 +57,13 @@ public class CreateStayHandler
 
         if (command.MaxGuests <= 0)
             throw new ArgumentException("MaxGuests must be greater than 0.");
+
+        var region = await _regionReferenceService.GetNeighbourhoodAsync(
+            command.Adm3Gid,
+            cancellationToken);
+
+        if (region is null)
+            throw new ArgumentException("Adm3Gid must reference an existing neighbourhood.");
 
         var normalizedName = command.Name.Trim();
         var normalizedAddress = command.Address?.Trim() ?? string.Empty;
@@ -67,7 +81,7 @@ public class CreateStayHandler
         {
             Id = Guid.NewGuid(),
             OwnerProfileId = ownerProfileId.Value,
-            AreaId = command.AreaId,
+            Adm3Gid = command.Adm3Gid,
             Name = command.Name,
             Description = command.Description ?? string.Empty,
             Address = command.Address ?? string.Empty,
@@ -95,28 +109,7 @@ public class CreateStayHandler
 
         var createdStay = await _stayRepository.AddAsync(stay, cancellationToken);
 
-        return new StayResponseDto
-        {
-            Id = createdStay.Id,
-            OwnerProfileId = createdStay.OwnerProfileId,
-            AreaId = createdStay.AreaId,
-            Name = createdStay.Name,
-            Description = createdStay.Description,
-            Address = createdStay.Address,
-            PricePerNight = createdStay.PricePerNight,
-            Currency = createdStay.Currency,
-            MaxGuests = createdStay.MaxGuests,
-            Latitude = createdStay.Latitude,
-            Longitude = createdStay.Longitude,
-            IsActive = createdStay.IsActive,
-            CreatedAtUtc = createdStay.CreatedAtUtc,
-            UpdatedAtUtc = createdStay.UpdatedAtUtc,
-            Tags = createdStay.Tags.Select(t => new StayTagDto
-            {
-                Id = t.Id,
-                StayId = t.StayId,
-                Name = t.Name
-            }).ToList()
-        };
+        return Glinter.Modules.Stays.Application.Common.Mapping.StayMappings
+            .ToResponseDto(createdStay, region);
     }
 }

@@ -39,7 +39,7 @@ public class CreateStayReviewHandler
 
         if (stay is null)
             throw new KeyNotFoundException("Stay not found.");
-        
+
         if (!_currentUserService.IsAuthenticated || _currentUserService.UserId is null)
         {
             throw new UnauthorizedAccessException("User is not authenticated.");

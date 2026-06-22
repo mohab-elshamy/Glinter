@@ -253,7 +253,6 @@ namespace Glinter.Modules.Regions.Infrastructure.Persistence.Migrations
                         .HasColumnName("name_ar");
 
                     b.Property<string>("NameEn")
-                        .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)")
                         .HasColumnName("name_en");

@@ -28,13 +28,13 @@ namespace Glinter.Modules.Experiences.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<int>("Adm3Gid")
+                        .HasColumnType("integer");
+
                     b.Property<string>("ApprovalStatus")
                         .IsRequired()
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)");
-
-                    b.Property<Guid>("AreaId")
-                        .HasColumnType("uuid");
 
                     b.Property<Guid>("CategoryId")
                         .HasColumnType("uuid");
@@ -96,7 +96,7 @@ namespace Glinter.Modules.Experiences.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("AreaId");
+                    b.HasIndex("Adm3Gid");
 
                     b.HasIndex("CategoryId");
 

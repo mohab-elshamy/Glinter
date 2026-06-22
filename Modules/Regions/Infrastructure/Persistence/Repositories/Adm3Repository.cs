@@ -15,7 +15,7 @@ public class Adm3Repository(RegionsDbContext db) : IAdm3Repository
         {
             var s = query.Search.ToLower();
             q = q.Where(x =>
-                x.NameEn.ToLower().Contains(s) ||
+                (x.NameEn != null && x.NameEn.ToLower().Contains(s)) ||
                 (x.NameAr != null && x.NameAr.ToLower().Contains(s)) ||
                 x.Pcode.ToLower().Contains(s));
         }

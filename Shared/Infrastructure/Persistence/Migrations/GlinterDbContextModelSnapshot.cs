@@ -33,8 +33,8 @@ namespace Glinter.Shared.Infrastructure.Persistence.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
-                    b.Property<Guid>("AreaId")
-                        .HasColumnType("uuid");
+                    b.Property<int>("Adm3Gid")
+                        .HasColumnType("integer");
 
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
@@ -77,6 +77,8 @@ namespace Glinter.Shared.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("Adm3Gid");
 
                     b.HasIndex("OwnerProfileId", "Name", "Address")
                         .IsUnique();

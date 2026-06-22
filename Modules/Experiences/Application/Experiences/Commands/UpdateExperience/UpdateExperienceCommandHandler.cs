@@ -10,6 +10,7 @@ public class UpdateExperienceCommandHandler
     private readonly IExperienceCategoryRepository _categoryRepository;
     private readonly IVibeRepository _vibeRepository;
     private readonly IExperienceProfileResolver _profileResolver;
+    private readonly Glinter.Modules.Regions.Application.Abstractions.IRegionReferenceService _regionReferenceService;
     private readonly UpdateExperienceCommandValidator _validator;
 
     public UpdateExperienceCommandHandler(
@@ -17,12 +18,14 @@ public class UpdateExperienceCommandHandler
         IExperienceCategoryRepository categoryRepository,
         IVibeRepository vibeRepository,
         IExperienceProfileResolver profileResolver,
+        Glinter.Modules.Regions.Application.Abstractions.IRegionReferenceService regionReferenceService,
         UpdateExperienceCommandValidator validator)
     {
         _experienceRepository = experienceRepository;
         _categoryRepository = categoryRepository;
         _vibeRepository = vibeRepository;
         _profileResolver = profileResolver;
+        _regionReferenceService = regionReferenceService;
         _validator = validator;
     }
 
@@ -67,8 +70,17 @@ public class UpdateExperienceCommandHandler
             throw new InvalidOperationException("One or more vibes were not found.");
         }
 
+        var region = await _regionReferenceService.GetNeighbourhoodAsync(
+            command.Adm3Gid,
+            cancellationToken);
+
+        if (region is null)
+        {
+            throw new InvalidOperationException("Adm3Gid must reference an existing neighbourhood.");
+        }
+
         experience.CategoryId = command.CategoryId;
-        experience.AreaId = command.AreaId;
+        experience.Adm3Gid = command.Adm3Gid;
         experience.Title = command.Title.Trim();
         experience.Description = command.Description.Trim();
         experience.LocationName = command.LocationName.Trim();
@@ -98,6 +110,6 @@ public class UpdateExperienceCommandHandler
 
         return updatedExperience == null
             ? null
-            : ExperiencesMappings.ToExperienceResponse(updatedExperience);
+            : ExperiencesMappings.ToExperienceResponse(updatedExperience, region);
     }
 }

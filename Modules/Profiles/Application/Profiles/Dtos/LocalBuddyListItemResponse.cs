@@ -13,7 +13,7 @@ public class LocalBuddyListItemResponse
     public string City { get; set; } = string.Empty;
 
     public string? Languages { get; set; }
-    
+
     public string? ProfileImageUrl { get; set; }
 
     public decimal Rating { get; set; }

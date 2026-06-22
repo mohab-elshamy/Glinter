@@ -35,7 +35,7 @@ public class GetExperienceReviewsQueryHandler
         {
             return null;
         }
-        
+
         if (!experience.IsActive || experience.ApprovalStatus != ExperienceApprovalStatus.Approved)
         {
             return null;

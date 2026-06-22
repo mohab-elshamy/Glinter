@@ -6,10 +6,14 @@ namespace Glinter.Modules.Stays.Application.Listings.Queries;
 public class GetAllStaysHandler
 {
     private readonly IStayRepository _stayRepository;
+    private readonly Glinter.Modules.Regions.Application.Abstractions.IRegionReferenceService _regionReferenceService;
 
-    public GetAllStaysHandler(IStayRepository stayRepository)
+    public GetAllStaysHandler(
+        IStayRepository stayRepository,
+        Glinter.Modules.Regions.Application.Abstractions.IRegionReferenceService regionReferenceService)
     {
         _stayRepository = stayRepository;
+        _regionReferenceService = regionReferenceService;
     }
 
     public async Task<List<StaySummaryDto>> HandleAsync(
@@ -31,22 +35,20 @@ public class GetAllStaysHandler
             throw new ArgumentException("Guests must be greater than 0.");
 
         var stays = await _stayRepository.GetFilteredAsync(
-            query.AreaId,
+            query.Adm3Gid,
             query.MinPrice,
             query.MaxPrice,
             query.Guests,
             query.Tag,
             cancellationToken);
 
-        return stays.Select(stay => new StaySummaryDto
-        {
-            Id = stay.Id,
-            Name = stay.Name,
-            Address = stay.Address,
-            PricePerNight = stay.PricePerNight,
-            Currency = stay.Currency,
-            MaxGuests = stay.MaxGuests,
-            IsActive = stay.IsActive
-        }).ToList();
+        var regions = await _regionReferenceService.GetNeighbourhoodsAsync(
+            stays.Select(x => x.Adm3Gid),
+            cancellationToken);
+
+        return stays
+            .Select(stay => Glinter.Modules.Stays.Application.Common.Mapping.StayMappings
+                .ToSummaryDto(stay, regions.GetValueOrDefault(stay.Adm3Gid)))
+            .ToList();
     }
 }

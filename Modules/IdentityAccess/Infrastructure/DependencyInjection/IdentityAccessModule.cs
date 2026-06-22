@@ -36,7 +36,7 @@ public static class IdentityAccessModule
             options.UseNpgsql(connectionString));
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUserService, CurrentUserService>();
-        
+
         services.AddScoped<IIdentityAccessDbContext>(sp =>
             sp.GetRequiredService<IdentityAccessDbContext>());
 

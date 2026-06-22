@@ -6,10 +6,14 @@ namespace Glinter.Modules.Stays.Application.Listings.Queries;
 public class GetStayByIdHandler
 {
     private readonly IStayRepository _stayRepository;
+    private readonly Glinter.Modules.Regions.Application.Abstractions.IRegionReferenceService _regionReferenceService;
 
-    public GetStayByIdHandler(IStayRepository stayRepository)
+    public GetStayByIdHandler(
+        IStayRepository stayRepository,
+        Glinter.Modules.Regions.Application.Abstractions.IRegionReferenceService regionReferenceService)
     {
         _stayRepository = stayRepository;
+        _regionReferenceService = regionReferenceService;
     }
 
     public async Task<StayResponseDto?> HandleAsync(GetStayByIdQuery query, CancellationToken cancellationToken = default)
@@ -19,28 +23,11 @@ public class GetStayByIdHandler
         if (stay is null)
             return null;
 
-        return new StayResponseDto
-        {
-            Id = stay.Id,
-            OwnerProfileId = stay.OwnerProfileId,
-            AreaId = stay.AreaId,
-            Name = stay.Name,
-            Description = stay.Description,
-            Address = stay.Address,
-            PricePerNight = stay.PricePerNight,
-            Currency = stay.Currency,
-            MaxGuests = stay.MaxGuests,
-            Latitude = stay.Latitude,
-            Longitude = stay.Longitude,
-            IsActive = stay.IsActive,
-            CreatedAtUtc = stay.CreatedAtUtc,
-            UpdatedAtUtc = stay.UpdatedAtUtc,
-            Tags = stay.Tags.Select(t => new StayTagDto
-            {
-                Id = t.Id,
-                StayId = t.StayId,
-                Name = t.Name
-            }).ToList()
-        };
+        var region = await _regionReferenceService.GetNeighbourhoodAsync(
+            stay.Adm3Gid,
+            cancellationToken);
+
+        return Glinter.Modules.Stays.Application.Common.Mapping.StayMappings
+            .ToResponseDto(stay, region);
     }
 }

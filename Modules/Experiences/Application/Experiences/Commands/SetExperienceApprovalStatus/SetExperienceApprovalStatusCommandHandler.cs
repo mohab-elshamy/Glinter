@@ -7,13 +7,16 @@ namespace Glinter.Modules.Experiences.Application.Experiences.Commands.SetExperi
 public class SetExperienceApprovalStatusCommandHandler
 {
     private readonly IExperienceRepository _experienceRepository;
+    private readonly Glinter.Modules.Regions.Application.Abstractions.IRegionReferenceService _regionReferenceService;
     private readonly SetExperienceApprovalStatusCommandValidator _validator;
 
     public SetExperienceApprovalStatusCommandHandler(
         IExperienceRepository experienceRepository,
+        Glinter.Modules.Regions.Application.Abstractions.IRegionReferenceService regionReferenceService,
         SetExperienceApprovalStatusCommandValidator validator)
     {
         _experienceRepository = experienceRepository;
+        _regionReferenceService = regionReferenceService;
         _validator = validator;
     }
 
@@ -45,8 +48,15 @@ public class SetExperienceApprovalStatusCommandHandler
             experience.Id,
             cancellationToken);
 
-        return updatedExperience == null
-            ? null
-            : ExperiencesMappings.ToExperienceResponse(updatedExperience);
+        if (updatedExperience is null)
+        {
+            return null;
+        }
+
+        var region = await _regionReferenceService.GetNeighbourhoodAsync(
+            updatedExperience.Adm3Gid,
+            cancellationToken);
+
+        return ExperiencesMappings.ToExperienceResponse(updatedExperience, region);
     }
 }

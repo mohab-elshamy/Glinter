@@ -16,7 +16,7 @@ public static class ExperienceRequestMappings
         return new CreateExperienceCommand
         {
             CategoryId = request.CategoryId,
-            AreaId = request.AreaId,
+            Adm3Gid = request.Adm3Gid,
             Title = request.Title,
             Description = request.Description,
             LocationName = request.LocationName,
@@ -37,7 +37,7 @@ public static class ExperienceRequestMappings
         {
             Id = experienceId,
             CategoryId = request.CategoryId,
-            AreaId = request.AreaId,
+            Adm3Gid = request.Adm3Gid,
             Title = request.Title,
             Description = request.Description,
             LocationName = request.LocationName,
@@ -100,12 +100,12 @@ public static class ExperienceRequestMappings
             Comment = request.Comment
         };
     }
-    
+
     public static GetAllExperiencesQuery ToQuery(this GetExperiencesRequestDto request)
     {
         return new GetAllExperiencesQuery
         {
-            AreaId = request.AreaId,
+            Adm3Gid = request.Adm3Gid,
             CategoryId = request.CategoryId,
             MinPrice = request.MinPrice,
             MaxPrice = request.MaxPrice,

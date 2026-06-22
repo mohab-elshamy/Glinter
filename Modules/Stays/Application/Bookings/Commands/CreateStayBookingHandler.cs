@@ -28,8 +28,8 @@ public class CreateStayBookingHandler
     public async Task<StayBookingResponseDto> HandleAsync(
         CreateStayBookingCommand command,
         CancellationToken cancellationToken = default)
-    
-    
+
+
     {
         if (!_currentUserService.IsAuthenticated || _currentUserService.UserId is null)
         {
@@ -45,9 +45,9 @@ public class CreateStayBookingHandler
         {
             throw new UnauthorizedAccessException("Only travelers can book stays.");
         }
-        
-        
-        
+
+
+
         if (command.GuestCount <= 0)
             throw new ArgumentException("GuestCount must be greater than 0.");
         var today = DateOnly.FromDateTime(DateTime.UtcNow.Date);
