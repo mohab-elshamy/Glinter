@@ -2,7 +2,7 @@ namespace Glinter.Modules.Experiences.Application.Experiences.Dtos;
 
 public class GetExperiencesRequestDto
 {
-    public Guid? AreaId { get; set; }
+    public int? Adm3Gid { get; set; }
 
     public Guid? CategoryId { get; set; }
 

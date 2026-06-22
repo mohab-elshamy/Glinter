@@ -7,10 +7,14 @@ namespace Glinter.Modules.Experiences.Application.Experiences.Queries.GetExperie
 public class GetExperienceByIdQueryHandler
 {
     private readonly IExperienceRepository _experienceRepository;
+    private readonly Glinter.Modules.Regions.Application.Abstractions.IRegionReferenceService _regionReferenceService;
 
-    public GetExperienceByIdQueryHandler(IExperienceRepository experienceRepository)
+    public GetExperienceByIdQueryHandler(
+        IExperienceRepository experienceRepository,
+        Glinter.Modules.Regions.Application.Abstractions.IRegionReferenceService regionReferenceService)
     {
         _experienceRepository = experienceRepository;
+        _regionReferenceService = regionReferenceService;
     }
 
     public async Task<ExperienceResponseDto?> HandleAsync(
@@ -26,8 +30,15 @@ public class GetExperienceByIdQueryHandler
             query.Id,
             cancellationToken);
 
-        return experience == null
-            ? null
-            : ExperiencesMappings.ToExperienceResponse(experience);
+        if (experience is null)
+        {
+            return null;
+        }
+
+        var region = await _regionReferenceService.GetNeighbourhoodAsync(
+            experience.Adm3Gid,
+            cancellationToken);
+
+        return ExperiencesMappings.ToExperienceResponse(experience, region);
     }
 }

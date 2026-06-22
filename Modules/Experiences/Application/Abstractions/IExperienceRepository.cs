@@ -12,7 +12,7 @@ public interface IExperienceRepository
     Task<Experience?> GetForUpdateAsync(Guid id, CancellationToken cancellationToken = default);
 
     Task<List<Experience>> GetFilteredAsync(
-        Guid? areaId,
+        int? adm3Gid,
         Guid? categoryId,
         decimal? minPrice,
         decimal? maxPrice,
@@ -24,7 +24,7 @@ public interface IExperienceRepository
     Task<bool> ExistsAsync(
         Guid providerProfileId,
         string title,
-        Guid areaId,
+        int adm3Gid,
         CancellationToken cancellationToken = default);
 
     Task ReplaceTagsAsync(
@@ -38,11 +38,11 @@ public interface IExperienceRepository
         CancellationToken cancellationToken = default);
 
     Task UpdateAsync(Experience experience, CancellationToken cancellationToken = default);
-    
+
     Task<List<Experience>> GetByProviderProfileIdAsync(
         Guid providerProfileId,
         CancellationToken cancellationToken = default);
-    
+
     Task<Experience?> GetPublishedByIdAsync(
         Guid id,
         CancellationToken cancellationToken = default);

@@ -3,7 +3,7 @@
 public class CreateStayBookingCommand
 {
     public Guid StayId { get; set; }
-    
+
     public DateOnly CheckInDate { get; set; }
     public DateOnly CheckOutDate { get; set; }
     public int GuestCount { get; set; }

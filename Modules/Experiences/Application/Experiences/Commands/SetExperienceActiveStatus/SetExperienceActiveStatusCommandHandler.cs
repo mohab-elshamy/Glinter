@@ -8,15 +8,18 @@ public class SetExperienceActiveStatusCommandHandler
 {
     private readonly IExperienceRepository _experienceRepository;
     private readonly IExperienceProfileResolver _profileResolver;
+    private readonly Glinter.Modules.Regions.Application.Abstractions.IRegionReferenceService _regionReferenceService;
     private readonly SetExperienceActiveStatusCommandValidator _validator;
 
     public SetExperienceActiveStatusCommandHandler(
         IExperienceRepository experienceRepository,
         IExperienceProfileResolver profileResolver,
+        Glinter.Modules.Regions.Application.Abstractions.IRegionReferenceService regionReferenceService,
         SetExperienceActiveStatusCommandValidator validator)
     {
         _experienceRepository = experienceRepository;
         _profileResolver = profileResolver;
+        _regionReferenceService = regionReferenceService;
         _validator = validator;
     }
 
@@ -52,8 +55,15 @@ public class SetExperienceActiveStatusCommandHandler
             experience.Id,
             cancellationToken);
 
-        return updatedExperience == null
-            ? null
-            : ExperiencesMappings.ToExperienceResponse(updatedExperience);
+        if (updatedExperience is null)
+        {
+            return null;
+        }
+
+        var region = await _regionReferenceService.GetNeighbourhoodAsync(
+            updatedExperience.Adm3Gid,
+            cancellationToken);
+
+        return ExperiencesMappings.ToExperienceResponse(updatedExperience, region);
     }
 }

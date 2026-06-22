@@ -9,26 +9,26 @@ namespace Glinter.Modules.Stays.Presentation.Controllers;
 [Route("api/[controller]")]
 public class StaysController : ControllerBase
 {
-    
+
     private readonly CreateStayHandler _createStayHandler;
     private readonly GetAllStaysHandler _getAllStaysHandler;
     private readonly GetStayByIdHandler _getStayByIdHandler;
     private readonly UpdateStayHandler _updateStayHandler;
-    private readonly GetStaysByAreaHandler _getStaysByAreaHandler;
+    private readonly GetStaysByNeighbourhoodHandler _getStaysByNeighbourhoodHandler;
     private readonly SetStayActiveStatusHandler _setStayActiveStatusHandler;
     public StaysController(
         CreateStayHandler createStayHandler,
         GetAllStaysHandler getAllStaysHandler,
         GetStayByIdHandler getStayByIdHandler,
         UpdateStayHandler updateStayHandler,
-        GetStaysByAreaHandler getStaysByAreaHandler,
+        GetStaysByNeighbourhoodHandler getStaysByNeighbourhoodHandler,
         SetStayActiveStatusHandler setStayActiveStatusHandler)
     {
         _createStayHandler = createStayHandler;
         _getAllStaysHandler = getAllStaysHandler;
         _getStayByIdHandler = getStayByIdHandler;
         _updateStayHandler = updateStayHandler;
-        _getStaysByAreaHandler = getStaysByAreaHandler;
+        _getStaysByNeighbourhoodHandler = getStaysByNeighbourhoodHandler;
         _setStayActiveStatusHandler = setStayActiveStatusHandler;
     }
     [Authorize]
@@ -39,8 +39,8 @@ public class StaysController : ControllerBase
         {
             var command = new CreateStayCommand
             {
-                
-                AreaId = request.AreaId,
+
+                Adm3Gid = request.Adm3Gid,
                 Name = request.Name,
                 Description = request.Description,
                 Address = request.Address,
@@ -70,7 +70,7 @@ public class StaysController : ControllerBase
         {
             var query = new GetAllStaysQuery
             {
-                AreaId = request.AreaId,
+                Adm3Gid = request.Adm3Gid,
                 MinPrice = request.MinPrice,
                 MaxPrice = request.MaxPrice,
                 Guests = request.Guests,
@@ -97,7 +97,7 @@ public class StaysController : ControllerBase
 
         return Ok(result);
     }
-    
+
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateStayRequestDto request, CancellationToken cancellationToken)
     {
@@ -129,19 +129,19 @@ public class StaysController : ControllerBase
             return BadRequest(new { message = ex.Message });
         }
     }
-    [HttpGet("by-area/{areaId:guid}")]
-    public async Task<IActionResult> GetByArea(Guid areaId, CancellationToken cancellationToken)
+    [HttpGet("by-neighbourhood/{adm3Gid:int}")]
+    public async Task<IActionResult> GetByNeighbourhood(int adm3Gid, CancellationToken cancellationToken)
     {
-        var query = new GetStaysByAreaQuery
+        var query = new GetStaysByNeighbourhoodQuery
         {
-            AreaId = areaId
+            Adm3Gid = adm3Gid
         };
 
-        var result = await _getStaysByAreaHandler.HandleAsync(query, cancellationToken);
+        var result = await _getStaysByNeighbourhoodHandler.HandleAsync(query, cancellationToken);
 
         return Ok(result);
     }
-    
+
     [HttpPatch("{id:guid}/deactivate")]
     public async Task<IActionResult> Deactivate(Guid id, CancellationToken cancellationToken)
     {
@@ -158,7 +158,7 @@ public class StaysController : ControllerBase
 
         return Ok(result);
     }
-    
+
     [HttpPatch("{id:guid}/activate")]
     public async Task<IActionResult> Activate(Guid id, CancellationToken cancellationToken)
     {
@@ -175,5 +175,5 @@ public class StaysController : ControllerBase
 
         return Ok(result);
     }
-    
+
 }

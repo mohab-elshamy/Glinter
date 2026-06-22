@@ -8,13 +8,16 @@ public class GetMyExperiencesQueryHandler
 {
     private readonly IExperienceRepository _experienceRepository;
     private readonly IExperienceProfileResolver _profileResolver;
+    private readonly Glinter.Modules.Regions.Application.Abstractions.IRegionReferenceService _regionReferenceService;
 
     public GetMyExperiencesQueryHandler(
         IExperienceRepository experienceRepository,
-        IExperienceProfileResolver profileResolver)
+        IExperienceProfileResolver profileResolver,
+        Glinter.Modules.Regions.Application.Abstractions.IRegionReferenceService regionReferenceService)
     {
         _experienceRepository = experienceRepository;
         _profileResolver = profileResolver;
+        _regionReferenceService = regionReferenceService;
     }
 
     public async Task<List<ExperienceSummaryDto>> HandleAsync(
@@ -28,8 +31,14 @@ public class GetMyExperiencesQueryHandler
             providerProfileId,
             cancellationToken);
 
+        var regions = await _regionReferenceService.GetNeighbourhoodsAsync(
+            experiences.Select(x => x.Adm3Gid),
+            cancellationToken);
+
         return experiences
-            .Select(ExperiencesMappings.ToExperienceSummary)
+            .Select(experience => ExperiencesMappings.ToExperienceSummary(
+                experience,
+                regions.GetValueOrDefault(experience.Adm3Gid)))
             .ToList();
     }
 }

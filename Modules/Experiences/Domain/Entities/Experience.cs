@@ -10,7 +10,7 @@ public class Experience
 
     public Guid CategoryId { get; set; }
 
-    public Guid AreaId { get; set; }
+    public int Adm3Gid { get; set; }
 
     public string Title { get; set; } = string.Empty;
 
@@ -31,7 +31,7 @@ public class Experience
     public double Longitude { get; set; }
 
     public bool IsActive { get; set; } = true;
-    
+
     public ExperienceApprovalStatus ApprovalStatus { get; set; } = ExperienceApprovalStatus.Pending;
 
     public string? ModerationNotes { get; set; }

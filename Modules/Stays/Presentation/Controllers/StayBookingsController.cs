@@ -23,7 +23,7 @@ public class StayBookingController : ControllerBase
         _getStayBookingsHandler = getStayBookingsHandler;
         _cancelStayBookingHandler = cancelStayBookingHandler;
     }
-    
+
     [Authorize]
     [HttpPost("/api/stays/{stayId:guid}/bookings")]
     public async Task<IActionResult> Create(

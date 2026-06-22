@@ -6,6 +6,7 @@ using Glinter.Modules.Stays.Application.Bookings.Commands;
 using Glinter.Modules.Stays.Application.Bookings.Queries;
 
 namespace Glinter.Modules.Stays.Infrastructure.DependencyInjection;
+
 using Glinter.Modules.Stays.Application.Listings.Commands;
 using Glinter.Modules.Stays.Application.Reviews.Commands;
 using Glinter.Modules.Stays.Application.Reviews.Queries;
@@ -30,7 +31,7 @@ public static class DependencyInjection
         services.AddScoped<CreateStayReviewHandler>();
         services.AddScoped<GetStayReviewsHandler>();
         services.AddScoped<DeleteStayReviewHandler>();
-        services.AddScoped<GetStaysByAreaHandler>();
+        services.AddScoped<GetStaysByNeighbourhoodHandler>();
         services.AddScoped<SetStayActiveStatusHandler>();
 
         return services;

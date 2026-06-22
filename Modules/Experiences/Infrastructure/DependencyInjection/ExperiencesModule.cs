@@ -85,7 +85,7 @@ public static class ExperiencesModule
         services.AddScoped<CompleteExperienceBookingCommandHandler>();
 
         services.AddScoped<GetExperienceBookingsQueryHandler>();
-        
+
         services.AddScoped<CreateExperienceReviewCommandValidator>();
         services.AddScoped<CreateExperienceReviewCommandHandler>();
 
@@ -96,19 +96,19 @@ public static class ExperiencesModule
         services.AddScoped<DeleteExperienceReviewCommandHandler>();
 
         services.AddScoped<GetExperienceReviewsQueryHandler>();
-        
+
         services.AddScoped<GetExperienceCategoriesQueryHandler>();
         services.AddScoped<GetVibesQueryHandler>();
-        
+
         services.AddScoped<GetMyExperiencesQueryHandler>();
-        
+
         services.AddScoped<GetMyExperienceBookingsQueryHandler>();
-        
+
         services.AddScoped<GetAdminExperiencesQueryHandler>();
 
         services.AddScoped<SetExperienceApprovalStatusCommandValidator>();
         services.AddScoped<SetExperienceApprovalStatusCommandHandler>();
-        
+
         return services;
     }
 }

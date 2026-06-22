@@ -66,7 +66,7 @@ public class UpsertHotelOwnerProfileCommandHandler
         }
 
         await _profilesDbContext.SaveChangesAsync(cancellationToken);
-        
+
         var stats = await _profileFollowStatsService.GetCountsAsync(
             profile.UserId,
             cancellationToken);
@@ -74,5 +74,6 @@ public class UpsertHotelOwnerProfileCommandHandler
         return ProfilesMappings.ToHotelOwnerProfileResponse(
             profile,
             stats.FollowersCount,
-            stats.FollowingCount);    }
+            stats.FollowingCount);
+    }
 }

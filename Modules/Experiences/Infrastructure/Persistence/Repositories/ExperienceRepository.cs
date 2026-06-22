@@ -40,7 +40,7 @@ public class ExperienceRepository : IExperienceRepository
     }
 
     public async Task<List<Experience>> GetFilteredAsync(
-        Guid? areaId,
+        int? adm3Gid,
         Guid? categoryId,
         decimal? minPrice,
         decimal? maxPrice,
@@ -58,9 +58,9 @@ public class ExperienceRepository : IExperienceRepository
             .Where(x => x.IsActive && x.ApprovalStatus == ExperienceApprovalStatus.Approved)
             .AsQueryable();
 
-        if (areaId.HasValue)
+        if (adm3Gid.HasValue)
         {
-            query = query.Where(x => x.AreaId == areaId.Value);
+            query = query.Where(x => x.Adm3Gid == adm3Gid.Value);
         }
 
         if (categoryId.HasValue)
@@ -102,14 +102,14 @@ public class ExperienceRepository : IExperienceRepository
     public async Task<bool> ExistsAsync(
         Guid providerProfileId,
         string title,
-        Guid areaId,
+        int adm3Gid,
         CancellationToken cancellationToken = default)
     {
         var normalizedTitle = title.Trim().ToLower();
 
         return await _context.Experiences.AnyAsync(
             x => x.ProviderProfileId == providerProfileId &&
-                 x.AreaId == areaId &&
+                 x.Adm3Gid == adm3Gid &&
                  x.Title.ToLower() == normalizedTitle,
             cancellationToken);
     }
@@ -171,7 +171,7 @@ public class ExperienceRepository : IExperienceRepository
         _context.Experiences.Update(experience);
         await _context.SaveChangesAsync(cancellationToken);
     }
-    
+
     public async Task<List<Experience>> GetByProviderProfileIdAsync(
         Guid providerProfileId,
         CancellationToken cancellationToken = default)
@@ -186,7 +186,7 @@ public class ExperienceRepository : IExperienceRepository
             .OrderByDescending(x => x.CreatedAtUtc)
             .ToListAsync(cancellationToken);
     }
-    
+
     public async Task<Experience?> GetPublishedByIdAsync(
         Guid id,
         CancellationToken cancellationToken = default)
@@ -203,7 +203,7 @@ public class ExperienceRepository : IExperienceRepository
                      x.ApprovalStatus == ExperienceApprovalStatus.Approved,
                 cancellationToken);
     }
-    
+
     public async Task<List<Experience>> GetForAdminAsync(
         ExperienceApprovalStatus? approvalStatus,
         bool? isActive,

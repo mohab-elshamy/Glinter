@@ -88,18 +88,18 @@ public class StayRepository : IStayRepository
         await _dbContext.SaveChangesAsync(cancellationToken);
         return stay;
     }
-    
-    public async Task<List<Stay>> GetByAreaIdAsync(Guid areaId, CancellationToken cancellationToken = default)
+
+    public async Task<List<Stay>> GetByAdm3GidAsync(int adm3Gid, CancellationToken cancellationToken = default)
     {
         return await _dbContext.Stays
             .Include(x => x.Tags)
-            .Where(x => x.AreaId == areaId && x.IsActive)
+            .Where(x => x.Adm3Gid == adm3Gid && x.IsActive)
             .OrderByDescending(x => x.CreatedAtUtc)
             .ToListAsync(cancellationToken);
     }
-    
+
     public async Task<List<Stay>> GetFilteredAsync(
-        Guid? areaId,
+        int? adm3Gid,
         decimal? minPrice,
         decimal? maxPrice,
         int? guests,
@@ -111,9 +111,9 @@ public class StayRepository : IStayRepository
             .Where(x => x.IsActive)
             .AsQueryable();
 
-        if (areaId.HasValue)
+        if (adm3Gid.HasValue)
         {
-            query = query.Where(x => x.AreaId == areaId.Value);
+            query = query.Where(x => x.Adm3Gid == adm3Gid.Value);
         }
 
         if (minPrice.HasValue)
@@ -143,5 +143,5 @@ public class StayRepository : IStayRepository
             .OrderByDescending(x => x.CreatedAtUtc)
             .ToListAsync(cancellationToken);
     }
-    
+
 }

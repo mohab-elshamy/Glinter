@@ -2,7 +2,7 @@
 
 public class GetStaysRequestDto
 {
-    public Guid? AreaId { get; set; }
+    public int? Adm3Gid { get; set; }
     public decimal? MinPrice { get; set; }
     public decimal? MaxPrice { get; set; }
     public int? Guests { get; set; }

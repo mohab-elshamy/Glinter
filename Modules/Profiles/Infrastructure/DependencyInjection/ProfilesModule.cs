@@ -49,7 +49,7 @@ public static class ProfilesModule
         services.AddScoped<ProfileFollowStatsService>();
         services.AddScoped<UpdateProfileImageCommandHandler>();
         services.AddScoped<UpdateLocalBuddyVerificationCommandHandler>();
-        
+
         return services;
     }
 }

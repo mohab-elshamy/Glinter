@@ -15,7 +15,7 @@ public class HotelOwnerProfileResponse
     public string? PhoneNumber { get; set; }
 
     public string? Description { get; set; }
-    
+
     public string? ProfileImageUrl { get; set; }
 
     public int FollowersCount { get; set; }

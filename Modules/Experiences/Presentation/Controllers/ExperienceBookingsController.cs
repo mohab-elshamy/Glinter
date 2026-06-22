@@ -82,7 +82,7 @@ public class ExperienceBookingsController : ControllerBase
             return BadRequest(new { message = ex.Message });
         }
     }
-    
+
     [Authorize(Roles = RoleNames.ExperienceProvider)]
     [HttpGet("api/experiences/{experienceId:guid}/bookings")]
     public async Task<ActionResult<List<ExperienceBookingResponseDto>>> GetByExperienceId(

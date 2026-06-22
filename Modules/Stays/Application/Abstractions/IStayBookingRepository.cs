@@ -22,7 +22,7 @@ public interface IStayBookingRepository
 
     Task<StayBooking?> GetByIdAsync(Guid bookingId, CancellationToken cancellationToken = default);
     Task<StayBooking> UpdateAsync(StayBooking booking, CancellationToken cancellationToken = default);
-    
+
     Task<bool> HasEligibleReviewBookingAsync(
         Guid stayId,
         Guid travelerProfileId,

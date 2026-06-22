@@ -54,7 +54,7 @@ public class StayBookingRepository : IStayBookingRepository
                  && checkInDate < x.CheckOutDate,
             cancellationToken);
     }
-    
+
     public async Task<StayBooking?> GetByIdAsync(Guid bookingId, CancellationToken cancellationToken = default)
     {
         return await _dbContext.StayBookings
@@ -66,7 +66,7 @@ public class StayBookingRepository : IStayBookingRepository
         await _dbContext.SaveChangesAsync(cancellationToken);
         return booking;
     }
-    
+
     public async Task<bool> HasEligibleReviewBookingAsync(
         Guid stayId,
         Guid travelerProfileId,

@@ -7,10 +7,14 @@ namespace Glinter.Modules.Experiences.Application.Experiences.Queries.GetAllExpe
 public class GetAllExperiencesQueryHandler
 {
     private readonly IExperienceRepository _experienceRepository;
+    private readonly Glinter.Modules.Regions.Application.Abstractions.IRegionReferenceService _regionReferenceService;
 
-    public GetAllExperiencesQueryHandler(IExperienceRepository experienceRepository)
+    public GetAllExperiencesQueryHandler(
+        IExperienceRepository experienceRepository,
+        Glinter.Modules.Regions.Application.Abstractions.IRegionReferenceService regionReferenceService)
     {
         _experienceRepository = experienceRepository;
+        _regionReferenceService = regionReferenceService;
     }
 
     public async Task<List<ExperienceSummaryDto>> HandleAsync(
@@ -40,7 +44,7 @@ public class GetAllExperiencesQueryHandler
         }
 
         var experiences = await _experienceRepository.GetFilteredAsync(
-            query.AreaId,
+            query.Adm3Gid,
             query.CategoryId,
             query.MinPrice,
             query.MaxPrice,
@@ -49,8 +53,14 @@ public class GetAllExperiencesQueryHandler
             query.Tag,
             cancellationToken);
 
+        var regions = await _regionReferenceService.GetNeighbourhoodsAsync(
+            experiences.Select(x => x.Adm3Gid),
+            cancellationToken);
+
         return experiences
-            .Select(ExperiencesMappings.ToExperienceSummary)
+            .Select(experience => ExperiencesMappings.ToExperienceSummary(
+                experience,
+                regions.GetValueOrDefault(experience.Adm3Gid)))
             .ToList();
     }
 }

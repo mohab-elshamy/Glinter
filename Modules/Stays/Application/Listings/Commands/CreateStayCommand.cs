@@ -2,7 +2,7 @@
 
 public class CreateStayCommand
 {
-    public Guid AreaId { get; set; }
+    public int Adm3Gid { get; set; }
 
     public string Name { get; set; } = string.Empty;
 

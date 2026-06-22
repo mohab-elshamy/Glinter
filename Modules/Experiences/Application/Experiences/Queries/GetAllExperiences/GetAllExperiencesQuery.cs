@@ -2,7 +2,7 @@ namespace Glinter.Modules.Experiences.Application.Experiences.Queries.GetAllExpe
 
 public class GetAllExperiencesQuery
 {
-    public Guid? AreaId { get; set; }
+    public int? Adm3Gid { get; set; }
 
     public Guid? CategoryId { get; set; }
 

@@ -34,7 +34,9 @@ public static class ExperiencesMappings
         };
     }
 
-    public static ExperienceResponseDto ToExperienceResponse(Experience experience)
+    public static ExperienceResponseDto ToExperienceResponse(
+        Experience experience,
+        Glinter.Modules.Regions.Application.DTOs.RegionReferenceDto? region = null)
     {
         return new ExperienceResponseDto
         {
@@ -42,7 +44,8 @@ public static class ExperiencesMappings
             ProviderProfileId = experience.ProviderProfileId,
             CategoryId = experience.CategoryId,
             CategoryName = experience.Category?.Name,
-            AreaId = experience.AreaId,
+            Adm3Gid = experience.Adm3Gid,
+            Region = region,
             Title = experience.Title,
             Description = experience.Description,
             LocationName = experience.LocationName,
@@ -68,7 +71,9 @@ public static class ExperiencesMappings
         };
     }
 
-    public static ExperienceSummaryDto ToExperienceSummary(Experience experience)
+    public static ExperienceSummaryDto ToExperienceSummary(
+        Experience experience,
+        Glinter.Modules.Regions.Application.DTOs.RegionReferenceDto? region = null)
     {
         return new ExperienceSummaryDto
         {
@@ -76,7 +81,8 @@ public static class ExperiencesMappings
             ProviderProfileId = experience.ProviderProfileId,
             CategoryId = experience.CategoryId,
             CategoryName = experience.Category?.Name,
-            AreaId = experience.AreaId,
+            Adm3Gid = experience.Adm3Gid,
+            Region = region,
             Title = experience.Title,
             LocationName = experience.LocationName,
             PricePerPerson = experience.PricePerPerson,

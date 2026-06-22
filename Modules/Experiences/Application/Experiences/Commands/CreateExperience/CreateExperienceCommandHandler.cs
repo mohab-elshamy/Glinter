@@ -11,6 +11,7 @@ public class CreateExperienceCommandHandler
     private readonly IExperienceCategoryRepository _categoryRepository;
     private readonly IVibeRepository _vibeRepository;
     private readonly IExperienceProfileResolver _profileResolver;
+    private readonly Glinter.Modules.Regions.Application.Abstractions.IRegionReferenceService _regionReferenceService;
     private readonly CreateExperienceCommandValidator _validator;
 
     public CreateExperienceCommandHandler(
@@ -18,12 +19,14 @@ public class CreateExperienceCommandHandler
         IExperienceCategoryRepository categoryRepository,
         IVibeRepository vibeRepository,
         IExperienceProfileResolver profileResolver,
+        Glinter.Modules.Regions.Application.Abstractions.IRegionReferenceService regionReferenceService,
         CreateExperienceCommandValidator validator)
     {
         _experienceRepository = experienceRepository;
         _categoryRepository = categoryRepository;
         _vibeRepository = vibeRepository;
         _profileResolver = profileResolver;
+        _regionReferenceService = regionReferenceService;
         _validator = validator;
     }
 
@@ -54,10 +57,19 @@ public class CreateExperienceCommandHandler
             throw new InvalidOperationException("One or more vibes were not found.");
         }
 
+        var region = await _regionReferenceService.GetNeighbourhoodAsync(
+            command.Adm3Gid,
+            cancellationToken);
+
+        if (region is null)
+        {
+            throw new InvalidOperationException("Adm3Gid must reference an existing neighbourhood.");
+        }
+
         var duplicateExists = await _experienceRepository.ExistsAsync(
             providerProfileId,
             command.Title,
-            command.AreaId,
+            command.Adm3Gid,
             cancellationToken);
 
         if (duplicateExists)
@@ -72,7 +84,7 @@ public class CreateExperienceCommandHandler
             Id = experienceId,
             ProviderProfileId = providerProfileId,
             CategoryId = command.CategoryId,
-            AreaId = command.AreaId,
+            Adm3Gid = command.Adm3Gid,
             Title = command.Title.Trim(),
             Description = command.Description.Trim(),
             LocationName = command.LocationName.Trim(),
@@ -117,6 +129,6 @@ public class CreateExperienceCommandHandler
             throw new InvalidOperationException("Experience was created but could not be loaded.");
         }
 
-        return ExperiencesMappings.ToExperienceResponse(createdExperience);
+        return ExperiencesMappings.ToExperienceResponse(createdExperience, region);
     }
 }

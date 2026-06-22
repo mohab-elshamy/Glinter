@@ -6,10 +6,14 @@ namespace Glinter.Modules.Stays.Application.Listings.Commands;
 public class UpdateStayHandler
 {
     private readonly IStayRepository _stayRepository;
+    private readonly Glinter.Modules.Regions.Application.Abstractions.IRegionReferenceService _regionReferenceService;
 
-    public UpdateStayHandler(IStayRepository stayRepository)
+    public UpdateStayHandler(
+        IStayRepository stayRepository,
+        Glinter.Modules.Regions.Application.Abstractions.IRegionReferenceService regionReferenceService)
     {
         _stayRepository = stayRepository;
+        _regionReferenceService = regionReferenceService;
     }
 
     public async Task<StayResponseDto?> HandleAsync(UpdateStayCommand command, CancellationToken cancellationToken = default)
@@ -50,28 +54,11 @@ public class UpdateStayHandler
         if (updatedStay is null)
             return null;
 
-        return new StayResponseDto
-        {
-            Id = updatedStay.Id,
-            OwnerProfileId = updatedStay.OwnerProfileId,
-            AreaId = updatedStay.AreaId,
-            Name = updatedStay.Name,
-            Description = updatedStay.Description,
-            Address = updatedStay.Address,
-            PricePerNight = updatedStay.PricePerNight,
-            Currency = updatedStay.Currency,
-            MaxGuests = updatedStay.MaxGuests,
-            Latitude = updatedStay.Latitude,
-            Longitude = updatedStay.Longitude,
-            IsActive = updatedStay.IsActive,
-            CreatedAtUtc = updatedStay.CreatedAtUtc,
-            UpdatedAtUtc = updatedStay.UpdatedAtUtc,
-            Tags = updatedStay.Tags.Select(t => new StayTagDto
-            {
-                Id = t.Id,
-                StayId = t.StayId,
-                Name = t.Name
-            }).ToList()
-        };
+        var region = await _regionReferenceService.GetNeighbourhoodAsync(
+            updatedStay.Adm3Gid,
+            cancellationToken);
+
+        return Glinter.Modules.Stays.Application.Common.Mapping.StayMappings
+            .ToResponseDto(updatedStay, region);
     }
 }
