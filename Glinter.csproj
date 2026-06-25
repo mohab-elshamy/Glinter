@@ -28,6 +28,20 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Folder Include="Modules\Communication\Application\Abstractions\" />
+    <Folder Include="Modules\Communication\Application\Chats\Commands\" />
+    <Folder Include="Modules\Communication\Application\Chats\Dtos\" />
+    <Folder Include="Modules\Communication\Application\Chats\Queries\" />
+    <Folder Include="Modules\Communication\Application\Notifications\Commands\" />
+    <Folder Include="Modules\Communication\Application\Notifications\Dtos\" />
+    <Folder Include="Modules\Communication\Application\Notifications\Queries\" />
+    <Folder Include="Modules\Communication\Domain\Entities\" />
+    <Folder Include="Modules\Communication\Domain\Enums\" />
+    <Folder Include="Modules\Communication\Infrastructure\DependencyInjection\" />
+    <Folder Include="Modules\Communication\Infrastructure\Persistence\" />
+    <Folder Include="Modules\Communication\Infrastructure\Persistence\Configurations\" />
+    <Folder Include="Modules\Communication\Infrastructure\Persistence\Repositories\" />
+    <Folder Include="Modules\Communication\Presentation\Controllers\" />
     <Folder Include="Modules\Stays\Application\Abstractions\" />
     <Folder Include="Modules\Stays\Application\Bookings\Commands\" />
     <Folder Include="Modules\Stays\Application\Bookings\Dtos\" />

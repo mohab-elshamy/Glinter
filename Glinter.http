@@ -1,6 +1,97 @@
 @Glinter_HostAddress = http://localhost:5160
+@AuthToken = paste-token-here
+@OtherUserId = paste-other-user-id-here
+@ThreadId = paste-thread-id-here
+@NotificationId = paste-notification-id-here
 
 GET {{Glinter_HostAddress}}/weatherforecast/
 Accept: application/json
+
+###
+
+POST {{Glinter_HostAddress}}/api/auth/register
+Content-Type: application/json
+
+{
+  "fullName": "Communication Tester One",
+  "email": "communication.tester.one@example.com",
+  "password": "CommTester1!",
+  "role": "Traveler"
+}
+
+###
+
+POST {{Glinter_HostAddress}}/api/auth/register
+Content-Type: application/json
+
+{
+  "fullName": "Communication Tester Two",
+  "email": "communication.tester.two@example.com",
+  "password": "CommTester2!",
+  "role": "Traveler"
+}
+
+###
+
+POST {{Glinter_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "communication.tester.one@example.com",
+  "password": "CommTester1!"
+}
+
+###
+
+GET {{Glinter_HostAddress}}/api/chat/threads
+Authorization: Bearer {{AuthToken}}
+Accept: application/json
+
+###
+
+POST {{Glinter_HostAddress}}/api/chat/threads/direct
+Authorization: Bearer {{AuthToken}}
+Content-Type: application/json
+
+{
+  "otherUserId": "{{OtherUserId}}"
+}
+
+###
+
+POST {{Glinter_HostAddress}}/api/chat/threads/{{ThreadId}}/messages
+Authorization: Bearer {{AuthToken}}
+Content-Type: application/json
+
+{
+  "body": "Hello from the Communication module."
+}
+
+###
+
+GET {{Glinter_HostAddress}}/api/chat/threads/{{ThreadId}}/messages?page=1&pageSize=50
+Authorization: Bearer {{AuthToken}}
+Accept: application/json
+
+###
+
+PATCH {{Glinter_HostAddress}}/api/chat/threads/{{ThreadId}}/read
+Authorization: Bearer {{AuthToken}}
+
+###
+
+GET {{Glinter_HostAddress}}/api/notifications?page=1&pageSize=50
+Authorization: Bearer {{AuthToken}}
+Accept: application/json
+
+###
+
+PATCH {{Glinter_HostAddress}}/api/notifications/{{NotificationId}}/read
+Authorization: Bearer {{AuthToken}}
+
+###
+
+PATCH {{Glinter_HostAddress}}/api/notifications/read-all
+Authorization: Bearer {{AuthToken}}
 
 ###

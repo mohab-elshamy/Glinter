@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Glinter.Modules.Communication.Infrastructure.DependencyInjection;
 using Glinter.Modules.Experiences.Infrastructure.DependencyInjection;
 using Glinter.Modules.Experiences.Infrastructure.Persistence;
 using Glinter.Modules.IdentityAccess.Domain.Entities;
@@ -32,6 +33,9 @@ builder.Services.AddExperiencesModule(builder.Configuration);
 
 // Module 6: Regions (Administrative Boundaries)
 builder.Services.AddRegionsModule(builder.Configuration);
+
+// Module 9: Communication
+builder.Services.AddCommunicationModule(builder.Configuration);
 
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
