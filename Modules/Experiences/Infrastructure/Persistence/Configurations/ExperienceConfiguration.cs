@@ -16,6 +16,12 @@ public class ExperienceConfiguration : IEntityTypeConfiguration<Experience>
         builder.HasIndex(x => x.CategoryId);
         builder.HasIndex(x => x.Adm3Gid);
         builder.HasIndex(x => x.IsActive);
+        builder.HasIndex(x => new
+        {
+            x.ProviderProfileId,
+            x.Adm3Gid,
+            x.Title
+        }).IsUnique();
 
         builder.Property(x => x.Title)
             .HasMaxLength(200)

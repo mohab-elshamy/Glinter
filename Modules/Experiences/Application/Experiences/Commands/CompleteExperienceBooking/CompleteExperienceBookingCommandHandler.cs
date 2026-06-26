@@ -9,17 +9,20 @@ public class CompleteExperienceBookingCommandHandler
 {
     private readonly IExperienceBookingRepository _bookingRepository;
     private readonly IExperienceRepository _experienceRepository;
+    private readonly IExperienceAvailabilityRepository _availabilityRepository;
     private readonly IExperienceProfileResolver _profileResolver;
     private readonly CompleteExperienceBookingCommandValidator _validator;
 
     public CompleteExperienceBookingCommandHandler(
         IExperienceBookingRepository bookingRepository,
         IExperienceRepository experienceRepository,
+        IExperienceAvailabilityRepository availabilityRepository,
         IExperienceProfileResolver profileResolver,
         CompleteExperienceBookingCommandValidator validator)
     {
         _bookingRepository = bookingRepository;
         _experienceRepository = experienceRepository;
+        _availabilityRepository = availabilityRepository;
         _profileResolver = profileResolver;
         _validator = validator;
     }
@@ -64,6 +67,21 @@ public class CompleteExperienceBookingCommandHandler
         if (booking.Status == ExperienceBookingStatus.Completed)
         {
             throw new InvalidOperationException("Booking is already completed.");
+        }
+
+        var availability = await _availabilityRepository.GetByIdAsync(
+            booking.AvailabilityId,
+            cancellationToken);
+
+        if (availability is null)
+        {
+            throw new InvalidOperationException("Availability slot was not found.");
+        }
+
+        if (availability.EndTimeUtc > DateTime.UtcNow)
+        {
+            throw new InvalidOperationException(
+                "Booking cannot be completed before the experience has ended.");
         }
 
         booking.Status = ExperienceBookingStatus.Completed;

@@ -27,6 +27,10 @@ public class GetExperienceReviewsQueryHandler
             throw new ArgumentException("ExperienceId is required.");
         }
 
+        Glinter.Modules.Experiences.Application.Common.ExperiencePagination.Validate(
+            query.Page,
+            query.PageSize);
+
         var experience = await _experienceRepository.GetByIdAsync(
             query.ExperienceId,
             cancellationToken);
@@ -43,6 +47,8 @@ public class GetExperienceReviewsQueryHandler
 
         var reviews = await _reviewRepository.GetByExperienceIdAsync(
             query.ExperienceId,
+            query.Page,
+            query.PageSize,
             cancellationToken);
 
         return reviews

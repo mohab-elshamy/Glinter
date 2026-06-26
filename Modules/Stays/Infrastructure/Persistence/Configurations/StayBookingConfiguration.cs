@@ -25,6 +25,8 @@ public class StayBookingConfiguration : IEntityTypeConfiguration<StayBooking>
             x.TravelerProfileId,
             x.CheckInDate,
             x.CheckOutDate
-        }).IsUnique();
+        })
+            .IsUnique()
+            .HasFilter("\"Status\" <> 'Cancelled'");
     }
 }

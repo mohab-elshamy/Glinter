@@ -13,7 +13,7 @@ public class Adm3Repository(RegionsDbContext db) : IAdm3Repository
         var q = db.Adm3.AsQueryable();
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
-            var s = query.Search.ToLower();
+            var s = query.Search.Trim().ToLower();
             q = q.Where(x =>
                 (x.NameEn != null && x.NameEn.ToLower().Contains(s)) ||
                 (x.NameAr != null && x.NameAr.ToLower().Contains(s)) ||
@@ -40,8 +40,9 @@ public class Adm3Repository(RegionsDbContext db) : IAdm3Repository
         var q = BuildQuery(query);
         q = StripGeometry(q);
         return await q.OrderBy(x => x.NameEn)
-                      .Skip((query.Page - 1) * query.PageSize)
-                      .Take(query.PageSize)
+                      .ThenBy(x => x.Gid)
+                      .Skip((query.NormalizedPage - 1) * query.NormalizedPageSize)
+                      .Take(query.NormalizedPageSize)
                       .ToListAsync(ct);
     }
 
@@ -50,8 +51,9 @@ public class Adm3Repository(RegionsDbContext db) : IAdm3Repository
         var q = BuildQuery(query).Where(x => x.Adm2Gid == adm2Gid);
         q = StripGeometry(q);
         return await q.OrderBy(x => x.NameEn)
-                      .Skip((query.Page - 1) * query.PageSize)
-                      .Take(query.PageSize)
+                      .ThenBy(x => x.Gid)
+                      .Skip((query.NormalizedPage - 1) * query.NormalizedPageSize)
+                      .Take(query.NormalizedPageSize)
                       .ToListAsync(ct);
     }
 

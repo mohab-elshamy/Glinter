@@ -42,20 +42,22 @@ public class CreateDirectChatThreadHandler
         if (!otherUserExists)
             throw new KeyNotFoundException("Other user was not found or is inactive.");
 
-        var existingThread = await _threadRepository.GetDirectThreadAsync(
+        var directKey = BuildDirectKey(currentUserId, command.OtherUserId);
+
+        var existingThread = await _threadRepository.GetDirectThreadSummaryAsync(
+            directKey,
             currentUserId,
-            command.OtherUserId,
             cancellationToken);
 
         if (existingThread is not null)
-            return CommunicationMappings.ToThreadSummaryDto(existingThread, currentUserId);
+            return existingThread;
 
         var now = DateTime.UtcNow;
         var thread = new ChatThread
         {
             Id = Guid.NewGuid(),
             Type = ChatThreadType.Direct,
-            DirectKey = BuildDirectKey(currentUserId, command.OtherUserId),
+            DirectKey = directKey,
             CreatedByUserId = currentUserId,
             CreatedAtUtc = now,
             Participants =
@@ -76,17 +78,17 @@ public class CreateDirectChatThreadHandler
         var createdThread = await _threadRepository.TryAddDirectThreadAsync(thread, cancellationToken);
 
         if (createdThread is not null)
-            return CommunicationMappings.ToThreadSummaryDto(createdThread, currentUserId);
+            return CommunicationMappings.ToNewThreadSummaryDto(createdThread);
 
-        var concurrentlyCreatedThread = await _threadRepository.GetDirectThreadAsync(
+        var concurrentlyCreatedThread = await _threadRepository.GetDirectThreadSummaryAsync(
+            directKey,
             currentUserId,
-            command.OtherUserId,
             cancellationToken);
 
         if (concurrentlyCreatedThread is null)
             throw new InvalidOperationException("Direct chat thread already exists but could not be loaded.");
 
-        return CommunicationMappings.ToThreadSummaryDto(concurrentlyCreatedThread, currentUserId);
+        return concurrentlyCreatedThread;
     }
 
     private Guid GetCurrentUserId()

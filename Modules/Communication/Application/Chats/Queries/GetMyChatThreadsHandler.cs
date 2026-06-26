@@ -24,13 +24,17 @@ public class GetMyChatThreadsHandler
     {
         var currentUserId = GetCurrentUserId();
 
-        var threads = await _threadRepository.GetThreadsForUserAsync(
-            currentUserId,
-            cancellationToken);
+        if (query.Page < 1 || query.Page > 10000)
+            throw new ArgumentException("Page must be between 1 and 10000.");
 
-        return threads
-            .Select(x => CommunicationMappings.ToThreadSummaryDto(x, currentUserId))
-            .ToList();
+        if (query.PageSize < 1 || query.PageSize > 100)
+            throw new ArgumentException("PageSize must be between 1 and 100.");
+
+        return await _threadRepository.GetThreadSummariesForUserAsync(
+            currentUserId,
+            query.Page,
+            query.PageSize,
+            cancellationToken);
     }
 
     private Guid GetCurrentUserId()

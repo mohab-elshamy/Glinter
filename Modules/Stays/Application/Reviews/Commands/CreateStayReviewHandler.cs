@@ -35,6 +35,9 @@ public class CreateStayReviewHandler
         if (command.Rating < 1 || command.Rating > 5)
             throw new ArgumentException("Rating must be between 1 and 5.");
 
+        if ((command.Comment?.Trim().Length ?? 0) > 2000)
+            throw new ArgumentException("Comment cannot exceed 2000 characters.");
+
         var stay = await _stayRepository.GetByIdAsync(command.StayId, cancellationToken);
 
         if (stay is null)

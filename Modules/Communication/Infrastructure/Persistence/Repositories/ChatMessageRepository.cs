@@ -47,6 +47,7 @@ public class ChatMessageRepository : IChatMessageRepository
             .AsNoTracking()
             .Where(x => x.ThreadId == threadId)
             .OrderByDescending(x => x.SentAtUtc)
+            .ThenByDescending(x => x.Id)
             .Skip(skip)
             .Take(take)
             .ToListAsync(cancellationToken);

@@ -1,4 +1,5 @@
 using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using System.Text;
 using Glinter.Modules.IdentityAccess.Application.Abstractions;
 using Glinter.Modules.IdentityAccess.Application.Auth.Commands.Login;
@@ -12,6 +13,7 @@ using Glinter.Modules.IdentityAccess.Infrastructure.Security;
 using Glinter.Modules.IdentityAccess.Infrastructure.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Glinter.Modules.IdentityAccess.Application.Auth.Commands.AssignRole;
@@ -66,6 +68,8 @@ public static class IdentityAccessModule
         var jwtOptions = configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>()
                          ?? throw new InvalidOperationException("Jwt configuration not found.");
 
+        ValidateJwtOptions(jwtOptions);
+
         services.AddAuthentication(options =>
         {
             options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -82,6 +86,7 @@ public static class IdentityAccessModule
                 ValidateIssuerSigningKey = true,
                 ValidIssuer = jwtOptions.Issuer,
                 ValidAudience = jwtOptions.Audience,
+                ClockSkew = TimeSpan.FromMinutes(1),
                 IssuerSigningKey = new SymmetricSecurityKey(
                     Encoding.UTF8.GetBytes(jwtOptions.SecretKey))
             };
@@ -98,14 +103,66 @@ public static class IdentityAccessModule
                         return;
                     }
 
+                    var userIdValue =
+                        context.Principal?.FindFirstValue(ClaimTypes.NameIdentifier) ??
+                        context.Principal?.FindFirstValue(JwtRegisteredClaimNames.Sub);
+
+                    if (!Guid.TryParse(userIdValue, out var userId))
+                    {
+                        context.Fail("Token does not contain a valid user id.");
+                        return;
+                    }
+
+                    var userReadService = context.HttpContext.RequestServices
+                        .GetRequiredService<IIdentityUserReadService>();
+
+                    var isActiveUser = await userReadService.IsActiveUserAsync(
+                        userId,
+                        context.HttpContext.RequestAborted);
+                    if (!isActiveUser)
+                    {
+                        context.Fail("User is inactive.");
+                        return;
+                    }
+
                     var revocationService = context.HttpContext.RequestServices
                         .GetRequiredService<ITokenRevocationService>();
 
-                    var revoked = await revocationService.IsRevokedAsync(jti);
+                    var revoked = await revocationService.IsRevokedAsync(
+                        jti,
+                        context.HttpContext.RequestAborted);
                     if (revoked)
                     {
                         context.Fail("Token has been revoked.");
                     }
+                },
+                OnChallenge = async context =>
+                {
+                    if (context.Response.HasStarted)
+                    {
+                        return;
+                    }
+
+                    context.HandleResponse();
+
+                    await WriteAuthenticationProblemDetailsAsync(
+                        context.HttpContext,
+                        StatusCodes.Status401Unauthorized,
+                        "Unauthorized.",
+                        "Invalid or expired access token.");
+                },
+                OnForbidden = async context =>
+                {
+                    if (context.Response.HasStarted)
+                    {
+                        return;
+                    }
+
+                    await WriteAuthenticationProblemDetailsAsync(
+                        context.HttpContext,
+                        StatusCodes.Status403Forbidden,
+                        "Forbidden.",
+                        "You do not have permission to access this resource.");
                 }
             };
         });
@@ -116,9 +173,6 @@ public static class IdentityAccessModule
                 policy.RequireRole(RoleNames.Admin));
         });
 
-        services.AddHttpContextAccessor();
-
-        services.AddScoped<ICurrentUserService, CurrentUserService>();
         services.AddScoped<IIdentityUserReadService, IdentityUserReadService>();
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
         services.AddScoped<ITokenRevocationService, TokenRevocationService>();
@@ -134,5 +188,45 @@ public static class IdentityAccessModule
         services.AddScoped<GetRolesQueryHandler>();
 
         return services;
+    }
+
+    private static void ValidateJwtOptions(JwtOptions jwtOptions)
+    {
+        if (string.IsNullOrWhiteSpace(jwtOptions.Issuer))
+            throw new InvalidOperationException("Jwt:Issuer is required.");
+
+        if (string.IsNullOrWhiteSpace(jwtOptions.Audience))
+            throw new InvalidOperationException("Jwt:Audience is required.");
+
+        if (string.IsNullOrWhiteSpace(jwtOptions.SecretKey))
+            throw new InvalidOperationException("Jwt:SecretKey is required.");
+
+        if (Encoding.UTF8.GetByteCount(jwtOptions.SecretKey) < 32)
+            throw new InvalidOperationException("Jwt:SecretKey must be at least 32 bytes.");
+
+        if (jwtOptions.ExpiryMinutes <= 0)
+            throw new InvalidOperationException("Jwt:ExpiryMinutes must be greater than zero.");
+    }
+
+    private static async Task WriteAuthenticationProblemDetailsAsync(
+        HttpContext httpContext,
+        int statusCode,
+        string title,
+        string detail)
+    {
+        var problemDetails = new ProblemDetails
+        {
+            Status = statusCode,
+            Title = title,
+            Detail = detail,
+            Instance = httpContext.Request.Path
+        };
+
+        problemDetails.Extensions["traceId"] = httpContext.TraceIdentifier;
+
+        httpContext.Response.StatusCode = statusCode;
+        httpContext.Response.ContentType = "application/problem+json";
+
+        await httpContext.Response.WriteAsJsonAsync(problemDetails);
     }
 }

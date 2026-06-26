@@ -1,7 +1,9 @@
-﻿using Glinter.Modules.Stays.Application.Bookings.Commands;
+using Glinter.Modules.IdentityAccess.Domain.Constants;
+using Glinter.Modules.Stays.Application.Bookings.Commands;
 using Glinter.Modules.Stays.Application.Bookings.Dtos;
 using Glinter.Modules.Stays.Application.Bookings.Queries;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Glinter.Modules.Stays.Presentation.Controllers;
@@ -24,7 +26,7 @@ public class StayBookingController : ControllerBase
         _cancelStayBookingHandler = cancelStayBookingHandler;
     }
 
-    [Authorize]
+    [Authorize(Roles = RoleNames.Traveler)]
     [HttpPost("/api/stays/{stayId:guid}/bookings")]
     public async Task<IActionResult> Create(
         Guid stayId,
@@ -55,10 +57,11 @@ public class StayBookingController : ControllerBase
         }
         catch (UnauthorizedAccessException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
         }
     }
 
+    [Authorize(Roles = RoleNames.HotelOwner)]
     [HttpGet]
     public async Task<IActionResult> GetBookings(Guid stayId, CancellationToken cancellationToken)
     {
@@ -76,8 +79,13 @@ public class StayBookingController : ControllerBase
         {
             return NotFound(new { message = ex.Message });
         }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+        }
     }
 
+    [Authorize(Roles = RoleNames.Traveler)]
     [HttpPatch("~/api/stay-bookings/{bookingId:guid}/cancel")]
     public async Task<IActionResult> CancelBooking(Guid bookingId, CancellationToken cancellationToken)
     {
@@ -98,6 +106,10 @@ public class StayBookingController : ControllerBase
         catch (ArgumentException ex)
         {
             return BadRequest(new { message = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
         }
     }
 }

@@ -9,6 +9,9 @@ public class SetExperienceApprovalStatusCommandValidator
             throw new ArgumentException("ExperienceId is required.");
         }
 
+        if (!Enum.IsDefined(command.ApprovalStatus))
+            throw new ArgumentException("ApprovalStatus is invalid.");
+
         if (!string.IsNullOrWhiteSpace(command.ModerationNotes) &&
             command.ModerationNotes.Length > 1000)
         {

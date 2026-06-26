@@ -29,6 +29,10 @@ public class GetExperienceBookingsQueryHandler
             throw new ArgumentException("ExperienceId is required.");
         }
 
+        Glinter.Modules.Experiences.Application.Common.ExperiencePagination.Validate(
+            query.Page,
+            query.PageSize);
+
         var providerProfileId = await _profileResolver
             .GetCurrentExperienceProviderProfileIdAsync(cancellationToken);
 
@@ -48,6 +52,8 @@ public class GetExperienceBookingsQueryHandler
 
         var bookings = await _bookingRepository.GetByExperienceIdAsync(
             query.ExperienceId,
+            query.Page,
+            query.PageSize,
             cancellationToken);
 
         return bookings

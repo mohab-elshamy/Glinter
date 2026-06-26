@@ -1,7 +1,9 @@
-﻿using Glinter.Modules.Stays.Application.Reviews.Commands;
+using Glinter.Modules.IdentityAccess.Domain.Constants;
+using Glinter.Modules.Stays.Application.Reviews.Commands;
 using Glinter.Modules.Stays.Application.Reviews.Dtos;
 using Glinter.Modules.Stays.Application.Reviews.Queries;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Glinter.Modules.Stays.Presentation.Controllers;
@@ -27,7 +29,7 @@ public class StayReviewController : ControllerBase
         _deleteStayReviewHandler = deleteStayReviewHandler;
     }
 
-    [Authorize]
+    [Authorize(Roles = RoleNames.Traveler)]
     [HttpPost]
     public async Task<IActionResult> CreateReview(
         Guid stayId,
@@ -56,7 +58,7 @@ public class StayReviewController : ControllerBase
         }
         catch (UnauthorizedAccessException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
         }
     }
 
@@ -79,7 +81,7 @@ public class StayReviewController : ControllerBase
         }
     }
 
-    [Authorize]
+    [Authorize(Roles = RoleNames.Traveler)]
     [HttpPut("~/api/stay-reviews/{reviewId:guid}")]
     public async Task<IActionResult> UpdateReview(
         Guid reviewId,
@@ -108,11 +110,11 @@ public class StayReviewController : ControllerBase
         }
         catch (UnauthorizedAccessException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
         }
     }
 
-    [Authorize]
+    [Authorize(Roles = RoleNames.Traveler)]
     [HttpDelete("~/api/stay-reviews/{reviewId:guid}")]
     public async Task<IActionResult> DeleteReview(
         Guid reviewId,
@@ -138,7 +140,7 @@ public class StayReviewController : ControllerBase
         }
         catch (UnauthorizedAccessException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
         }
     }
 }

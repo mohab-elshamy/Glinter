@@ -1,9 +1,11 @@
 using Glinter.Modules.Communication.Application.Chats.Commands;
 using Glinter.Modules.Communication.Application.Chats.Dtos;
 using Glinter.Modules.Communication.Application.Chats.Queries;
+using Glinter.Modules.Communication.Infrastructure.DependencyInjection;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Glinter.Modules.Communication.Presentation.Controllers;
 
@@ -33,12 +35,19 @@ public class ChatController : ControllerBase
     }
 
     [HttpGet("threads")]
-    public async Task<IActionResult> GetMyThreads(CancellationToken cancellationToken)
+    public async Task<IActionResult> GetMyThreads(
+        CancellationToken cancellationToken,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20)
     {
         try
         {
             var result = await _getMyChatThreadsHandler.HandleAsync(
-                new GetMyChatThreadsQuery(),
+                new GetMyChatThreadsQuery
+                {
+                    Page = page,
+                    PageSize = pageSize
+                },
                 cancellationToken);
 
             return Ok(result);
@@ -47,9 +56,14 @@ public class ChatController : ControllerBase
         {
             return Unauthorized(new { message = ex.Message });
         }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     [HttpPost("threads/direct")]
+    [EnableRateLimiting(CommunicationRateLimitPolicies.DirectThreadCreation)]
     public async Task<IActionResult> CreateDirectThread(
         [FromBody] CreateDirectChatThreadRequestDto request,
         CancellationToken cancellationToken)
@@ -82,9 +96,9 @@ public class ChatController : ControllerBase
     [HttpGet("threads/{threadId:guid}/messages")]
     public async Task<IActionResult> GetMessages(
         Guid threadId,
-        [FromQuery] int page,
-        [FromQuery] int pageSize,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50)
     {
         try
         {
@@ -92,8 +106,8 @@ public class ChatController : ControllerBase
                 new GetChatThreadMessagesQuery
                 {
                     ThreadId = threadId,
-                    Page = page <= 0 ? 1 : page,
-                    PageSize = pageSize <= 0 ? 50 : pageSize
+                    Page = page,
+                    PageSize = pageSize
                 },
                 cancellationToken);
 
@@ -118,6 +132,7 @@ public class ChatController : ControllerBase
     }
 
     [HttpPost("threads/{threadId:guid}/messages")]
+    [EnableRateLimiting(CommunicationRateLimitPolicies.MessageSending)]
     public async Task<IActionResult> SendMessage(
         Guid threadId,
         [FromBody] SendChatMessageRequestDto request,

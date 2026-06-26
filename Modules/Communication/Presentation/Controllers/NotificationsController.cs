@@ -27,17 +27,17 @@ public class NotificationsController : ControllerBase
 
     [HttpGet]
     public async Task<IActionResult> GetMyNotifications(
-        [FromQuery] int page,
-        [FromQuery] int pageSize,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50)
     {
         try
         {
             var result = await _getMyNotificationsHandler.HandleAsync(
                 new GetMyNotificationsQuery
                 {
-                    Page = page <= 0 ? 1 : page,
-                    PageSize = pageSize <= 0 ? 50 : pageSize
+                    Page = page,
+                    PageSize = pageSize
                 },
                 cancellationToken);
 
@@ -46,6 +46,10 @@ public class NotificationsController : ControllerBase
         catch (UnauthorizedAccessException ex)
         {
             return Unauthorized(new { message = ex.Message });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
         }
     }
 

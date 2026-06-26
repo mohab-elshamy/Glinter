@@ -15,4 +15,8 @@ public class GetAllExperiencesQuery
     public Guid? VibeId { get; set; }
 
     public string? Tag { get; set; }
+
+    public int Page { get; set; } = 1;
+
+    public int PageSize { get; set; } = 20;
 }

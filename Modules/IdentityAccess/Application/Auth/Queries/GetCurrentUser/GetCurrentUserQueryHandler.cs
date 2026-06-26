@@ -28,6 +28,9 @@ public class GetCurrentUserQueryHandler
         if (user is null)
             throw new UnauthorizedAccessException("User not found.");
 
+        if (!user.IsActive)
+            throw new UnauthorizedAccessException("User is inactive.");
+
         var roles = await _userManager.GetRolesAsync(user);
 
         return IdentityAccessMappings.ToCurrentUserResponse(user, roles);

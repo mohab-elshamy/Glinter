@@ -8,10 +8,11 @@ public interface IStayRepository
     Task<List<Stay>> GetAllAsync(CancellationToken cancellationToken = default);
     Task<Stay?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
     Task<bool> ExistsAsync(Guid ownerProfileId, string name, string address, CancellationToken cancellationToken = default);
+    Task<bool> ExistsAsync(Guid ownerProfileId, string name, string address, Guid excludedStayId, CancellationToken cancellationToken = default);
     Task<Stay> UpdateAsync(Stay stay, CancellationToken cancellationToken = default);
 
     Task<Stay?> GetForUpdateAsync(Guid id, CancellationToken cancellationToken = default);
-    Task<List<Stay>> GetByAdm3GidAsync(int adm3Gid, CancellationToken cancellationToken = default);
+    Task<List<Stay>> GetByAdm3GidAsync(int adm3Gid, int page, int pageSize, CancellationToken cancellationToken = default);
 
     Task ReplaceTagsAsync(
         Guid stayId,
@@ -24,5 +25,7 @@ public interface IStayRepository
         decimal? maxPrice,
         int? guests,
         string? tag,
+        int page,
+        int pageSize,
         CancellationToken cancellationToken = default);
 }

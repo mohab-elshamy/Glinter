@@ -6,6 +6,9 @@ using Glinter.Modules.Communication.Application.Notifications.Queries;
 using Glinter.Modules.Communication.Infrastructure.Persistence;
 using Glinter.Modules.Communication.Infrastructure.Persistence.Repositories;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.RateLimiting;
+using System.Security.Claims;
+using System.Threading.RateLimiting;
 
 namespace Glinter.Modules.Communication.Infrastructure.DependencyInjection;
 
@@ -27,6 +30,36 @@ public static class CommunicationModule
             options.UseNpgsql(connectionString);
         });
 
+        var directThreadPermitLimit = Math.Max(
+            1,
+            configuration.GetValue<int?>(
+                "Communication:RateLimiting:DirectThreadPermitLimit") ?? 10);
+        var messagePermitLimit = Math.Max(
+            1,
+            configuration.GetValue<int?>(
+                "Communication:RateLimiting:MessagePermitLimit") ?? 30);
+        var windowSeconds = Math.Max(
+            1,
+            configuration.GetValue<int?>(
+                "Communication:RateLimiting:WindowSeconds") ?? 60);
+
+        services.AddRateLimiter(options =>
+        {
+            options.AddPolicy(
+                CommunicationRateLimitPolicies.DirectThreadCreation,
+                httpContext => CreateFixedWindowPartition(
+                    httpContext,
+                    directThreadPermitLimit,
+                    windowSeconds));
+
+            options.AddPolicy(
+                CommunicationRateLimitPolicies.MessageSending,
+                httpContext => CreateFixedWindowPartition(
+                    httpContext,
+                    messagePermitLimit,
+                    windowSeconds));
+        });
+
         services.AddScoped<ICommunicationDbContext>(provider =>
             provider.GetRequiredService<CommunicationDbContext>());
 
@@ -46,5 +79,27 @@ public static class CommunicationModule
         services.AddScoped<MarkAllNotificationsAsReadHandler>();
 
         return services;
+    }
+
+    private static RateLimitPartition<string> CreateFixedWindowPartition(
+        HttpContext httpContext,
+        int permitLimit,
+        int windowSeconds)
+    {
+        var userId = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var partitionKey = !string.IsNullOrWhiteSpace(userId)
+            ? $"user:{userId}"
+            : $"ip:{httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown"}";
+
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey,
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = permitLimit,
+                Window = TimeSpan.FromSeconds(windowSeconds),
+                QueueLimit = 0,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                AutoReplenishment = true
+            });
     }
 }

@@ -109,8 +109,6 @@ public class CreateExperienceBookingCommandHandler
             CreatedAtUtc = DateTime.UtcNow
         };
 
-        availability.BookedCount += command.GuestsCount;
-
         await _bookingRepository.AddBookingAndUpdateAvailabilityAsync(
             booking,
             availability,

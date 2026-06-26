@@ -1,6 +1,7 @@
 using Glinter.Modules.Experiences.Application.Abstractions;
 using Glinter.Modules.Experiences.Application.Common.Mapping;
 using Glinter.Modules.Experiences.Application.Experiences.Dtos;
+using Glinter.Modules.Experiences.Domain.Enums;
 
 namespace Glinter.Modules.Experiences.Application.Experiences.Commands.UpdateExperience;
 
@@ -79,6 +80,19 @@ public class UpdateExperienceCommandHandler
             throw new InvalidOperationException("Adm3Gid must reference an existing neighbourhood.");
         }
 
+        var duplicateExists = await _experienceRepository.ExistsAsync(
+            providerProfileId,
+            command.Title,
+            command.Adm3Gid,
+            experience.Id,
+            cancellationToken);
+
+        if (duplicateExists)
+        {
+            throw new InvalidOperationException(
+                "An experience with the same title already exists in this area for this provider.");
+        }
+
         experience.CategoryId = command.CategoryId;
         experience.Adm3Gid = command.Adm3Gid;
         experience.Title = command.Title.Trim();
@@ -90,9 +104,10 @@ public class UpdateExperienceCommandHandler
         experience.MaxGuests = command.MaxGuests;
         experience.Latitude = command.Latitude;
         experience.Longitude = command.Longitude;
+        experience.ApprovalStatus = ExperienceApprovalStatus.Pending;
+        experience.ModerationNotes = null;
+        experience.ModeratedAtUtc = null;
         experience.UpdatedAtUtc = DateTime.UtcNow;
-
-        await _experienceRepository.UpdateAsync(experience, cancellationToken);
 
         await _experienceRepository.ReplaceTagsAsync(
             experience.Id,
@@ -103,6 +118,8 @@ public class UpdateExperienceCommandHandler
             experience.Id,
             command.VibeIds,
             cancellationToken);
+
+        await _experienceRepository.UpdateAsync(experience, cancellationToken);
 
         var updatedExperience = await _experienceRepository.GetByIdAsync(
             experience.Id,

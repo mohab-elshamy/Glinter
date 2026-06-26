@@ -8,6 +8,8 @@ namespace Glinter.Modules.Stays.Application.Bookings.Commands;
 
 public class CreateStayBookingHandler
 {
+    private const decimal MaxDatabaseMoneyValue = 9_999_999_999_999_999.99m;
+
     private readonly IStayRepository _stayRepository;
     private readonly IStayBookingRepository _stayBookingRepository;
     private readonly ICurrentUserService _currentUserService;
@@ -31,6 +33,9 @@ public class CreateStayBookingHandler
 
 
     {
+        if (command.StayId == Guid.Empty)
+            throw new ArgumentException("Stay id is required.");
+
         if (!_currentUserService.IsAuthenticated || _currentUserService.UserId is null)
         {
             throw new UnauthorizedAccessException("User is not authenticated.");
@@ -94,6 +99,9 @@ public class CreateStayBookingHandler
             throw new ArgumentException("Booking must be at least one night.");
 
         var totalPrice = nights * stay.PricePerNight;
+
+        if (totalPrice > MaxDatabaseMoneyValue)
+            throw new ArgumentException("The booking total exceeds the maximum supported value.");
 
         var booking = new StayBooking
         {

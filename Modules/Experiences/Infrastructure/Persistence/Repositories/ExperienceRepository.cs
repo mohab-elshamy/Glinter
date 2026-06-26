@@ -2,6 +2,7 @@ using Glinter.Modules.Experiences.Application.Abstractions;
 using Glinter.Modules.Experiences.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Glinter.Modules.Experiences.Domain.Enums;
+using Glinter.Modules.Experiences.Application.Common;
 
 namespace Glinter.Modules.Experiences.Infrastructure.Persistence.Repositories;
 
@@ -16,8 +17,24 @@ public class ExperienceRepository : IExperienceRepository
 
     public async Task AddAsync(Experience experience, CancellationToken cancellationToken = default)
     {
+        await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+
+        await AcquireProviderWriteLockAsync(experience.ProviderProfileId, cancellationToken);
+
+        var duplicateExists = await ExistsAsync(
+            experience.ProviderProfileId,
+            experience.Title,
+            experience.Adm3Gid,
+            experience.Id,
+            cancellationToken);
+
+        if (duplicateExists)
+            throw new InvalidOperationException(
+                "An experience with the same title already exists in this area for this provider.");
+
         await _context.Experiences.AddAsync(experience, cancellationToken);
         await _context.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
     }
 
     public async Task<Experience?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
@@ -47,8 +64,12 @@ public class ExperienceRepository : IExperienceRepository
         int? guests,
         Guid? vibeId,
         string? tag,
+        int page,
+        int pageSize,
         CancellationToken cancellationToken = default)
     {
+        var pagination = ExperiencePagination.Normalize(page, pageSize);
+
         var query = _context.Experiences
             .AsNoTracking()
             .Include(x => x.Category)
@@ -96,6 +117,9 @@ public class ExperienceRepository : IExperienceRepository
 
         return await query
             .OrderByDescending(x => x.CreatedAtUtc)
+            .ThenBy(x => x.Id)
+            .Skip((pagination.Page - 1) * pagination.PageSize)
+            .Take(pagination.PageSize)
             .ToListAsync(cancellationToken);
     }
 
@@ -105,11 +129,27 @@ public class ExperienceRepository : IExperienceRepository
         int adm3Gid,
         CancellationToken cancellationToken = default)
     {
+        return await ExistsAsync(
+            providerProfileId,
+            title,
+            adm3Gid,
+            Guid.Empty,
+            cancellationToken);
+    }
+
+    public async Task<bool> ExistsAsync(
+        Guid providerProfileId,
+        string title,
+        int adm3Gid,
+        Guid excludedExperienceId,
+        CancellationToken cancellationToken = default)
+    {
         var normalizedTitle = title.Trim().ToLower();
 
         return await _context.Experiences.AnyAsync(
             x => x.ProviderProfileId == providerProfileId &&
                  x.Adm3Gid == adm3Gid &&
+                 x.Id != excludedExperienceId &&
                  x.Title.ToLower() == normalizedTitle,
             cancellationToken);
     }
@@ -138,7 +178,6 @@ public class ExperienceRepository : IExperienceRepository
             .ToList();
 
         await _context.ExperienceTags.AddRangeAsync(newTags, cancellationToken);
-        await _context.SaveChangesAsync(cancellationToken);
     }
 
     public async Task ReplaceVibesAsync(
@@ -163,19 +202,37 @@ public class ExperienceRepository : IExperienceRepository
             .ToList();
 
         await _context.ExperienceVibes.AddRangeAsync(newVibes, cancellationToken);
-        await _context.SaveChangesAsync(cancellationToken);
     }
 
     public async Task UpdateAsync(Experience experience, CancellationToken cancellationToken = default)
     {
-        _context.Experiences.Update(experience);
+        await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+
+        await AcquireProviderWriteLockAsync(experience.ProviderProfileId, cancellationToken);
+
+        var duplicateExists = await ExistsAsync(
+            experience.ProviderProfileId,
+            experience.Title,
+            experience.Adm3Gid,
+            experience.Id,
+            cancellationToken);
+
+        if (duplicateExists)
+            throw new InvalidOperationException(
+                "An experience with the same title already exists in this area for this provider.");
+
         await _context.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
     }
 
     public async Task<List<Experience>> GetByProviderProfileIdAsync(
         Guid providerProfileId,
+        int page,
+        int pageSize,
         CancellationToken cancellationToken = default)
     {
+        var pagination = ExperiencePagination.Normalize(page, pageSize);
+
         return await _context.Experiences
             .AsNoTracking()
             .Include(x => x.Category)
@@ -184,6 +241,9 @@ public class ExperienceRepository : IExperienceRepository
             .ThenInclude(x => x.Vibe)
             .Where(x => x.ProviderProfileId == providerProfileId)
             .OrderByDescending(x => x.CreatedAtUtc)
+            .ThenBy(x => x.Id)
+            .Skip((pagination.Page - 1) * pagination.PageSize)
+            .Take(pagination.PageSize)
             .ToListAsync(cancellationToken);
     }
 
@@ -207,8 +267,12 @@ public class ExperienceRepository : IExperienceRepository
     public async Task<List<Experience>> GetForAdminAsync(
         ExperienceApprovalStatus? approvalStatus,
         bool? isActive,
+        int page,
+        int pageSize,
         CancellationToken cancellationToken = default)
     {
+        var pagination = ExperiencePagination.Normalize(page, pageSize);
+
         var query = _context.Experiences
             .AsNoTracking()
             .Include(x => x.Category)
@@ -229,6 +293,21 @@ public class ExperienceRepository : IExperienceRepository
 
         return await query
             .OrderByDescending(x => x.CreatedAtUtc)
+            .ThenBy(x => x.Id)
+            .Skip((pagination.Page - 1) * pagination.PageSize)
+            .Take(pagination.PageSize)
             .ToListAsync(cancellationToken);
+    }
+
+    private Task<int> AcquireProviderWriteLockAsync(
+        Guid providerProfileId,
+        CancellationToken cancellationToken)
+    {
+        return _context.Database.ExecuteSqlInterpolatedAsync(
+            $"""
+             SELECT pg_advisory_xact_lock(
+                 hashtextextended({providerProfileId.ToString()}, 0::bigint))
+             """,
+            cancellationToken);
     }
 }

@@ -21,6 +21,22 @@ public class GetAllExperiencesQueryHandler
         GetAllExperiencesQuery query,
         CancellationToken cancellationToken = default)
     {
+        Glinter.Modules.Experiences.Application.Common.ExperiencePagination.Validate(
+            query.Page,
+            query.PageSize);
+
+        if (query.Adm3Gid.HasValue && query.Adm3Gid.Value <= 0)
+            throw new ArgumentException("Adm3Gid must be greater than zero.");
+
+        if (query.CategoryId == Guid.Empty)
+            throw new ArgumentException("CategoryId must be a valid id.");
+
+        if (query.VibeId == Guid.Empty)
+            throw new ArgumentException("VibeId must be a valid id.");
+
+        if (!string.IsNullOrWhiteSpace(query.Tag) && query.Tag.Trim().Length > 100)
+            throw new ArgumentException("Tag cannot exceed 100 characters.");
+
         if (query.MinPrice.HasValue && query.MinPrice.Value < 0)
         {
             throw new ArgumentException("MinPrice cannot be negative.");
@@ -51,6 +67,8 @@ public class GetAllExperiencesQueryHandler
             query.Guests,
             query.VibeId,
             query.Tag,
+            query.Page,
+            query.PageSize,
             cancellationToken);
 
         var regions = await _regionReferenceService.GetNeighbourhoodsAsync(

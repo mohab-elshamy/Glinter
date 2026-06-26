@@ -47,6 +47,19 @@ public class CreateNotificationHandler
         if (body.Length > 1000)
             throw new ArgumentException("Notification body cannot exceed 1000 characters.");
 
+        if (!Enum.IsDefined(command.Type))
+            throw new ArgumentException("Notification type is invalid.");
+
+        var linkUrl = ValidateAndNormalizeLink(command.LinkUrl);
+        var sourceModule = NormalizeOptionalValue(command.SourceModule, 100, "SourceModule");
+        var sourceEntityType = NormalizeOptionalValue(
+            command.SourceEntityType,
+            100,
+            "SourceEntityType");
+
+        if (command.SourceEntityId == Guid.Empty)
+            throw new ArgumentException("SourceEntityId must be a valid id.");
+
         var notification = new Notification
         {
             Id = Guid.NewGuid(),
@@ -54,9 +67,9 @@ public class CreateNotificationHandler
             Type = command.Type,
             Title = title,
             Body = body,
-            LinkUrl = string.IsNullOrWhiteSpace(command.LinkUrl) ? null : command.LinkUrl.Trim(),
-            SourceModule = string.IsNullOrWhiteSpace(command.SourceModule) ? null : command.SourceModule.Trim(),
-            SourceEntityType = string.IsNullOrWhiteSpace(command.SourceEntityType) ? null : command.SourceEntityType.Trim(),
+            LinkUrl = linkUrl,
+            SourceModule = sourceModule,
+            SourceEntityType = sourceEntityType,
             SourceEntityId = command.SourceEntityId,
             CreatedAtUtc = DateTime.UtcNow
         };
@@ -66,5 +79,61 @@ public class CreateNotificationHandler
             cancellationToken);
 
         return CommunicationMappings.ToNotificationResponseDto(createdNotification);
+    }
+
+    private static string? ValidateAndNormalizeLink(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        var link = value.Trim();
+
+        if (link.Length > 1000)
+            throw new ArgumentException("Notification link cannot exceed 1000 characters.");
+
+        if (!link.StartsWith('/') ||
+            link.StartsWith("//", StringComparison.Ordinal) ||
+            link.Contains('\\') ||
+            link.Any(char.IsControl) ||
+            !Uri.TryCreate(link, UriKind.Relative, out _))
+        {
+            throw new ArgumentException(
+                "Notification link must be a safe application-relative path.");
+        }
+
+        string decodedLink;
+        try
+        {
+            decodedLink = Uri.UnescapeDataString(link);
+        }
+        catch (UriFormatException)
+        {
+            throw new ArgumentException("Notification link contains invalid escaping.");
+        }
+
+        if (decodedLink.StartsWith("//", StringComparison.Ordinal) ||
+            decodedLink.Contains('\\') ||
+            decodedLink.Any(char.IsControl))
+        {
+            throw new ArgumentException(
+                "Notification link must be a safe application-relative path.");
+        }
+
+        return link;
+    }
+
+    private static string? NormalizeOptionalValue(
+        string? value,
+        int maxLength,
+        string fieldName)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        var normalized = value.Trim();
+        if (normalized.Length > maxLength)
+            throw new ArgumentException($"{fieldName} cannot exceed {maxLength} characters.");
+
+        return normalized;
     }
 }

@@ -1,3 +1,4 @@
+using Glinter.Modules.IdentityAccess.Domain.Constants;
 using Glinter.Modules.Regions.Application.Countries.Commands;
 using Glinter.Modules.Regions.Application.Countries.Queries;
 using Glinter.Modules.Regions.Application.Districts.Commands;
@@ -8,6 +9,7 @@ using Glinter.Modules.Regions.Application.Governorates.Queries;
 using Glinter.Modules.Regions.Application.Neighbourhoods.Commands;
 using Glinter.Modules.Regions.Application.Neighbourhoods.Queries;
 using Glinter.Modules.Regions.Application.PointLookup.Queries;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Glinter.Modules.Regions.Presentation.Controllers;
@@ -81,6 +83,7 @@ public class RegionsController(
     }
 
     [HttpPost("countries")]
+    [Authorize(Policy = PolicyNames.AdminOnly)]
     public async Task<IActionResult> CreateCountry([FromBody] CreateAdm0Request request, CancellationToken ct)
     {
         var result = await createCountry.HandleAsync(new CreateCountryCommand
@@ -95,6 +98,7 @@ public class RegionsController(
     }
 
     [HttpPut("countries/{gid:int}")]
+    [Authorize(Policy = PolicyNames.AdminOnly)]
     public async Task<IActionResult> UpdateCountry(int gid, [FromBody] UpdateAdm0Request request, CancellationToken ct)
     {
         var result = await updateCountry.HandleAsync(new UpdateCountryCommand
@@ -109,6 +113,7 @@ public class RegionsController(
     }
 
     [HttpDelete("countries/{gid:int}")]
+    [Authorize(Policy = PolicyNames.AdminOnly)]
     public async Task<IActionResult> DeleteCountry(int gid, CancellationToken ct)
     {
         var deleted = await deleteCountry.HandleAsync(gid, ct);
@@ -148,6 +153,7 @@ public class RegionsController(
     }
 
     [HttpPost("governorates")]
+    [Authorize(Policy = PolicyNames.AdminOnly)]
     public async Task<IActionResult> CreateGovernorate([FromBody] CreateAdm1Request request, CancellationToken ct)
     {
         var result = await createGovernorate.HandleAsync(new CreateGovernorateCommand
@@ -162,6 +168,7 @@ public class RegionsController(
     }
 
     [HttpPut("governorates/{gid:int}")]
+    [Authorize(Policy = PolicyNames.AdminOnly)]
     public async Task<IActionResult> UpdateGovernorate(int gid, [FromBody] UpdateAdm1Request request, CancellationToken ct)
     {
         var result = await updateGovernorate.HandleAsync(new UpdateGovernorateCommand
@@ -175,6 +182,7 @@ public class RegionsController(
     }
 
     [HttpDelete("governorates/{gid:int}")]
+    [Authorize(Policy = PolicyNames.AdminOnly)]
     public async Task<IActionResult> DeleteGovernorate(int gid, CancellationToken ct)
     {
         var deleted = await deleteGovernorate.HandleAsync(gid, ct);
@@ -214,6 +222,7 @@ public class RegionsController(
     }
 
     [HttpPost("districts")]
+    [Authorize(Policy = PolicyNames.AdminOnly)]
     public async Task<IActionResult> CreateDistrict([FromBody] CreateAdm2Request request, CancellationToken ct)
     {
         var result = await createDistrict.HandleAsync(new CreateDistrictCommand
@@ -228,6 +237,7 @@ public class RegionsController(
     }
 
     [HttpPut("districts/{gid:int}")]
+    [Authorize(Policy = PolicyNames.AdminOnly)]
     public async Task<IActionResult> UpdateDistrict(int gid, [FromBody] UpdateAdm2Request request, CancellationToken ct)
     {
         var result = await updateDistrict.HandleAsync(new UpdateDistrictCommand
@@ -241,6 +251,7 @@ public class RegionsController(
     }
 
     [HttpDelete("districts/{gid:int}")]
+    [Authorize(Policy = PolicyNames.AdminOnly)]
     public async Task<IActionResult> DeleteDistrict(int gid, CancellationToken ct)
     {
         var deleted = await deleteDistrict.HandleAsync(gid, ct);
@@ -280,6 +291,7 @@ public class RegionsController(
     }
 
     [HttpPost("neighbourhoods")]
+    [Authorize(Policy = PolicyNames.AdminOnly)]
     public async Task<IActionResult> CreateNeighbourhood([FromBody] CreateAdm3Request request, CancellationToken ct)
     {
         var result = await createNeighbourhood.HandleAsync(new CreateNeighbourhoodCommand
@@ -294,6 +306,7 @@ public class RegionsController(
     }
 
     [HttpPut("neighbourhoods/{gid:int}")]
+    [Authorize(Policy = PolicyNames.AdminOnly)]
     public async Task<IActionResult> UpdateNeighbourhood(int gid, [FromBody] UpdateAdm3Request request, CancellationToken ct)
     {
         var result = await updateNeighbourhood.HandleAsync(new UpdateNeighbourhoodCommand
@@ -307,6 +320,7 @@ public class RegionsController(
     }
 
     [HttpDelete("neighbourhoods/{gid:int}")]
+    [Authorize(Policy = PolicyNames.AdminOnly)]
     public async Task<IActionResult> DeleteNeighbourhood(int gid, CancellationToken ct)
     {
         var deleted = await deleteNeighbourhood.HandleAsync(gid, ct);

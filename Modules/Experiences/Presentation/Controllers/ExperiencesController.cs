@@ -61,12 +61,18 @@ public class ExperiencesController : ControllerBase
     [Authorize(Roles = RoleNames.ExperienceProvider)]
     [HttpGet("my")]
     public async Task<ActionResult<List<ExperienceSummaryDto>>> GetMyExperiences(
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20)
     {
         try
         {
             var result = await _getMyExperiencesHandler.HandleAsync(
-                new GetMyExperiencesQuery(),
+                new GetMyExperiencesQuery
+                {
+                    Page = page,
+                    PageSize = pageSize
+                },
                 cancellationToken);
 
             return Ok(result);

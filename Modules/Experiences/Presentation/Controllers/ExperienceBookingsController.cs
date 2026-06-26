@@ -67,12 +67,18 @@ public class ExperienceBookingsController : ControllerBase
     [Authorize(Roles = RoleNames.Traveler)]
     [HttpGet("api/experience-bookings/my")]
     public async Task<ActionResult<List<ExperienceBookingResponseDto>>> GetMyBookings(
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20)
     {
         try
         {
             var result = await _getMyBookingsHandler.HandleAsync(
-                new GetMyExperienceBookingsQuery(),
+                new GetMyExperienceBookingsQuery
+                {
+                    Page = page,
+                    PageSize = pageSize
+                },
                 cancellationToken);
 
             return Ok(result);
@@ -87,14 +93,18 @@ public class ExperienceBookingsController : ControllerBase
     [HttpGet("api/experiences/{experienceId:guid}/bookings")]
     public async Task<ActionResult<List<ExperienceBookingResponseDto>>> GetByExperienceId(
         Guid experienceId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20)
     {
         try
         {
             var result = await _getBookingsHandler.HandleAsync(
                 new GetExperienceBookingsQuery
                 {
-                    ExperienceId = experienceId
+                    ExperienceId = experienceId,
+                    Page = page,
+                    PageSize = pageSize
                 },
                 cancellationToken);
 

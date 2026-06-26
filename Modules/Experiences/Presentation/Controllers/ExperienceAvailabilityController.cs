@@ -33,14 +33,18 @@ public class ExperienceAvailabilityController : ControllerBase
     [HttpGet("api/experiences/{experienceId:guid}/availability")]
     public async Task<ActionResult<List<ExperienceAvailabilityResponseDto>>> GetByExperienceId(
         Guid experienceId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20)
     {
         try
         {
             var result = await _getAvailabilityHandler.HandleAsync(
                 new GetExperienceAvailabilityQuery
                 {
-                    ExperienceId = experienceId
+                    ExperienceId = experienceId,
+                    Page = page,
+                    PageSize = pageSize
                 },
                 cancellationToken);
 

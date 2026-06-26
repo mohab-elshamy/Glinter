@@ -38,7 +38,8 @@ public class AdminExperiencesController : ControllerBase
                 if (!Enum.TryParse<ExperienceApprovalStatus>(
                         request.ApprovalStatus,
                         ignoreCase: true,
-                        out var parsedStatus))
+                        out var parsedStatus) ||
+                    !Enum.IsDefined(parsedStatus))
                 {
                     return BadRequest(new { message = "Invalid approval status." });
                 }
@@ -50,7 +51,9 @@ public class AdminExperiencesController : ControllerBase
                 new GetAdminExperiencesQuery
                 {
                     ApprovalStatus = approvalStatus,
-                    IsActive = request.IsActive
+                    IsActive = request.IsActive,
+                    Page = request.Page,
+                    PageSize = request.PageSize
                 },
                 cancellationToken);
 
@@ -73,7 +76,8 @@ public class AdminExperiencesController : ControllerBase
             if (!Enum.TryParse<ExperienceApprovalStatus>(
                     request.ApprovalStatus,
                     ignoreCase: true,
-                    out var approvalStatus))
+                    out var approvalStatus) ||
+                !Enum.IsDefined(approvalStatus))
             {
                 return BadRequest(new { message = "Invalid approval status." });
             }

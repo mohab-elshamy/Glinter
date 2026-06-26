@@ -69,7 +69,11 @@ public class CancelExperienceBookingCommandHandler
             throw new InvalidOperationException("Availability slot was not found.");
         }
 
-        availability.BookedCount = Math.Max(0, availability.BookedCount - booking.GuestsCount);
+        if (availability.StartTimeUtc <= DateTime.UtcNow)
+        {
+            throw new InvalidOperationException(
+                "A booking cannot be cancelled after the experience has started.");
+        }
 
         await _bookingRepository.UpdateBookingAndAvailabilityAsync(
             booking,

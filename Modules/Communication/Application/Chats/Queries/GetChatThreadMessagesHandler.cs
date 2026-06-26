@@ -43,8 +43,14 @@ public class GetChatThreadMessagesHandler
         if (!isParticipant)
             throw new KeyNotFoundException("Chat thread was not found.");
 
-        var page = query.Page <= 0 ? 1 : query.Page;
-        var pageSize = query.PageSize <= 0 ? 50 : Math.Min(query.PageSize, 100);
+        if (query.Page < 1 || query.Page > 10000)
+            throw new ArgumentException("Page must be between 1 and 10000.");
+
+        if (query.PageSize < 1 || query.PageSize > 100)
+            throw new ArgumentException("PageSize must be between 1 and 100.");
+
+        var page = query.Page;
+        var pageSize = query.PageSize;
         var skip = (page - 1) * pageSize;
 
         var messages = await _messageRepository.GetByThreadIdAsync(

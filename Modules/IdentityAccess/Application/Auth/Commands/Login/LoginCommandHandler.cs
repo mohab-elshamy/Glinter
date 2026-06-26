@@ -36,7 +36,14 @@ public class LoginCommandHandler
         if (!user.IsActive)
             throw new UnauthorizedAccessException("User is inactive.");
 
-        var result = await _signInManager.CheckPasswordSignInAsync(user, command.Password, false);
+        var result = await _signInManager.CheckPasswordSignInAsync(
+            user,
+            command.Password,
+            lockoutOnFailure: true);
+
+        if (result.IsLockedOut)
+            throw new UnauthorizedAccessException("User is temporarily locked. Try again later.");
+
         if (!result.Succeeded)
             throw new UnauthorizedAccessException("Invalid email or password.");
 
