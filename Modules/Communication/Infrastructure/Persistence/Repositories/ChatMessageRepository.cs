@@ -22,6 +22,21 @@ public class ChatMessageRepository : IChatMessageRepository
         return message;
     }
 
+    public async Task<ChatMessage> AddMessageAndUpdateThreadAsync(
+        ChatMessage message,
+        ChatThread thread,
+        ChatParticipant participant,
+        CancellationToken cancellationToken = default)
+    {
+        await _dbContext.ChatMessages.AddAsync(message, cancellationToken);
+        _dbContext.ChatThreads.Update(thread);
+        _dbContext.ChatParticipants.Update(participant);
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return message;
+    }
+
     public async Task<List<ChatMessage>> GetByThreadIdAsync(
         Guid threadId,
         int skip,

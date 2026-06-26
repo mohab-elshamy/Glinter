@@ -35,13 +35,13 @@ public class GetChatThreadMessagesHandler
             cancellationToken);
 
         if (thread is null)
-            throw new InvalidOperationException("Chat thread was not found.");
+            throw new KeyNotFoundException("Chat thread was not found.");
 
         var isParticipant = thread.Participants
             .Any(x => x.UserId == currentUserId && x.LeftAtUtc == null);
 
         if (!isParticipant)
-            throw new UnauthorizedAccessException("User is not a participant in this chat thread.");
+            throw new KeyNotFoundException("Chat thread was not found.");
 
         var page = query.Page <= 0 ? 1 : query.Page;
         var pageSize = query.PageSize <= 0 ? 50 : Math.Min(query.PageSize, 100);

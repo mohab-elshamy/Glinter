@@ -92,6 +92,10 @@ namespace Glinter.Modules.Communication.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("CreatedByUserId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("DirectKey")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
                     b.Property<DateTime?>("LastMessageAtUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -105,6 +109,9 @@ namespace Glinter.Modules.Communication.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(30)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("DirectKey")
+                        .IsUnique();
 
                     b.HasIndex("LastMessageAtUtc");
 

@@ -69,6 +69,10 @@ public class ChatController : ControllerBase
         {
             return BadRequest(new { message = ex.Message });
         }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
         catch (UnauthorizedAccessException ex)
         {
             return Unauthorized(new { message = ex.Message });
@@ -100,6 +104,10 @@ public class ChatController : ControllerBase
             return BadRequest(new { message = ex.Message });
         }
         catch (InvalidOperationException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (KeyNotFoundException ex)
         {
             return NotFound(new { message = ex.Message });
         }
@@ -135,6 +143,10 @@ public class ChatController : ControllerBase
         {
             return NotFound(new { message = ex.Message });
         }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
         catch (UnauthorizedAccessException ex)
         {
             return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
@@ -160,6 +172,10 @@ public class ChatController : ControllerBase
         catch (ArgumentException ex)
         {
             return BadRequest(new { message = ex.Message });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
         }
         catch (UnauthorizedAccessException ex)
         {

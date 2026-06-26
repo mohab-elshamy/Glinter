@@ -30,6 +30,10 @@ public interface IChatThreadRepository
         ChatThread thread,
         CancellationToken cancellationToken = default);
 
+    Task<ChatThread?> TryAddDirectThreadAsync(
+        ChatThread thread,
+        CancellationToken cancellationToken = default);
+
     Task UpdateAsync(
         ChatThread thread,
         CancellationToken cancellationToken = default);

@@ -8,6 +8,8 @@ public class ChatThread
 
     public ChatThreadType Type { get; set; } = ChatThreadType.Direct;
 
+    public string? DirectKey { get; set; }
+
     public string? Title { get; set; }
 
     public Guid? CreatedByUserId { get; set; }

@@ -11,13 +11,16 @@ public class CreateDirectChatThreadHandler
 {
     private readonly IChatThreadRepository _threadRepository;
     private readonly ICurrentUserService _currentUserService;
+    private readonly IIdentityUserReadService _identityUserReadService;
 
     public CreateDirectChatThreadHandler(
         IChatThreadRepository threadRepository,
-        ICurrentUserService currentUserService)
+        ICurrentUserService currentUserService,
+        IIdentityUserReadService identityUserReadService)
     {
         _threadRepository = threadRepository;
         _currentUserService = currentUserService;
+        _identityUserReadService = identityUserReadService;
     }
 
     public async Task<ChatThreadSummaryDto> HandleAsync(
@@ -32,6 +35,13 @@ public class CreateDirectChatThreadHandler
         if (command.OtherUserId == currentUserId)
             throw new ArgumentException("Cannot create a direct chat with yourself.");
 
+        var otherUserExists = await _identityUserReadService.IsActiveUserAsync(
+            command.OtherUserId,
+            cancellationToken);
+
+        if (!otherUserExists)
+            throw new KeyNotFoundException("Other user was not found or is inactive.");
+
         var existingThread = await _threadRepository.GetDirectThreadAsync(
             currentUserId,
             command.OtherUserId,
@@ -45,6 +55,7 @@ public class CreateDirectChatThreadHandler
         {
             Id = Guid.NewGuid(),
             Type = ChatThreadType.Direct,
+            DirectKey = BuildDirectKey(currentUserId, command.OtherUserId),
             CreatedByUserId = currentUserId,
             CreatedAtUtc = now,
             Participants =
@@ -62,9 +73,20 @@ public class CreateDirectChatThreadHandler
             ]
         };
 
-        var createdThread = await _threadRepository.AddAsync(thread, cancellationToken);
+        var createdThread = await _threadRepository.TryAddDirectThreadAsync(thread, cancellationToken);
 
-        return CommunicationMappings.ToThreadSummaryDto(createdThread, currentUserId);
+        if (createdThread is not null)
+            return CommunicationMappings.ToThreadSummaryDto(createdThread, currentUserId);
+
+        var concurrentlyCreatedThread = await _threadRepository.GetDirectThreadAsync(
+            currentUserId,
+            command.OtherUserId,
+            cancellationToken);
+
+        if (concurrentlyCreatedThread is null)
+            throw new InvalidOperationException("Direct chat thread already exists but could not be loaded.");
+
+        return CommunicationMappings.ToThreadSummaryDto(concurrentlyCreatedThread, currentUserId);
     }
 
     private Guid GetCurrentUserId()
@@ -73,5 +95,18 @@ public class CreateDirectChatThreadHandler
             throw new UnauthorizedAccessException("User is not authenticated.");
 
         return _currentUserService.UserId.Value;
+    }
+
+    private static string BuildDirectKey(Guid firstUserId, Guid secondUserId)
+    {
+        var orderedUserIds = new[]
+            {
+                firstUserId.ToString("D"),
+                secondUserId.ToString("D")
+            }
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        return $"{orderedUserIds[0]}:{orderedUserIds[1]}";
     }
 }

@@ -31,7 +31,7 @@ public class MarkChatThreadAsReadHandler
             cancellationToken);
 
         if (participant is null)
-            throw new UnauthorizedAccessException("User is not a participant in this chat thread.");
+            throw new KeyNotFoundException("Chat thread was not found.");
 
         participant.LastReadAtUtc = DateTime.UtcNow;
 

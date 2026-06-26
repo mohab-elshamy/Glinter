@@ -2,6 +2,7 @@ using Glinter.Modules.Communication.Application.Abstractions;
 using Glinter.Modules.Communication.Domain.Entities;
 using Glinter.Modules.Communication.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace Glinter.Modules.Communication.Infrastructure.Persistence.Repositories;
 
@@ -83,6 +84,28 @@ public class ChatThreadRepository : IChatThreadRepository
         return thread;
     }
 
+    public async Task<ChatThread?> TryAddDirectThreadAsync(
+        ChatThread thread,
+        CancellationToken cancellationToken = default)
+    {
+        await _dbContext.ChatThreads.AddAsync(thread, cancellationToken);
+
+        try
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            return thread;
+        }
+        catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
+        {
+            foreach (var entry in ex.Entries)
+            {
+                entry.State = EntityState.Detached;
+            }
+
+            return null;
+        }
+    }
+
     public async Task UpdateAsync(
         ChatThread thread,
         CancellationToken cancellationToken = default)
@@ -97,5 +120,11 @@ public class ChatThreadRepository : IChatThreadRepository
     {
         _dbContext.ChatParticipants.Update(participant);
         await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    private static bool IsUniqueConstraintViolation(DbUpdateException exception)
+    {
+        return exception.InnerException is PostgresException postgresException &&
+               postgresException.SqlState == PostgresErrorCodes.UniqueViolation;
     }
 }

@@ -31,7 +31,7 @@ public class SendChatMessageHandler
         if (command.ThreadId == Guid.Empty)
             throw new ArgumentException("ThreadId is required.");
 
-        var body = command.Body.Trim();
+        var body = command.Body?.Trim();
         if (string.IsNullOrWhiteSpace(body))
             throw new ArgumentException("Message body is required.");
 
@@ -43,13 +43,13 @@ public class SendChatMessageHandler
             cancellationToken);
 
         if (thread is null)
-            throw new InvalidOperationException("Chat thread was not found.");
+            throw new KeyNotFoundException("Chat thread was not found.");
 
         var participant = thread.Participants
             .FirstOrDefault(x => x.UserId == currentUserId && x.LeftAtUtc == null);
 
         if (participant is null)
-            throw new UnauthorizedAccessException("User is not a participant in this chat thread.");
+            throw new KeyNotFoundException("Chat thread was not found.");
 
         var now = DateTime.UtcNow;
         var message = new ChatMessage
@@ -64,8 +64,11 @@ public class SendChatMessageHandler
         thread.LastMessageAtUtc = now;
         participant.LastReadAtUtc = now;
 
-        var createdMessage = await _messageRepository.AddAsync(message, cancellationToken);
-        await _threadRepository.UpdateAsync(thread, cancellationToken);
+        var createdMessage = await _messageRepository.AddMessageAndUpdateThreadAsync(
+            message,
+            thread,
+            participant,
+            cancellationToken);
 
         return CommunicationMappings.ToMessageResponseDto(createdMessage, currentUserId);
     }

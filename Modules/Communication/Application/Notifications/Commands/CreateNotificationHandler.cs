@@ -2,16 +2,21 @@ using Glinter.Modules.Communication.Application.Abstractions;
 using Glinter.Modules.Communication.Application.Common.Mapping;
 using Glinter.Modules.Communication.Application.Notifications.Dtos;
 using Glinter.Modules.Communication.Domain.Entities;
+using Glinter.Modules.IdentityAccess.Application.Abstractions;
 
 namespace Glinter.Modules.Communication.Application.Notifications.Commands;
 
 public class CreateNotificationHandler
 {
     private readonly INotificationRepository _notificationRepository;
+    private readonly IIdentityUserReadService _identityUserReadService;
 
-    public CreateNotificationHandler(INotificationRepository notificationRepository)
+    public CreateNotificationHandler(
+        INotificationRepository notificationRepository,
+        IIdentityUserReadService identityUserReadService)
     {
         _notificationRepository = notificationRepository;
+        _identityUserReadService = identityUserReadService;
     }
 
     public async Task<NotificationResponseDto> HandleAsync(
@@ -21,14 +26,21 @@ public class CreateNotificationHandler
         if (command.UserId == Guid.Empty)
             throw new ArgumentException("UserId is required.");
 
-        var title = command.Title.Trim();
+        var userExists = await _identityUserReadService.IsActiveUserAsync(
+            command.UserId,
+            cancellationToken);
+
+        if (!userExists)
+            throw new KeyNotFoundException("User was not found or is inactive.");
+
+        var title = command.Title?.Trim();
         if (string.IsNullOrWhiteSpace(title))
             throw new ArgumentException("Notification title is required.");
 
         if (title.Length > 200)
             throw new ArgumentException("Notification title cannot exceed 200 characters.");
 
-        var body = command.Body.Trim();
+        var body = command.Body?.Trim();
         if (string.IsNullOrWhiteSpace(body))
             throw new ArgumentException("Notification body is required.");
 

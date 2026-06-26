@@ -9,6 +9,7 @@ using Glinter.Modules.IdentityAccess.Domain.Constants;
 using Glinter.Modules.IdentityAccess.Domain.Entities;
 using Glinter.Modules.IdentityAccess.Infrastructure.Persistence;
 using Glinter.Modules.IdentityAccess.Infrastructure.Security;
+using Glinter.Modules.IdentityAccess.Infrastructure.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -118,6 +119,7 @@ public static class IdentityAccessModule
         services.AddHttpContextAccessor();
 
         services.AddScoped<ICurrentUserService, CurrentUserService>();
+        services.AddScoped<IIdentityUserReadService, IdentityUserReadService>();
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
         services.AddScoped<ITokenRevocationService, TokenRevocationService>();
 

@@ -20,10 +20,15 @@ public class ChatThreadConfiguration : IEntityTypeConfiguration<ChatThread>
         builder.Property(x => x.Title)
             .HasMaxLength(200);
 
+        builder.Property(x => x.DirectKey)
+            .HasMaxLength(80);
+
         builder.Property(x => x.CreatedAtUtc)
             .IsRequired();
 
         builder.HasIndex(x => x.Type);
+        builder.HasIndex(x => x.DirectKey)
+            .IsUnique();
         builder.HasIndex(x => x.LastMessageAtUtc);
 
         builder.HasMany(x => x.Participants)
