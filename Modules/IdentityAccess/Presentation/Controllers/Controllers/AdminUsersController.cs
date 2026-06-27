@@ -53,68 +53,35 @@ public class AdminUsersController : ControllerBase
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetUserById(Guid id)
     {
-        try
+        var result = await _getUserByIdQueryHandler.HandleAsync(new GetUserByIdQuery
         {
-            var result = await _getUserByIdQueryHandler.HandleAsync(new GetUserByIdQuery
-            {
-                UserId = id
-            });
+            UserId = id
+        });
 
-            return Ok(result);
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        return Ok(result);
     }
 
     [HttpPost("{id:guid}/roles")]
     public async Task<IActionResult> AssignRole(Guid id, [FromBody] AssignRoleRequest request)
     {
-        try
+        var result = await _assignRoleCommandHandler.HandleAsync(new AssignRoleCommand
         {
-            var result = await _assignRoleCommandHandler.HandleAsync(new AssignRoleCommand
-            {
-                UserId = id,
-                Role = request.Role
-            });
+            UserId = id,
+            Role = request.Role
+        });
 
-            return Ok(result);
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        return Ok(result);
     }
 
     [HttpPatch("{id:guid}/status")]
     public async Task<IActionResult> ChangeUserStatus(Guid id, [FromBody] ChangeUserStatusRequest request)
     {
-        try
+        var result = await _changeUserStatusCommandHandler.HandleAsync(new ChangeUserStatusCommand
         {
-            var result = await _changeUserStatusCommandHandler.HandleAsync(new ChangeUserStatusCommand
-            {
-                UserId = id,
-                IsActive = request.IsActive
-            });
+            UserId = id,
+            IsActive = request.IsActive
+        });
 
-            return Ok(result);
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        return Ok(result);
     }
 }

@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Glinter.Modules.IdentityAccess.Application.Auth.Commands.Logout;
 
-namespace Glinter.Modules.IdentityAccess.Presentation.Controllers;
+namespace Glinter.Modules.IdentityAccess.Presentation.Controllers.Controllers;
 
 [ApiController]
 [Route("api/auth")]
@@ -33,74 +33,42 @@ public class AuthController : ControllerBase
     [HttpPost("register")]
     public async Task<IActionResult> Register([FromBody] RegisterRequest request)
     {
-        try
+        var result = await _registerCommandHandler.HandleAsync(new RegisterCommand
         {
-            var result = await _registerCommandHandler.HandleAsync(new RegisterCommand
-            {
-                FullName = request.FullName,
-                Email = request.Email,
-                Password = request.Password,
-                Role = request.Role
-            });
+            FullName = request.FullName,
+            Email = request.Email,
+            Password = request.Password,
+            Role = request.Role
+        });
 
-            return Ok(result);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        return Ok(result);
     }
 
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
-        try
+        var result = await _loginCommandHandler.HandleAsync(new LoginCommand
         {
-            var result = await _loginCommandHandler.HandleAsync(new LoginCommand
-            {
-                Email = request.Email,
-                Password = request.Password
-            });
+            Email = request.Email,
+            Password = request.Password
+        });
 
-            return Ok(result);
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return Unauthorized(new { message = ex.Message });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        return Ok(result);
     }
 
     [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
     [HttpGet("me")]
     public async Task<IActionResult> Me()
     {
-        try
-        {
-            var result = await _getCurrentUserQueryHandler.HandleAsync(new GetCurrentUserQuery());
-            return Ok(result);
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return Unauthorized(new { message = ex.Message });
-        }
+        var result = await _getCurrentUserQueryHandler.HandleAsync(new GetCurrentUserQuery());
+        return Ok(result);
     }
 
     [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
     [HttpPost("logout")]
     public async Task<IActionResult> Logout()
     {
-        try
-        {
-            var result = await _logoutCommandHandler.HandleAsync(new LogoutCommand());
-            return Ok(result);
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return Unauthorized(new { message = ex.Message });
-        }
+        var result = await _logoutCommandHandler.HandleAsync(new LogoutCommand());
+        return Ok(result);
     }
 }

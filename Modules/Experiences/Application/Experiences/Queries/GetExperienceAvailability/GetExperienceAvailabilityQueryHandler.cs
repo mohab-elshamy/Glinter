@@ -24,7 +24,7 @@ public class GetExperienceAvailabilityQueryHandler
     {
         if (query.ExperienceId == Guid.Empty)
         {
-            throw new ArgumentException("ExperienceId is required.");
+            throw new ValidationException("ExperienceId is required.");
         }
 
         Glinter.Modules.Experiences.Application.Common.ExperiencePagination.Validate(

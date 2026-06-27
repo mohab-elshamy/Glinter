@@ -26,7 +26,7 @@ public class CancelStayBookingHandler
         CancellationToken cancellationToken = default)
     {
         if (command.BookingId == Guid.Empty)
-            throw new ArgumentException("Booking id is required.");
+            throw new ValidationException("Booking id is required.");
 
         var travelerProfileId = await GetCurrentTravelerProfileIdAsync(cancellationToken);
 
@@ -36,10 +36,10 @@ public class CancelStayBookingHandler
             return null;
 
         if (booking.TravelerProfileId != travelerProfileId)
-            throw new UnauthorizedAccessException("You can cancel only your own bookings.");
+            throw new ForbiddenException("You can cancel only your own bookings.");
 
         if (booking.Status == "Cancelled")
-            throw new ArgumentException("Booking is already cancelled.");
+            throw new ValidationException("Booking is already cancelled.");
 
         booking.Status = "Cancelled";
 
@@ -62,13 +62,13 @@ public class CancelStayBookingHandler
     private async Task<Guid> GetCurrentTravelerProfileIdAsync(CancellationToken cancellationToken)
     {
         if (!_currentUserService.IsAuthenticated || _currentUserService.UserId is null)
-            throw new UnauthorizedAccessException("User is not authenticated.");
+            throw new AuthenticationException("User is not authenticated.");
 
         var travelerProfileId = await _profilesReadService.GetTravelerProfileIdByUserIdAsync(
             _currentUserService.UserId.Value,
             cancellationToken);
 
         return travelerProfileId
-               ?? throw new UnauthorizedAccessException("Only travelers can cancel stay bookings.");
+               ?? throw new ForbiddenException("Only travelers can cancel stay bookings.");
     }
 }

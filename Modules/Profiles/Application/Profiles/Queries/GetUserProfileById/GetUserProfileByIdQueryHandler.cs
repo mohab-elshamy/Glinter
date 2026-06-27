@@ -23,7 +23,7 @@ public class GetUserProfileByIdQueryHandler
         CancellationToken cancellationToken = default)
     {
         if (query.UserId == Guid.Empty)
-            throw new InvalidOperationException("User id is required.");
+            throw new ValidationException("User id is required.");
 
         var stats = await _profileFollowStatsService.GetCountsAsync(
             query.UserId,
@@ -77,6 +77,6 @@ public class GetUserProfileByIdQueryHandler
                 stats.FollowingCount);
         }
 
-        throw new KeyNotFoundException("Profile not found.");
+        throw new NotFoundException("Profile not found.");
     }
 }

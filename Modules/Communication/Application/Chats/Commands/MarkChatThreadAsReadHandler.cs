@@ -23,7 +23,20 @@ public class MarkChatThreadAsReadHandler
         var currentUserId = GetCurrentUserId();
 
         if (command.ThreadId == Guid.Empty)
-            throw new ArgumentException("ThreadId is required.");
+            throw new ValidationException("ThreadId is required.");
+
+        var thread = await _threadRepository.GetByIdWithParticipantsAsync(
+            command.ThreadId,
+            cancellationToken);
+
+        if (thread is null)
+            throw new NotFoundException("Chat thread was not found.");
+
+        var isParticipant = thread.Participants
+            .Any(x => x.UserId == currentUserId && x.LeftAtUtc == null);
+
+        if (!isParticipant)
+            throw new ForbiddenException("You are not a participant in this chat thread.");
 
         var participant = await _threadRepository.GetParticipantForUpdateAsync(
             command.ThreadId,
@@ -31,7 +44,7 @@ public class MarkChatThreadAsReadHandler
             cancellationToken);
 
         if (participant is null)
-            throw new KeyNotFoundException("Chat thread was not found.");
+            throw new ConflictException("Chat participation changed while the request was being processed.");
 
         participant.LastReadAtUtc = DateTime.UtcNow;
 
@@ -41,7 +54,7 @@ public class MarkChatThreadAsReadHandler
     private Guid GetCurrentUserId()
     {
         if (!_currentUserService.IsAuthenticated || _currentUserService.UserId is null)
-            throw new UnauthorizedAccessException("User is not authenticated.");
+            throw new AuthenticationException("User is not authenticated.");
 
         return _currentUserService.UserId.Value;
     }

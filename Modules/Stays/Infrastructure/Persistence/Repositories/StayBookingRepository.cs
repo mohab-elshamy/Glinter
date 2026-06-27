@@ -36,13 +36,13 @@ public class StayBookingRepository : IStayBookingRepository
             .SingleOrDefaultAsync(cancellationToken);
 
         if (currentStay is null)
-            throw new KeyNotFoundException("Stay not found.");
+            throw new NotFoundException("Stay not found.");
 
         if (!currentStay.IsActive)
-            throw new InvalidOperationException("This stay is not active.");
+            throw new ConflictException("This stay is not active.");
 
         if (booking.GuestCount > currentStay.MaxGuests)
-            throw new InvalidOperationException("GuestCount exceeds the maximum allowed guests for this stay.");
+            throw new ValidationException("GuestCount exceeds the maximum allowed guests for this stay.");
 
         var hasOverlap = await _dbContext.StayBookings.AnyAsync(
             x => x.StayId == booking.StayId
@@ -52,13 +52,13 @@ public class StayBookingRepository : IStayBookingRepository
             cancellationToken);
 
         if (hasOverlap)
-            throw new InvalidOperationException("This stay is already booked for the selected dates.");
+            throw new ConflictException("This stay is already booked for the selected dates.");
 
         var nights = booking.CheckOutDate.DayNumber - booking.CheckInDate.DayNumber;
         var totalPrice = nights * currentStay.PricePerNight;
 
         if (totalPrice > MaxDatabaseMoneyValue)
-            throw new ArgumentException("The booking total exceeds the maximum supported value.");
+            throw new ValidationException("The booking total exceeds the maximum supported value.");
 
         booking.TotalPrice = totalPrice;
 

@@ -22,14 +22,14 @@ public class GetCurrentUserQueryHandler
     public async Task<CurrentUserResponse> HandleAsync(GetCurrentUserQuery query)
     {
         if (!_currentUserService.IsAuthenticated || _currentUserService.UserId is null)
-            throw new UnauthorizedAccessException("User is not authenticated.");
+            throw new AuthenticationException("User is not authenticated.");
 
         var user = await _userManager.FindByIdAsync(_currentUserService.UserId.Value.ToString());
         if (user is null)
-            throw new UnauthorizedAccessException("User not found.");
+            throw new AuthenticationException("User not found.");
 
         if (!user.IsActive)
-            throw new UnauthorizedAccessException("User is inactive.");
+            throw new AuthenticationException("User is inactive.");
 
         var roles = await _userManager.GetRolesAsync(user);
 

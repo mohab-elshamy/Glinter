@@ -52,7 +52,7 @@ public class CreateExperienceReviewCommandHandler
 
         if (!hasCompletedBooking)
         {
-            throw new InvalidOperationException("You can review this experience only after completing a booking.");
+            throw new ConflictException("You can review this experience only after completing a booking.");
         }
 
         var alreadyReviewed = await _reviewRepository.ExistsAsync(
@@ -62,7 +62,7 @@ public class CreateExperienceReviewCommandHandler
 
         if (alreadyReviewed)
         {
-            throw new InvalidOperationException("You have already reviewed this experience.");
+            throw new ConflictException("You have already reviewed this experience.");
         }
 
         var review = new ExperienceReview

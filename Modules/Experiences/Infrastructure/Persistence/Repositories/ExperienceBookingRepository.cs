@@ -97,10 +97,10 @@ public class ExperienceBookingRepository : IExperienceBookingRepository
         await _context.Entry(booking).ReloadAsync(cancellationToken);
 
         if (booking.Status == ExperienceBookingStatus.Cancelled)
-            throw new InvalidOperationException("Cancelled booking cannot be completed.");
+            throw new ConflictException("Cancelled booking cannot be completed.");
 
         if (booking.Status == ExperienceBookingStatus.Completed)
-            throw new InvalidOperationException("Booking is already completed.");
+            throw new ConflictException("Booking is already completed.");
 
         booking.Status = ExperienceBookingStatus.Completed;
         booking.CompletedAtUtc = completedAtUtc ?? DateTime.UtcNow;
@@ -138,29 +138,29 @@ public class ExperienceBookingRepository : IExperienceBookingRepository
             .SingleOrDefaultAsync(cancellationToken);
 
         if (currentExperience is null)
-            throw new KeyNotFoundException("Experience was not found.");
+            throw new NotFoundException("Experience was not found.");
 
         if (!currentExperience.IsActive ||
             currentExperience.ApprovalStatus != ExperienceApprovalStatus.Approved)
-            throw new InvalidOperationException("Cannot book an experience that is not active and approved.");
+            throw new ConflictException("Cannot book an experience that is not active and approved.");
 
         if (booking.GuestsCount > currentExperience.MaxGuests)
-            throw new InvalidOperationException(
+            throw new ValidationException(
                 "GuestsCount exceeds the maximum guests allowed for this experience.");
 
         await _context.Entry(availability).ReloadAsync(cancellationToken);
 
         if (availability.ExperienceId != booking.ExperienceId)
-            throw new InvalidOperationException("Availability slot does not belong to this experience.");
+            throw new ConflictException("Availability slot does not belong to this experience.");
 
         if (!availability.IsActive)
-            throw new InvalidOperationException("Availability slot is not active.");
+            throw new ConflictException("Availability slot is not active.");
 
         if (availability.StartTimeUtc <= DateTime.UtcNow)
-            throw new InvalidOperationException("Cannot book an availability slot in the past.");
+            throw new ConflictException("Cannot book an availability slot in the past.");
 
         if (booking.GuestsCount > availability.Capacity - availability.BookedCount)
-            throw new InvalidOperationException("Not enough remaining capacity for this availability slot.");
+            throw new ConflictException("Not enough remaining capacity for this availability slot.");
 
         var alreadyBooked = await _context.ExperienceBookings.AnyAsync(
             x => x.AvailabilityId == booking.AvailabilityId &&
@@ -169,12 +169,12 @@ public class ExperienceBookingRepository : IExperienceBookingRepository
             cancellationToken);
 
         if (alreadyBooked)
-            throw new InvalidOperationException(
+            throw new ConflictException(
                 "You already have an active booking for this availability slot.");
 
         var totalPrice = currentExperience.PricePerPerson * booking.GuestsCount;
         if (totalPrice > MaxDatabaseMoneyValue)
-            throw new ArgumentException("The booking total exceeds the maximum supported value.");
+            throw new ValidationException("The booking total exceeds the maximum supported value.");
 
         booking.TotalPrice = totalPrice;
         availability.BookedCount += booking.GuestsCount;
@@ -207,13 +207,13 @@ public class ExperienceBookingRepository : IExperienceBookingRepository
         await _context.Entry(availability).ReloadAsync(cancellationToken);
 
         if (booking.Status == ExperienceBookingStatus.Cancelled)
-            throw new InvalidOperationException("Booking is already cancelled.");
+            throw new ConflictException("Booking is already cancelled.");
 
         if (booking.Status == ExperienceBookingStatus.Completed)
-            throw new InvalidOperationException("Completed booking cannot be cancelled.");
+            throw new ConflictException("Completed booking cannot be cancelled.");
 
         if (availability.StartTimeUtc <= DateTime.UtcNow)
-            throw new InvalidOperationException("A booking cannot be cancelled after the experience has started.");
+            throw new ConflictException("A booking cannot be cancelled after the experience has started.");
 
         booking.Status = ExperienceBookingStatus.Cancelled;
         booking.CancelledAtUtc = cancelledAtUtc ?? DateTime.UtcNow;

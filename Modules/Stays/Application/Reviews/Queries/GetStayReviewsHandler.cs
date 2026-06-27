@@ -21,12 +21,12 @@ public class GetStayReviewsHandler
         CancellationToken cancellationToken = default)
     {
         if (query.StayId == Guid.Empty)
-            throw new ArgumentException("Stay id is required.");
+            throw new ValidationException("Stay id is required.");
 
         var stay = await _stayRepository.GetByIdAsync(query.StayId, cancellationToken);
 
         if (stay is null || !stay.IsActive)
-            throw new KeyNotFoundException("Stay not found.");
+            throw new NotFoundException("Stay not found.");
 
         var reviews = await _stayReviewRepository.GetByStayIdAsync(query.StayId, cancellationToken);
 

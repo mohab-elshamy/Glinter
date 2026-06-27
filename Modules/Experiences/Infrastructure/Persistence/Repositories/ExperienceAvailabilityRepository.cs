@@ -29,10 +29,10 @@ public class ExperienceAvailabilityRepository : IExperienceAvailabilityRepositor
             .SingleOrDefaultAsync(cancellationToken);
 
         if (experienceIsActive is null)
-            throw new KeyNotFoundException("Experience was not found.");
+            throw new NotFoundException("Experience was not found.");
 
         if (!experienceIsActive.Value)
-            throw new InvalidOperationException("Cannot add availability to an inactive experience.");
+            throw new ConflictException("Cannot add availability to an inactive experience.");
 
         var hasOverlap = await _context.ExperienceAvailability.AnyAsync(
             x => x.ExperienceId == availability.ExperienceId &&
@@ -42,7 +42,7 @@ public class ExperienceAvailabilityRepository : IExperienceAvailabilityRepositor
             cancellationToken);
 
         if (hasOverlap)
-            throw new InvalidOperationException("This availability slot overlaps with an existing active slot.");
+            throw new ConflictException("This availability slot overlaps with an existing active slot.");
 
         await _context.ExperienceAvailability.AddAsync(availability, cancellationToken);
         await _context.SaveChangesAsync(cancellationToken);
@@ -129,10 +129,10 @@ public class ExperienceAvailabilityRepository : IExperienceAvailabilityRepositor
                 .SingleOrDefaultAsync(cancellationToken);
 
             if (experienceIsActive != true)
-                throw new InvalidOperationException("Cannot activate availability for an inactive experience.");
+                throw new ConflictException("Cannot activate availability for an inactive experience.");
 
             if (availability.StartTimeUtc <= DateTime.UtcNow)
-                throw new InvalidOperationException("Cannot activate an availability slot in the past.");
+                throw new ConflictException("Cannot activate an availability slot in the past.");
 
             var hasOverlap = await _context.ExperienceAvailability.AnyAsync(
                 x => x.ExperienceId == availability.ExperienceId &&
@@ -143,7 +143,7 @@ public class ExperienceAvailabilityRepository : IExperienceAvailabilityRepositor
                 cancellationToken);
 
             if (hasOverlap)
-                throw new InvalidOperationException(
+                throw new ConflictException(
                     "Cannot activate this slot because it overlaps with another active slot.");
         }
 

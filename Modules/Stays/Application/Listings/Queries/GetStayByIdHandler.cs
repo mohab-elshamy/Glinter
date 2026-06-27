@@ -19,7 +19,7 @@ public class GetStayByIdHandler
     public async Task<StayResponseDto?> HandleAsync(GetStayByIdQuery query, CancellationToken cancellationToken = default)
     {
         if (query.Id == Guid.Empty)
-            throw new ArgumentException("Stay id is required.");
+            throw new ValidationException("Stay id is required.");
 
         var stay = await _stayRepository.GetByIdAsync(query.Id, cancellationToken);
 

@@ -56,17 +56,17 @@ public class CompleteExperienceBookingCommandHandler
 
         if (experience.ProviderProfileId != providerProfileId)
         {
-            throw new UnauthorizedAccessException("You can complete bookings only for your own experiences.");
+            throw new ForbiddenException("You can complete bookings only for your own experiences.");
         }
 
         if (booking.Status == ExperienceBookingStatus.Cancelled)
         {
-            throw new InvalidOperationException("Cancelled booking cannot be completed.");
+            throw new ConflictException("Cancelled booking cannot be completed.");
         }
 
         if (booking.Status == ExperienceBookingStatus.Completed)
         {
-            throw new InvalidOperationException("Booking is already completed.");
+            throw new ConflictException("Booking is already completed.");
         }
 
         var availability = await _availabilityRepository.GetByIdAsync(
@@ -75,12 +75,12 @@ public class CompleteExperienceBookingCommandHandler
 
         if (availability is null)
         {
-            throw new InvalidOperationException("Availability slot was not found.");
+            throw new NotFoundException("Availability slot was not found.");
         }
 
         if (availability.EndTimeUtc > DateTime.UtcNow)
         {
-            throw new InvalidOperationException(
+            throw new ConflictException(
                 "Booking cannot be completed before the experience has ended.");
         }
 

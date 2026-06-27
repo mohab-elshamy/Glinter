@@ -28,7 +28,7 @@ public class UpdateLocalBuddyVerificationCommandHandler
         var errors = _validator.Validate(command);
 
         if (errors.Count > 0)
-            throw new InvalidOperationException(string.Join(" | ", errors));
+            throw new ValidationException(string.Join(" | ", errors));
 
         var profile = await _profilesDbContext.LocalBuddyProfiles
             .Include(x => x.Interests)
@@ -36,7 +36,7 @@ public class UpdateLocalBuddyVerificationCommandHandler
             .FirstOrDefaultAsync(x => x.UserId == command.UserId, cancellationToken);
 
         if (profile is null)
-            throw new KeyNotFoundException("Local buddy profile not found.");
+            throw new NotFoundException("Local buddy profile not found.");
 
         var verificationStatus = Enum.Parse<VerificationStatus>(
             command.VerificationStatus,

@@ -27,14 +27,14 @@ public class LoginCommandHandler
     {
         var errors = _validator.Validate(command);
         if (errors.Count > 0)
-            throw new InvalidOperationException(string.Join(" | ", errors));
+            throw new ValidationException(string.Join(" | ", errors));
 
         var user = await _userManager.FindByEmailAsync(command.Email);
         if (user is null)
-            throw new UnauthorizedAccessException("Invalid email or password.");
+            throw new AuthenticationException("Invalid email or password.");
 
         if (!user.IsActive)
-            throw new UnauthorizedAccessException("User is inactive.");
+            throw new AuthenticationException("User is inactive.");
 
         var result = await _signInManager.CheckPasswordSignInAsync(
             user,
@@ -42,10 +42,10 @@ public class LoginCommandHandler
             lockoutOnFailure: true);
 
         if (result.IsLockedOut)
-            throw new UnauthorizedAccessException("User is temporarily locked. Try again later.");
+            throw new AuthenticationException("User is temporarily locked. Try again later.");
 
         if (!result.Succeeded)
-            throw new UnauthorizedAccessException("Invalid email or password.");
+            throw new AuthenticationException("Invalid email or password.");
 
         var roles = await _userManager.GetRolesAsync(user);
         var token = _jwtTokenGenerator.GenerateToken(user, roles);

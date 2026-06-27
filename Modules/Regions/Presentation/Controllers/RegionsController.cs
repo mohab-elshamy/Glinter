@@ -57,7 +57,10 @@ public class RegionsController(
             Lon = request.Lon,
         }, ct);
 
-        return result is null ? NotFound(new { message = "No region found for point." }) : Ok(result);
+        if (result is null)
+            throw new NotFoundException("No region found for point.");
+
+        return Ok(result);
     }
 
     // ──────────────────────────────────────────────
@@ -79,7 +82,10 @@ public class RegionsController(
             Gid = gid,
             GeometryAccuracy = geometry.GeometryAccuracy,
         }, ct);
-        return result is null ? NotFound(new { message = "Country not found." }) : Ok(result);
+        if (result is null)
+            throw new NotFoundException("Country not found.");
+
+        return Ok(result);
     }
 
     [HttpPost("countries")]
@@ -109,7 +115,10 @@ public class RegionsController(
             ImageUrl = request.ImageUrl,
             FlagUrl = request.FlagUrl,
         }, ct);
-        return result is null ? NotFound(new { message = "Country not found." }) : Ok(result);
+        if (result is null)
+            throw new NotFoundException("Country not found.");
+
+        return Ok(result);
     }
 
     [HttpDelete("countries/{gid:int}")]
@@ -117,7 +126,10 @@ public class RegionsController(
     public async Task<IActionResult> DeleteCountry(int gid, CancellationToken ct)
     {
         var deleted = await deleteCountry.HandleAsync(gid, ct);
-        return deleted ? NoContent() : NotFound(new { message = "Country not found." });
+        if (!deleted)
+            throw new NotFoundException("Country not found.");
+
+        return NoContent();
     }
 
     // ──────────────────────────────────────────────
@@ -139,7 +151,10 @@ public class RegionsController(
             Gid = gid,
             GeometryAccuracy = geometry.GeometryAccuracy,
         }, ct);
-        return result is null ? NotFound(new { message = "Governorate not found." }) : Ok(result);
+        if (result is null)
+            throw new NotFoundException("Governorate not found.");
+
+        return Ok(result);
     }
 
     [HttpGet("countries/{adm0Gid:int}/governorates")]
@@ -178,7 +193,10 @@ public class RegionsController(
             NameAr = request.NameAr,
             ImageUrl = request.ImageUrl,
         }, ct);
-        return result is null ? NotFound(new { message = "Governorate not found." }) : Ok(result);
+        if (result is null)
+            throw new NotFoundException("Governorate not found.");
+
+        return Ok(result);
     }
 
     [HttpDelete("governorates/{gid:int}")]
@@ -186,7 +204,10 @@ public class RegionsController(
     public async Task<IActionResult> DeleteGovernorate(int gid, CancellationToken ct)
     {
         var deleted = await deleteGovernorate.HandleAsync(gid, ct);
-        return deleted ? NoContent() : NotFound(new { message = "Governorate not found." });
+        if (!deleted)
+            throw new NotFoundException("Governorate not found.");
+
+        return NoContent();
     }
 
     // ──────────────────────────────────────────────
@@ -208,7 +229,10 @@ public class RegionsController(
             Gid = gid,
             GeometryAccuracy = geometry.GeometryAccuracy,
         }, ct);
-        return result is null ? NotFound(new { message = "District not found." }) : Ok(result);
+        if (result is null)
+            throw new NotFoundException("District not found.");
+
+        return Ok(result);
     }
 
     [HttpGet("governorates/{adm1Gid:int}/districts")]
@@ -247,7 +271,10 @@ public class RegionsController(
             NameAr = request.NameAr,
             ImageUrl = request.ImageUrl,
         }, ct);
-        return result is null ? NotFound(new { message = "District not found." }) : Ok(result);
+        if (result is null)
+            throw new NotFoundException("District not found.");
+
+        return Ok(result);
     }
 
     [HttpDelete("districts/{gid:int}")]
@@ -255,7 +282,10 @@ public class RegionsController(
     public async Task<IActionResult> DeleteDistrict(int gid, CancellationToken ct)
     {
         var deleted = await deleteDistrict.HandleAsync(gid, ct);
-        return deleted ? NoContent() : NotFound(new { message = "District not found." });
+        if (!deleted)
+            throw new NotFoundException("District not found.");
+
+        return NoContent();
     }
 
     // ──────────────────────────────────────────────
@@ -277,7 +307,10 @@ public class RegionsController(
             Gid = gid,
             GeometryAccuracy = geometry.GeometryAccuracy,
         }, ct);
-        return result is null ? NotFound(new { message = "Neighbourhood not found." }) : Ok(result);
+        if (result is null)
+            throw new NotFoundException("Neighbourhood not found.");
+
+        return Ok(result);
     }
 
     [HttpGet("districts/{adm2Gid:int}/neighbourhoods")]
@@ -316,7 +349,10 @@ public class RegionsController(
             NameAr = request.NameAr,
             ImageUrl = request.ImageUrl,
         }, ct);
-        return result is null ? NotFound(new { message = "Neighbourhood not found." }) : Ok(result);
+        if (result is null)
+            throw new NotFoundException("Neighbourhood not found.");
+
+        return Ok(result);
     }
 
     [HttpDelete("neighbourhoods/{gid:int}")]
@@ -324,6 +360,9 @@ public class RegionsController(
     public async Task<IActionResult> DeleteNeighbourhood(int gid, CancellationToken ct)
     {
         var deleted = await deleteNeighbourhood.HandleAsync(gid, ct);
-        return deleted ? NoContent() : NotFound(new { message = "Neighbourhood not found." });
+        if (!deleted)
+            throw new NotFoundException("Neighbourhood not found.");
+
+        return NoContent();
     }
 }

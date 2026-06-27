@@ -1,6 +1,9 @@
+using System.Security.Claims;
+using Glinter.Modules.IdentityAccess.Domain.Constants;
 using Glinter.Modules.Profiles.Application.Profiles.Dtos;
 using Glinter.Modules.Profiles.Application.Profiles.Queries.GetLocalBuddies;
 using Glinter.Modules.Profiles.Application.Profiles.Queries.GetUserProfileById;
+using Glinter.Modules.Profiles.Domain.Enums;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Glinter.Modules.Profiles.Presentation.Controllers;
@@ -46,27 +49,29 @@ public class LocalBuddiesController : ControllerBase
         Guid userId,
         CancellationToken cancellationToken)
     {
-        try
-        {
-            var result = await _getUserProfileByIdQueryHandler.HandleAsync(
-                new GetUserProfileByIdQuery
-                {
-                    UserId = userId
-                },
-                cancellationToken);
+        var result = await _getUserProfileByIdQueryHandler.HandleAsync(
+            new GetUserProfileByIdQuery
+            {
+                UserId = userId
+            },
+            cancellationToken);
 
-            if (result is not LocalBuddyProfileResponse)
-                return NotFound(new { message = "Local buddy profile not found." });
+        if (result is not LocalBuddyProfileResponse localBuddy)
+            throw new NotFoundException("Local buddy profile not found.");
 
-            return Ok(result);
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        var isApproved = string.Equals(
+            localBuddy.VerificationStatus,
+            VerificationStatus.Approved.ToString(),
+            StringComparison.OrdinalIgnoreCase);
+        var isOwner = Guid.TryParse(
+                          User.FindFirstValue(ClaimTypes.NameIdentifier),
+                          out var currentUserId) &&
+                      currentUserId == userId;
+        var isAdmin = User.IsInRole(RoleNames.Admin);
+
+        if (!isApproved && !isOwner && !isAdmin)
+            throw new NotFoundException("Local buddy profile not found.");
+
+        return Ok(localBuddy);
     }
 }

@@ -29,7 +29,7 @@ public class SetStayActiveStatusHandler
         CancellationToken cancellationToken = default)
     {
         if (command.StayId == Guid.Empty)
-            throw new ArgumentException("Stay id is required.");
+            throw new ValidationException("Stay id is required.");
 
         var ownerProfileId = await GetCurrentOwnerProfileIdAsync(cancellationToken);
 
@@ -39,7 +39,7 @@ public class SetStayActiveStatusHandler
             return null;
 
         if (stay.OwnerProfileId != ownerProfileId)
-            throw new UnauthorizedAccessException("You can change status only for your own stays.");
+            throw new ForbiddenException("You can change status only for your own stays.");
 
         stay.IsActive = command.IsActive;
         stay.UpdatedAtUtc = DateTime.UtcNow;
@@ -62,13 +62,13 @@ public class SetStayActiveStatusHandler
     private async Task<Guid> GetCurrentOwnerProfileIdAsync(CancellationToken cancellationToken)
     {
         if (!_currentUserService.IsAuthenticated || _currentUserService.UserId is null)
-            throw new UnauthorizedAccessException("User is not authenticated.");
+            throw new AuthenticationException("User is not authenticated.");
 
         var ownerProfileId = await _profilesReadService.GetHotelOwnerProfileIdByUserIdAsync(
             _currentUserService.UserId.Value,
             cancellationToken);
 
         return ownerProfileId
-               ?? throw new UnauthorizedAccessException("Only hotel owners can manage stays.");
+               ?? throw new ForbiddenException("Only hotel owners can manage stays.");
     }
 }

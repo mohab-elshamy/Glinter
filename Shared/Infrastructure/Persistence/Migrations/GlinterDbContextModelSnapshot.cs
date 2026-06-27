@@ -122,7 +122,8 @@ namespace Glinter.Shared.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("StayId", "TravelerProfileId", "CheckInDate", "CheckOutDate")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"Status\" <> 'Cancelled'");
 
                     b.ToTable("stay_bookings", (string)null);
                 });

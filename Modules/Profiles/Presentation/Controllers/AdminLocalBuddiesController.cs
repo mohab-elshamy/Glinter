@@ -26,25 +26,14 @@ public class AdminLocalBuddiesController : ControllerBase
         [FromBody] UpdateLocalBuddyVerificationRequest request,
         CancellationToken cancellationToken)
     {
-        try
-        {
-            var result = await _updateLocalBuddyVerificationCommandHandler.HandleAsync(
-                new UpdateLocalBuddyVerificationCommand
-                {
-                    UserId = userId,
-                    VerificationStatus = request.VerificationStatus
-                },
-                cancellationToken);
+        var result = await _updateLocalBuddyVerificationCommandHandler.HandleAsync(
+            new UpdateLocalBuddyVerificationCommand
+            {
+                UserId = userId,
+                VerificationStatus = request.VerificationStatus
+            },
+            cancellationToken);
 
-            return Ok(result);
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        return Ok(result);
     }
 }

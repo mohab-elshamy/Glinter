@@ -19,11 +19,11 @@ public class AssignRoleCommandHandler
     {
         var errors = _validator.Validate(command);
         if (errors.Count > 0)
-            throw new InvalidOperationException(string.Join(" | ", errors));
+            throw new ValidationException(string.Join(" | ", errors));
 
         var user = await _userManager.FindByIdAsync(command.UserId.ToString());
         if (user is null)
-            throw new KeyNotFoundException("User not found.");
+            throw new NotFoundException("User not found.");
 
         var currentRoles = await _userManager.GetRolesAsync(user);
 
@@ -31,12 +31,12 @@ public class AssignRoleCommandHandler
         {
             var removeResult = await _userManager.RemoveFromRolesAsync(user, currentRoles);
             if (!removeResult.Succeeded)
-                throw new InvalidOperationException(string.Join(" | ", removeResult.Errors.Select(x => x.Description)));
+                throw new ConflictException(string.Join(" | ", removeResult.Errors.Select(x => x.Description)));
         }
 
         var addResult = await _userManager.AddToRoleAsync(user, command.Role);
         if (!addResult.Succeeded)
-            throw new InvalidOperationException(string.Join(" | ", addResult.Errors.Select(x => x.Description)));
+            throw new ConflictException(string.Join(" | ", addResult.Errors.Select(x => x.Description)));
 
         var updatedRoles = await _userManager.GetRolesAsync(user);
 

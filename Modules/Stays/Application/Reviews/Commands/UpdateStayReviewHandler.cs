@@ -26,13 +26,13 @@ public class UpdateStayReviewHandler
         CancellationToken cancellationToken = default)
     {
         if (command.ReviewId == Guid.Empty)
-            throw new ArgumentException("Review id is required.");
+            throw new ValidationException("Review id is required.");
 
         if (command.Rating < 1 || command.Rating > 5)
-            throw new ArgumentException("Rating must be between 1 and 5.");
+            throw new ValidationException("Rating must be between 1 and 5.");
 
         if ((command.Comment?.Trim().Length ?? 0) > 2000)
-            throw new ArgumentException("Comment cannot exceed 2000 characters.");
+            throw new ValidationException("Comment cannot exceed 2000 characters.");
 
         var travelerProfileId = await GetCurrentTravelerProfileIdAsync(cancellationToken);
 
@@ -42,7 +42,7 @@ public class UpdateStayReviewHandler
             return null;
 
         if (review.TravelerProfileId != travelerProfileId)
-            throw new UnauthorizedAccessException("You can update only your own reviews.");
+            throw new ForbiddenException("You can update only your own reviews.");
 
         review.Rating = command.Rating;
         review.Comment = command.Comment?.Trim() ?? string.Empty;
@@ -63,13 +63,13 @@ public class UpdateStayReviewHandler
     private async Task<Guid> GetCurrentTravelerProfileIdAsync(CancellationToken cancellationToken)
     {
         if (!_currentUserService.IsAuthenticated || _currentUserService.UserId is null)
-            throw new UnauthorizedAccessException("User is not authenticated.");
+            throw new AuthenticationException("User is not authenticated.");
 
         var travelerProfileId = await _profilesReadService.GetTravelerProfileIdByUserIdAsync(
             _currentUserService.UserId.Value,
             cancellationToken);
 
         return travelerProfileId
-               ?? throw new UnauthorizedAccessException("Only travelers can update stay reviews.");
+               ?? throw new ForbiddenException("Only travelers can update stay reviews.");
     }
 }

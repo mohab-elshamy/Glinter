@@ -5,15 +5,15 @@ public class CreateExperienceAvailabilityCommandValidator
     public void Validate(CreateExperienceAvailabilityCommand command)
     {
         if (command.ExperienceId == Guid.Empty)
-            throw new ArgumentException("ExperienceId is required.");
+            throw new ValidationException("ExperienceId is required.");
 
         if (command.StartTimeUtc <= DateTime.UtcNow)
-            throw new ArgumentException("StartTimeUtc must be in the future.");
+            throw new ValidationException("StartTimeUtc must be in the future.");
 
         if (command.EndTimeUtc <= command.StartTimeUtc)
-            throw new ArgumentException("EndTimeUtc must be after StartTimeUtc.");
+            throw new ValidationException("EndTimeUtc must be after StartTimeUtc.");
 
         if (command.Capacity <= 0)
-            throw new ArgumentException("Capacity must be greater than zero.");
+            throw new ValidationException("Capacity must be greater than zero.");
     }
 }

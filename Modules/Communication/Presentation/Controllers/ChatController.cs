@@ -40,26 +40,15 @@ public class ChatController : ControllerBase
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20)
     {
-        try
-        {
-            var result = await _getMyChatThreadsHandler.HandleAsync(
-                new GetMyChatThreadsQuery
-                {
-                    Page = page,
-                    PageSize = pageSize
-                },
-                cancellationToken);
+        var result = await _getMyChatThreadsHandler.HandleAsync(
+            new GetMyChatThreadsQuery
+            {
+                Page = page,
+                PageSize = pageSize
+            },
+            cancellationToken);
 
-            return Ok(result);
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return Unauthorized(new { message = ex.Message });
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        return Ok(result);
     }
 
     [HttpPost("threads/direct")]
@@ -68,29 +57,14 @@ public class ChatController : ControllerBase
         [FromBody] CreateDirectChatThreadRequestDto request,
         CancellationToken cancellationToken)
     {
-        try
-        {
-            var result = await _createDirectThreadHandler.HandleAsync(
-                new CreateDirectChatThreadCommand
-                {
-                    OtherUserId = request.OtherUserId
-                },
-                cancellationToken);
+        var result = await _createDirectThreadHandler.HandleAsync(
+            new CreateDirectChatThreadCommand
+            {
+                OtherUserId = request.OtherUserId
+            },
+            cancellationToken);
 
-            return Ok(result);
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return Unauthorized(new { message = ex.Message });
-        }
+        return Ok(result);
     }
 
     [HttpGet("threads/{threadId:guid}/messages")]
@@ -100,35 +74,16 @@ public class ChatController : ControllerBase
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 50)
     {
-        try
-        {
-            var result = await _getMessagesHandler.HandleAsync(
-                new GetChatThreadMessagesQuery
-                {
-                    ThreadId = threadId,
-                    Page = page,
-                    PageSize = pageSize
-                },
-                cancellationToken);
+        var result = await _getMessagesHandler.HandleAsync(
+            new GetChatThreadMessagesQuery
+            {
+                ThreadId = threadId,
+                Page = page,
+                PageSize = pageSize
+            },
+            cancellationToken);
 
-            return Ok(result);
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
-        }
+        return Ok(result);
     }
 
     [HttpPost("threads/{threadId:guid}/messages")]
@@ -138,34 +93,15 @@ public class ChatController : ControllerBase
         [FromBody] SendChatMessageRequestDto request,
         CancellationToken cancellationToken)
     {
-        try
-        {
-            var result = await _sendMessageHandler.HandleAsync(
-                new SendChatMessageCommand
-                {
-                    ThreadId = threadId,
-                    Body = request.Body
-                },
-                cancellationToken);
+        var result = await _sendMessageHandler.HandleAsync(
+            new SendChatMessageCommand
+            {
+                ThreadId = threadId,
+                Body = request.Body
+            },
+            cancellationToken);
 
-            return Ok(result);
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
-        }
+        return Ok(result);
     }
 
     [HttpPatch("threads/{threadId:guid}/read")]
@@ -173,28 +109,13 @@ public class ChatController : ControllerBase
         Guid threadId,
         CancellationToken cancellationToken)
     {
-        try
-        {
-            await _markThreadAsReadHandler.HandleAsync(
-                new MarkChatThreadAsReadCommand
-                {
-                    ThreadId = threadId
-                },
-                cancellationToken);
+        await _markThreadAsReadHandler.HandleAsync(
+            new MarkChatThreadAsReadCommand
+            {
+                ThreadId = threadId
+            },
+            cancellationToken);
 
-            return NoContent();
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
-        }
+        return NoContent();
     }
 }

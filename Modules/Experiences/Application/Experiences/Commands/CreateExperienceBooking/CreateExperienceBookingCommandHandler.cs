@@ -48,12 +48,12 @@ public class CreateExperienceBookingCommandHandler
 
         if (!experience.IsActive || experience.ApprovalStatus != ExperienceApprovalStatus.Approved)
         {
-            throw new InvalidOperationException("Cannot book an experience that is not active and approved.");
+            throw new ConflictException("Cannot book an experience that is not active and approved.");
         }
 
         if (command.GuestsCount > experience.MaxGuests)
         {
-            throw new InvalidOperationException("GuestsCount exceeds the maximum guests allowed for this experience.");
+            throw new ValidationException("GuestsCount exceeds the maximum guests allowed for this experience.");
         }
 
         var availability = await _availabilityRepository.GetForUpdateAsync(
@@ -62,29 +62,29 @@ public class CreateExperienceBookingCommandHandler
 
         if (availability == null)
         {
-            throw new InvalidOperationException("Availability slot was not found.");
+            throw new NotFoundException("Availability slot was not found.");
         }
 
         if (availability.ExperienceId != command.ExperienceId)
         {
-            throw new InvalidOperationException("Availability slot does not belong to this experience.");
+            throw new ConflictException("Availability slot does not belong to this experience.");
         }
 
         if (!availability.IsActive)
         {
-            throw new InvalidOperationException("Availability slot is not active.");
+            throw new ConflictException("Availability slot is not active.");
         }
 
         if (availability.StartTimeUtc <= DateTime.UtcNow)
         {
-            throw new InvalidOperationException("Cannot book an availability slot in the past.");
+            throw new ConflictException("Cannot book an availability slot in the past.");
         }
 
         var remainingCapacity = availability.Capacity - availability.BookedCount;
 
         if (command.GuestsCount > remainingCapacity)
         {
-            throw new InvalidOperationException("Not enough remaining capacity for this availability slot.");
+            throw new ConflictException("Not enough remaining capacity for this availability slot.");
         }
 
         var alreadyBooked = await _bookingRepository.HasActiveBookingAsync(
@@ -94,7 +94,7 @@ public class CreateExperienceBookingCommandHandler
 
         if (alreadyBooked)
         {
-            throw new InvalidOperationException("You already have an active booking for this availability slot.");
+            throw new ConflictException("You already have an active booking for this availability slot.");
         }
 
         var booking = new ExperienceBooking

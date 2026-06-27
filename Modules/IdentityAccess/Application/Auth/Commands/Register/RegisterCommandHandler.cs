@@ -24,11 +24,11 @@ public class RegisterCommandHandler
     {
         var errors = _validator.Validate(command);
         if (errors.Count > 0)
-            throw new InvalidOperationException(string.Join(" | ", errors));
+            throw new ValidationException(string.Join(" | ", errors));
 
         var existingUser = await _userManager.FindByEmailAsync(command.Email);
         if (existingUser is not null)
-            throw new InvalidOperationException("Email already exists.");
+            throw new ConflictException("Email already exists.");
 
         var user = new ApplicationUser
         {
@@ -42,9 +42,15 @@ public class RegisterCommandHandler
         var result = await _userManager.CreateAsync(user, command.Password);
 
         if (!result.Succeeded)
-            throw new InvalidOperationException(string.Join(" | ", result.Errors.Select(x => x.Description)));
+            throw new ValidationException(string.Join(" | ", result.Errors.Select(x => x.Description)));
 
-        await _userManager.AddToRoleAsync(user, command.Role);
+        var roleResult = await _userManager.AddToRoleAsync(user, command.Role);
+        if (!roleResult.Succeeded)
+        {
+            await _userManager.DeleteAsync(user);
+            throw new ValidationException(
+                string.Join(" | ", roleResult.Errors.Select(x => x.Description)));
+        }
 
         var roles = await _userManager.GetRolesAsync(user);
         var token = _jwtTokenGenerator.GenerateToken(user, roles);

@@ -24,31 +24,31 @@ public class CreateNotificationHandler
         CancellationToken cancellationToken = default)
     {
         if (command.UserId == Guid.Empty)
-            throw new ArgumentException("UserId is required.");
+            throw new ValidationException("UserId is required.");
 
         var userExists = await _identityUserReadService.IsActiveUserAsync(
             command.UserId,
             cancellationToken);
 
         if (!userExists)
-            throw new KeyNotFoundException("User was not found or is inactive.");
+            throw new NotFoundException("User was not found or is inactive.");
 
         var title = command.Title?.Trim();
         if (string.IsNullOrWhiteSpace(title))
-            throw new ArgumentException("Notification title is required.");
+            throw new ValidationException("Notification title is required.");
 
         if (title.Length > 200)
-            throw new ArgumentException("Notification title cannot exceed 200 characters.");
+            throw new ValidationException("Notification title cannot exceed 200 characters.");
 
         var body = command.Body?.Trim();
         if (string.IsNullOrWhiteSpace(body))
-            throw new ArgumentException("Notification body is required.");
+            throw new ValidationException("Notification body is required.");
 
         if (body.Length > 1000)
-            throw new ArgumentException("Notification body cannot exceed 1000 characters.");
+            throw new ValidationException("Notification body cannot exceed 1000 characters.");
 
         if (!Enum.IsDefined(command.Type))
-            throw new ArgumentException("Notification type is invalid.");
+            throw new ValidationException("Notification type is invalid.");
 
         var linkUrl = ValidateAndNormalizeLink(command.LinkUrl);
         var sourceModule = NormalizeOptionalValue(command.SourceModule, 100, "SourceModule");
@@ -58,7 +58,7 @@ public class CreateNotificationHandler
             "SourceEntityType");
 
         if (command.SourceEntityId == Guid.Empty)
-            throw new ArgumentException("SourceEntityId must be a valid id.");
+            throw new ValidationException("SourceEntityId must be a valid id.");
 
         var notification = new Notification
         {
@@ -89,7 +89,7 @@ public class CreateNotificationHandler
         var link = value.Trim();
 
         if (link.Length > 1000)
-            throw new ArgumentException("Notification link cannot exceed 1000 characters.");
+            throw new ValidationException("Notification link cannot exceed 1000 characters.");
 
         if (!link.StartsWith('/') ||
             link.StartsWith("//", StringComparison.Ordinal) ||
@@ -97,7 +97,7 @@ public class CreateNotificationHandler
             link.Any(char.IsControl) ||
             !Uri.TryCreate(link, UriKind.Relative, out _))
         {
-            throw new ArgumentException(
+            throw new ValidationException(
                 "Notification link must be a safe application-relative path.");
         }
 
@@ -108,14 +108,14 @@ public class CreateNotificationHandler
         }
         catch (UriFormatException)
         {
-            throw new ArgumentException("Notification link contains invalid escaping.");
+            throw new ValidationException("Notification link contains invalid escaping.");
         }
 
         if (decodedLink.StartsWith("//", StringComparison.Ordinal) ||
             decodedLink.Contains('\\') ||
             decodedLink.Any(char.IsControl))
         {
-            throw new ArgumentException(
+            throw new ValidationException(
                 "Notification link must be a safe application-relative path.");
         }
 
@@ -132,7 +132,7 @@ public class CreateNotificationHandler
 
         var normalized = value.Trim();
         if (normalized.Length > maxLength)
-            throw new ArgumentException($"{fieldName} cannot exceed {maxLength} characters.");
+            throw new ValidationException($"{fieldName} cannot exceed {maxLength} characters.");
 
         return normalized;
     }

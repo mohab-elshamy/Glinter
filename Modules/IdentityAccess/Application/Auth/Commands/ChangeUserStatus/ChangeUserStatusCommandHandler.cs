@@ -19,17 +19,17 @@ public class ChangeUserStatusCommandHandler
     {
         var errors = _validator.Validate(command);
         if (errors.Count > 0)
-            throw new InvalidOperationException(string.Join(" | ", errors));
+            throw new ValidationException(string.Join(" | ", errors));
 
         var user = await _userManager.FindByIdAsync(command.UserId.ToString());
         if (user is null)
-            throw new KeyNotFoundException("User not found.");
+            throw new NotFoundException("User not found.");
 
         user.IsActive = command.IsActive;
 
         var result = await _userManager.UpdateAsync(user);
         if (!result.Succeeded)
-            throw new InvalidOperationException(string.Join(" | ", result.Errors.Select(x => x.Description)));
+            throw new ConflictException(string.Join(" | ", result.Errors.Select(x => x.Description)));
 
         var roles = await _userManager.GetRolesAsync(user);
 

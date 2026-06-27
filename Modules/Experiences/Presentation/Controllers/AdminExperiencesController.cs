@@ -29,40 +29,33 @@ public class AdminExperiencesController : ControllerBase
         [FromQuery] GetAdminExperiencesRequestDto request,
         CancellationToken cancellationToken)
     {
-        try
+        ExperienceApprovalStatus? approvalStatus = null;
+
+        if (!string.IsNullOrWhiteSpace(request.ApprovalStatus))
         {
-            ExperienceApprovalStatus? approvalStatus = null;
-
-            if (!string.IsNullOrWhiteSpace(request.ApprovalStatus))
+            if (!Enum.TryParse<ExperienceApprovalStatus>(
+                    request.ApprovalStatus,
+                    ignoreCase: true,
+                    out var parsedStatus) ||
+                !Enum.IsDefined(parsedStatus))
             {
-                if (!Enum.TryParse<ExperienceApprovalStatus>(
-                        request.ApprovalStatus,
-                        ignoreCase: true,
-                        out var parsedStatus) ||
-                    !Enum.IsDefined(parsedStatus))
-                {
-                    return BadRequest(new { message = "Invalid approval status." });
-                }
-
-                approvalStatus = parsedStatus;
+                throw new ValidationException("Invalid approval status.");
             }
 
-            var result = await _getAdminExperiencesHandler.HandleAsync(
-                new GetAdminExperiencesQuery
-                {
-                    ApprovalStatus = approvalStatus,
-                    IsActive = request.IsActive,
-                    Page = request.Page,
-                    PageSize = request.PageSize
-                },
-                cancellationToken);
+            approvalStatus = parsedStatus;
+        }
 
-            return Ok(result);
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        var result = await _getAdminExperiencesHandler.HandleAsync(
+            new GetAdminExperiencesQuery
+            {
+                ApprovalStatus = approvalStatus,
+                IsActive = request.IsActive,
+                Page = request.Page,
+                PageSize = request.PageSize
+            },
+            cancellationToken);
+
+        return Ok(result);
     }
 
     [HttpPatch("{id:guid}/approval-status")]
@@ -71,36 +64,27 @@ public class AdminExperiencesController : ControllerBase
         [FromBody] SetExperienceApprovalStatusRequestDto request,
         CancellationToken cancellationToken)
     {
-        try
+        if (!Enum.TryParse<ExperienceApprovalStatus>(
+                request.ApprovalStatus,
+                ignoreCase: true,
+                out var approvalStatus) ||
+            !Enum.IsDefined(approvalStatus))
         {
-            if (!Enum.TryParse<ExperienceApprovalStatus>(
-                    request.ApprovalStatus,
-                    ignoreCase: true,
-                    out var approvalStatus) ||
-                !Enum.IsDefined(approvalStatus))
-            {
-                return BadRequest(new { message = "Invalid approval status." });
-            }
-
-            var result = await _setApprovalStatusHandler.HandleAsync(
-                new SetExperienceApprovalStatusCommand
-                {
-                    ExperienceId = id,
-                    ApprovalStatus = approvalStatus,
-                    ModerationNotes = request.ModerationNotes
-                },
-                cancellationToken);
-
-            if (result == null)
-            {
-                return NotFound(new { message = "Experience was not found." });
-            }
-
-            return Ok(result);
+            throw new ValidationException("Invalid approval status.");
         }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+
+        var result = await _setApprovalStatusHandler.HandleAsync(
+            new SetExperienceApprovalStatusCommand
+            {
+                ExperienceId = id,
+                ApprovalStatus = approvalStatus,
+                ModerationNotes = request.ModerationNotes
+            },
+            cancellationToken);
+
+        if (result is null)
+            throw new NotFoundException("Experience was not found.");
+
+        return Ok(result);
     }
 }

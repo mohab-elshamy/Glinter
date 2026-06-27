@@ -26,37 +26,37 @@ public class GetAllExperiencesQueryHandler
             query.PageSize);
 
         if (query.Adm3Gid.HasValue && query.Adm3Gid.Value <= 0)
-            throw new ArgumentException("Adm3Gid must be greater than zero.");
+            throw new ValidationException("Adm3Gid must be greater than zero.");
 
         if (query.CategoryId == Guid.Empty)
-            throw new ArgumentException("CategoryId must be a valid id.");
+            throw new ValidationException("CategoryId must be a valid id.");
 
         if (query.VibeId == Guid.Empty)
-            throw new ArgumentException("VibeId must be a valid id.");
+            throw new ValidationException("VibeId must be a valid id.");
 
         if (!string.IsNullOrWhiteSpace(query.Tag) && query.Tag.Trim().Length > 100)
-            throw new ArgumentException("Tag cannot exceed 100 characters.");
+            throw new ValidationException("Tag cannot exceed 100 characters.");
 
         if (query.MinPrice.HasValue && query.MinPrice.Value < 0)
         {
-            throw new ArgumentException("MinPrice cannot be negative.");
+            throw new ValidationException("MinPrice cannot be negative.");
         }
 
         if (query.MaxPrice.HasValue && query.MaxPrice.Value < 0)
         {
-            throw new ArgumentException("MaxPrice cannot be negative.");
+            throw new ValidationException("MaxPrice cannot be negative.");
         }
 
         if (query.MinPrice.HasValue &&
             query.MaxPrice.HasValue &&
             query.MinPrice.Value > query.MaxPrice.Value)
         {
-            throw new ArgumentException("MinPrice cannot be greater than MaxPrice.");
+            throw new ValidationException("MinPrice cannot be greater than MaxPrice.");
         }
 
         if (query.Guests.HasValue && query.Guests.Value <= 0)
         {
-            throw new ArgumentException("Guests must be greater than zero.");
+            throw new ValidationException("Guests must be greater than zero.");
         }
 
         var experiences = await _experienceRepository.GetFilteredAsync(

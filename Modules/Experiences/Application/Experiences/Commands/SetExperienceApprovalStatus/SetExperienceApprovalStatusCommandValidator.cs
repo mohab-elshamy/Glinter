@@ -6,16 +6,16 @@ public class SetExperienceApprovalStatusCommandValidator
     {
         if (command.ExperienceId == Guid.Empty)
         {
-            throw new ArgumentException("ExperienceId is required.");
+            throw new ValidationException("ExperienceId is required.");
         }
 
         if (!Enum.IsDefined(command.ApprovalStatus))
-            throw new ArgumentException("ApprovalStatus is invalid.");
+            throw new ValidationException("ApprovalStatus is invalid.");
 
         if (!string.IsNullOrWhiteSpace(command.ModerationNotes) &&
             command.ModerationNotes.Length > 1000)
         {
-            throw new ArgumentException("ModerationNotes cannot exceed 1000 characters.");
+            throw new ValidationException("ModerationNotes cannot exceed 1000 characters.");
         }
     }
 }

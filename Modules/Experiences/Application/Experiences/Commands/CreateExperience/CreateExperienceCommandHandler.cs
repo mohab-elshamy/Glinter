@@ -45,7 +45,7 @@ public class CreateExperienceCommandHandler
 
         if (!categoryExists)
         {
-            throw new InvalidOperationException("Experience category was not found.");
+            throw new NotFoundException("Experience category was not found.");
         }
 
         var vibesExist = await _vibeRepository.ExistsAllAsync(
@@ -54,7 +54,7 @@ public class CreateExperienceCommandHandler
 
         if (!vibesExist)
         {
-            throw new InvalidOperationException("One or more vibes were not found.");
+            throw new NotFoundException("One or more vibes were not found.");
         }
 
         var region = await _regionReferenceService.GetNeighbourhoodAsync(
@@ -63,7 +63,7 @@ public class CreateExperienceCommandHandler
 
         if (region is null)
         {
-            throw new InvalidOperationException("Adm3Gid must reference an existing neighbourhood.");
+            throw new NotFoundException("Adm3Gid must reference an existing neighbourhood.");
         }
 
         var duplicateExists = await _experienceRepository.ExistsAsync(
@@ -74,7 +74,7 @@ public class CreateExperienceCommandHandler
 
         if (duplicateExists)
         {
-            throw new InvalidOperationException("An experience with the same title already exists in this area for this provider.");
+            throw new ConflictException("An experience with the same title already exists in this area for this provider.");
         }
 
         var experienceId = Guid.NewGuid();

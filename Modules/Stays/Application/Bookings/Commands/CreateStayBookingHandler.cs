@@ -34,11 +34,11 @@ public class CreateStayBookingHandler
 
     {
         if (command.StayId == Guid.Empty)
-            throw new ArgumentException("Stay id is required.");
+            throw new ValidationException("Stay id is required.");
 
         if (!_currentUserService.IsAuthenticated || _currentUserService.UserId is null)
         {
-            throw new UnauthorizedAccessException("User is not authenticated.");
+            throw new AuthenticationException("User is not authenticated.");
         }
 
         var currentUserId = _currentUserService.UserId.Value;
@@ -48,31 +48,31 @@ public class CreateStayBookingHandler
 
         if (travelerProfileId is null)
         {
-            throw new UnauthorizedAccessException("Only travelers can book stays.");
+            throw new ForbiddenException("Only travelers can book stays.");
         }
 
 
 
         if (command.GuestCount <= 0)
-            throw new ArgumentException("GuestCount must be greater than 0.");
+            throw new ValidationException("GuestCount must be greater than 0.");
         var today = DateOnly.FromDateTime(DateTime.UtcNow.Date);
 
         if (command.CheckInDate < today)
-            throw new ArgumentException("CheckInDate cannot be in the past.");
+            throw new ValidationException("CheckInDate cannot be in the past.");
 
         if (command.CheckInDate >= command.CheckOutDate)
-            throw new ArgumentException("CheckOutDate must be after CheckInDate.");
+            throw new ValidationException("CheckOutDate must be after CheckInDate.");
 
         var stay = await _stayRepository.GetByIdAsync(command.StayId, cancellationToken);
 
         if (stay is null)
-            throw new KeyNotFoundException("Stay not found.");
+            throw new NotFoundException("Stay not found.");
 
         if (!stay.IsActive)
-            throw new ArgumentException("This stay is not active.");
+            throw new ValidationException("This stay is not active.");
 
         if (command.GuestCount > stay.MaxGuests)
-            throw new ArgumentException("GuestCount exceeds the maximum allowed guests for this stay.");
+            throw new ValidationException("GuestCount exceeds the maximum allowed guests for this stay.");
 
         var alreadyExists = await _stayBookingRepository.ExistsAsync(
             command.StayId,
@@ -82,7 +82,7 @@ public class CreateStayBookingHandler
             cancellationToken);
 
         if (alreadyExists)
-            throw new ArgumentException("This booking already exists for the same traveler and dates.");
+            throw new ValidationException("This booking already exists for the same traveler and dates.");
 
         var hasOverlap = await _stayBookingRepository.HasOverlapAsync(
             command.StayId,
@@ -91,17 +91,17 @@ public class CreateStayBookingHandler
             cancellationToken);
 
         if (hasOverlap)
-            throw new ArgumentException("This stay is already booked for the selected dates.");
+            throw new ValidationException("This stay is already booked for the selected dates.");
 
         var nights = command.CheckOutDate.DayNumber - command.CheckInDate.DayNumber;
 
         if (nights <= 0)
-            throw new ArgumentException("Booking must be at least one night.");
+            throw new ValidationException("Booking must be at least one night.");
 
         var totalPrice = nights * stay.PricePerNight;
 
         if (totalPrice > MaxDatabaseMoneyValue)
-            throw new ArgumentException("The booking total exceeds the maximum supported value.");
+            throw new ValidationException("The booking total exceeds the maximum supported value.");
 
         var booking = new StayBooking
         {

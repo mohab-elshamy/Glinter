@@ -36,49 +36,27 @@ public class StayReviewController : ControllerBase
         [FromBody] CreateStayReviewRequestDto request,
         CancellationToken cancellationToken)
     {
-        try
+        var command = new CreateStayReviewCommand
         {
-            var command = new CreateStayReviewCommand
-            {
-                StayId = stayId,
-                Rating = request.Rating,
-                Comment = request.Comment
-            };
+            StayId = stayId,
+            Rating = request.Rating,
+            Comment = request.Comment
+        };
 
-            var result = await _createStayReviewHandler.HandleAsync(command, cancellationToken);
-            return Ok(result);
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
-        }
+        var result = await _createStayReviewHandler.HandleAsync(command, cancellationToken);
+        return Ok(result);
     }
 
     [HttpGet]
     public async Task<IActionResult> GetReviews(Guid stayId, CancellationToken cancellationToken)
     {
-        try
+        var query = new GetStayReviewsQuery
         {
-            var query = new GetStayReviewsQuery
-            {
-                StayId = stayId
-            };
+            StayId = stayId
+        };
 
-            var result = await _getStayReviewsHandler.HandleAsync(query, cancellationToken);
-            return Ok(result);
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
+        var result = await _getStayReviewsHandler.HandleAsync(query, cancellationToken);
+        return Ok(result);
     }
 
     [Authorize(Roles = RoleNames.Traveler)]
@@ -88,30 +66,19 @@ public class StayReviewController : ControllerBase
         [FromBody] UpdateStayReviewRequestDto request,
         CancellationToken cancellationToken)
     {
-        try
+        var command = new UpdateStayReviewCommand
         {
-            var command = new UpdateStayReviewCommand
-            {
-                ReviewId = reviewId,
-                Rating = request.Rating,
-                Comment = request.Comment
-            };
+            ReviewId = reviewId,
+            Rating = request.Rating,
+            Comment = request.Comment
+        };
 
-            var result = await _updateStayReviewHandler.HandleAsync(command, cancellationToken);
+        var result = await _updateStayReviewHandler.HandleAsync(command, cancellationToken);
 
-            if (result is null)
-                return NotFound(new { message = "Review not found." });
+        if (result is null)
+            throw new NotFoundException("Review not found.");
 
-            return Ok(result);
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
-        }
+        return Ok(result);
     }
 
     [Authorize(Roles = RoleNames.Traveler)]
@@ -120,27 +87,16 @@ public class StayReviewController : ControllerBase
         Guid reviewId,
         CancellationToken cancellationToken)
     {
-        try
+        var command = new DeleteStayReviewCommand
         {
-            var command = new DeleteStayReviewCommand
-            {
-                ReviewId = reviewId
-            };
+            ReviewId = reviewId
+        };
 
-            var deleted = await _deleteStayReviewHandler.HandleAsync(command, cancellationToken);
+        var deleted = await _deleteStayReviewHandler.HandleAsync(command, cancellationToken);
 
-            if (!deleted)
-                return NotFound(new { message = "Review not found." });
+        if (!deleted)
+            throw new NotFoundException("Review not found.");
 
-            return Ok(new { message = "Review deleted successfully." });
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
-        }
+        return Ok(new { message = "Review deleted successfully." });
     }
 }

@@ -149,7 +149,8 @@ public static class IdentityAccessModule
                         context.HttpContext,
                         StatusCodes.Status401Unauthorized,
                         "Unauthorized.",
-                        "Invalid or expired access token.");
+                        "Invalid or expired access token.",
+                        "authentication_required");
                 },
                 OnForbidden = async context =>
                 {
@@ -162,7 +163,8 @@ public static class IdentityAccessModule
                         context.HttpContext,
                         StatusCodes.Status403Forbidden,
                         "Forbidden.",
-                        "You do not have permission to access this resource.");
+                        "You do not have permission to access this resource.",
+                        "forbidden");
                 }
             };
         });
@@ -212,7 +214,8 @@ public static class IdentityAccessModule
         HttpContext httpContext,
         int statusCode,
         string title,
-        string detail)
+        string detail,
+        string errorCode)
     {
         var problemDetails = new ProblemDetails
         {
@@ -222,11 +225,16 @@ public static class IdentityAccessModule
             Instance = httpContext.Request.Path
         };
 
+        problemDetails.Extensions["errorCode"] = errorCode;
         problemDetails.Extensions["traceId"] = httpContext.TraceIdentifier;
 
         httpContext.Response.StatusCode = statusCode;
         httpContext.Response.ContentType = "application/problem+json";
 
-        await httpContext.Response.WriteAsJsonAsync(problemDetails);
+        await httpContext.Response.WriteAsJsonAsync(
+            problemDetails,
+            options: null,
+            contentType: "application/problem+json",
+            cancellationToken: httpContext.RequestAborted);
     }
 }

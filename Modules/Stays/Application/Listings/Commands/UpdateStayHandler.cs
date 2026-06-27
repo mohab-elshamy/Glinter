@@ -39,7 +39,7 @@ public class UpdateStayHandler
             return null;
 
         if (stay.OwnerProfileId != ownerProfileId)
-            throw new UnauthorizedAccessException("You can update only your own stays.");
+            throw new ForbiddenException("You can update only your own stays.");
 
         var normalizedName = command.Name.Trim();
         var normalizedAddress = command.Address?.Trim() ?? string.Empty;
@@ -52,7 +52,7 @@ public class UpdateStayHandler
             cancellationToken);
 
         if (alreadyExists)
-            throw new ArgumentException("A stay with the same owner, name, and address already exists.");
+            throw new ValidationException("A stay with the same owner, name, and address already exists.");
 
         stay.Name = normalizedName;
         stay.Description = command.Description?.Trim() ?? string.Empty;
@@ -87,64 +87,64 @@ public class UpdateStayHandler
     private async Task<Guid> GetCurrentOwnerProfileIdAsync(CancellationToken cancellationToken)
     {
         if (!_currentUserService.IsAuthenticated || _currentUserService.UserId is null)
-            throw new UnauthorizedAccessException("User is not authenticated.");
+            throw new AuthenticationException("User is not authenticated.");
 
         var ownerProfileId = await _profilesReadService.GetHotelOwnerProfileIdByUserIdAsync(
             _currentUserService.UserId.Value,
             cancellationToken);
 
         return ownerProfileId
-               ?? throw new UnauthorizedAccessException("Only hotel owners can update stays.");
+               ?? throw new ForbiddenException("Only hotel owners can update stays.");
     }
 
     private static void Validate(UpdateStayCommand command)
     {
         if (command.Id == Guid.Empty)
-            throw new ArgumentException("Stay id is required.");
+            throw new ValidationException("Stay id is required.");
 
         if (string.IsNullOrWhiteSpace(command.Name))
-            throw new ArgumentException("Stay name is required.");
+            throw new ValidationException("Stay name is required.");
 
         if (command.Name.Trim().Length > 200)
-            throw new ArgumentException("Stay name cannot exceed 200 characters.");
+            throw new ValidationException("Stay name cannot exceed 200 characters.");
 
         if ((command.Description?.Trim().Length ?? 0) > 2000)
-            throw new ArgumentException("Description cannot exceed 2000 characters.");
+            throw new ValidationException("Description cannot exceed 2000 characters.");
 
         if (string.IsNullOrWhiteSpace(command.Address))
-            throw new ArgumentException("Address is required.");
+            throw new ValidationException("Address is required.");
 
         if (command.Address.Trim().Length > 500)
-            throw new ArgumentException("Address cannot exceed 500 characters.");
+            throw new ValidationException("Address cannot exceed 500 characters.");
 
         if (command.PricePerNight <= 0)
-            throw new ArgumentException("PricePerNight must be greater than 0.");
+            throw new ValidationException("PricePerNight must be greater than 0.");
 
         if (command.PricePerNight > MaxDatabaseMoneyValue)
-            throw new ArgumentException("PricePerNight exceeds the maximum supported value.");
+            throw new ValidationException("PricePerNight exceeds the maximum supported value.");
 
         if (string.IsNullOrWhiteSpace(command.Currency))
-            throw new ArgumentException("Currency is required.");
+            throw new ValidationException("Currency is required.");
 
         if (command.Currency.Trim().Length > 10)
-            throw new ArgumentException("Currency cannot exceed 10 characters.");
+            throw new ValidationException("Currency cannot exceed 10 characters.");
 
         if (command.MaxGuests <= 0)
-            throw new ArgumentException("MaxGuests must be greater than 0.");
+            throw new ValidationException("MaxGuests must be greater than 0.");
 
         if (double.IsNaN(command.Latitude) || double.IsInfinity(command.Latitude) ||
             command.Latitude < -90 || command.Latitude > 90)
-            throw new ArgumentException("Latitude must be between -90 and 90.");
+            throw new ValidationException("Latitude must be between -90 and 90.");
 
         if (double.IsNaN(command.Longitude) || double.IsInfinity(command.Longitude) ||
             command.Longitude < -180 || command.Longitude > 180)
-            throw new ArgumentException("Longitude must be between -180 and 180.");
+            throw new ValidationException("Longitude must be between -180 and 180.");
 
         if (command.Tags is not null && command.Tags.Any(tag => !string.IsNullOrWhiteSpace(tag) && tag.Trim().Length > 100))
-            throw new ArgumentException("Tags cannot exceed 100 characters.");
+            throw new ValidationException("Tags cannot exceed 100 characters.");
 
         if (command.Tags is { Count: > MaxTags })
-            throw new ArgumentException($"A stay cannot have more than {MaxTags} tags.");
+            throw new ValidationException($"A stay cannot have more than {MaxTags} tags.");
     }
 
     private static IEnumerable<string> NormalizeTags(IEnumerable<string>? tags)

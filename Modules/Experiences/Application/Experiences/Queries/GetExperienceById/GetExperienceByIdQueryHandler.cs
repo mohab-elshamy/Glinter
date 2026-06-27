@@ -23,7 +23,7 @@ public class GetExperienceByIdQueryHandler
     {
         if (query.Id == Guid.Empty)
         {
-            throw new ArgumentException("Experience Id is required.");
+            throw new ValidationException("Experience Id is required.");
         }
 
         var experience = await _experienceRepository.GetPublishedByIdAsync(

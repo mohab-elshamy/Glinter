@@ -17,11 +17,11 @@ public class GetUserByIdQueryHandler
     public async Task<UserResponse> HandleAsync(GetUserByIdQuery query)
     {
         if (query.UserId == Guid.Empty)
-            throw new InvalidOperationException("User id is required.");
+            throw new ValidationException("User id is required.");
 
         var user = await _userManager.FindByIdAsync(query.UserId.ToString());
         if (user is null)
-            throw new KeyNotFoundException("User not found.");
+            throw new NotFoundException("User not found.");
 
         var roles = await _userManager.GetRolesAsync(user);
 

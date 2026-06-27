@@ -26,8 +26,25 @@ public sealed class ApiExceptionHandlingMiddleware
         {
             await _next(context);
         }
-        catch (Exception exception) when (!context.Response.HasStarted)
+        catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
         {
+            _logger.LogInformation(
+                "Request was cancelled by the client while processing {Method} {Path}.",
+                context.Request.Method,
+                context.Request.Path);
+        }
+        catch (Exception exception)
+        {
+            if (context.Response.HasStarted)
+            {
+                _logger.LogError(
+                    exception,
+                    "An exception occurred after the response started for {Method} {Path}.",
+                    context.Request.Method,
+                    context.Request.Path);
+                throw;
+            }
+
             await WriteProblemDetailsAsync(context, exception);
         }
     }
@@ -39,13 +56,15 @@ public sealed class ApiExceptionHandlingMiddleware
 
         if (statusCode >= StatusCodes.Status500InternalServerError)
         {
-            _logger.LogError(exception, "Unhandled exception while processing {Method} {Path}.",
+            _logger.LogError(exception,
+                "Unhandled exception while processing {Method} {Path}.",
                 context.Request.Method,
                 context.Request.Path);
         }
         else
         {
-            _logger.LogWarning(exception, "Request failed with {StatusCode} while processing {Method} {Path}.",
+            _logger.LogWarning(exception,
+                "Request failed with {StatusCode} while processing {Method} {Path}.",
                 statusCode,
                 context.Request.Method,
                 context.Request.Path);
@@ -54,34 +73,32 @@ public sealed class ApiExceptionHandlingMiddleware
         context.Response.Clear();
         context.Response.StatusCode = statusCode;
         context.Response.ContentType = "application/problem+json";
-
-        await context.Response.WriteAsJsonAsync(problemDetails);
+        await context.Response.WriteAsJsonAsync(
+            problemDetails,
+            options: null,
+            contentType: "application/problem+json",
+            cancellationToken: context.RequestAborted);
     }
 
     private ProblemDetails CreateProblemDetails(HttpContext context, Exception exception)
     {
-        var (status, title, detail) = exception switch
+        var (status, title, detail, errorCode) = exception switch
         {
-            ArgumentException => (
-                StatusCodes.Status400BadRequest,
-                "Bad request.",
-                exception.Message),
-            KeyNotFoundException => (
-                StatusCodes.Status404NotFound,
-                "Resource not found.",
-                exception.Message),
-            UnauthorizedAccessException => MapUnauthorizedAccess(exception),
-            DbUpdateException dbUpdateException => MapDatabaseUpdateException(dbUpdateException),
-            InvalidOperationException => (
-                StatusCodes.Status400BadRequest,
-                "Invalid operation.",
-                exception.Message),
-            _ => (
-                StatusCodes.Status500InternalServerError,
-                "An unexpected error occurred.",
+            ValidationException ex => (400, "Validation failed.", ex.Message, ex.ErrorCode),
+            AuthenticationException ex => (401, "Unauthorized.", ex.Message, ex.ErrorCode),
+            ForbiddenException ex => (403, "Forbidden.", ex.Message, ex.ErrorCode),
+            NotFoundException ex => (404, "Resource not found.", ex.Message, ex.ErrorCode),
+            ConflictException ex => (409, "Conflict.", ex.Message, ex.ErrorCode),
+            BadHttpRequestException ex => (400, "Bad request.", ex.Message, "bad_request"),
+            DbUpdateConcurrencyException => (409, "Concurrency conflict.",
+                "The resource was changed by another request. Reload it and try again.",
+                "concurrency_conflict"),
+            DbUpdateException ex => MapDatabaseUpdateException(ex),
+            _ => (500, "An unexpected error occurred.",
                 _environment.IsDevelopment()
                     ? exception.ToString()
-                    : "An unexpected error occurred while processing the request.")
+                    : "An unexpected error occurred while processing the request.",
+                "internal_server_error")
         };
 
         var problemDetails = new ProblemDetails
@@ -91,53 +108,36 @@ public sealed class ApiExceptionHandlingMiddleware
             Detail = detail,
             Instance = context.Request.Path
         };
-
+        problemDetails.Extensions["errorCode"] = errorCode;
         problemDetails.Extensions["traceId"] = context.TraceIdentifier;
+
+        if (exception is ValidationException { Errors: not null } validationException)
+            problemDetails.Extensions["errors"] = validationException.Errors;
 
         return problemDetails;
     }
 
-    private static (int Status, string Title, string Detail) MapUnauthorizedAccess(Exception exception)
-    {
-        var message = exception.Message;
-        var isAuthenticationFailure =
-            message.Contains("authenticated", StringComparison.OrdinalIgnoreCase) ||
-            message.Contains("token", StringComparison.OrdinalIgnoreCase);
-
-        return isAuthenticationFailure
-            ? (StatusCodes.Status401Unauthorized, "Unauthorized.", message)
-            : (StatusCodes.Status403Forbidden, "Forbidden.", message);
-    }
-
-    private static (int Status, string Title, string Detail) MapDatabaseUpdateException(
-        DbUpdateException exception)
+    private static (int Status, string Title, string Detail, string ErrorCode)
+        MapDatabaseUpdateException(DbUpdateException exception)
     {
         if (exception.InnerException is not PostgresException postgresException)
-        {
-            return (
-                StatusCodes.Status500InternalServerError,
-                "Database update failed.",
-                "An unexpected database error occurred while processing the request.");
-        }
+            return (500, "Database update failed.",
+                "An unexpected database error occurred while processing the request.",
+                "database_update_failed");
 
         return postgresException.SqlState switch
         {
-            PostgresErrorCodes.UniqueViolation => (
-                StatusCodes.Status409Conflict,
-                "Duplicate resource.",
-                "A resource with the same unique value already exists."),
-            PostgresErrorCodes.ForeignKeyViolation => (
-                StatusCodes.Status400BadRequest,
-                "Invalid reference.",
-                "One or more referenced resources do not exist."),
-            PostgresErrorCodes.StringDataRightTruncation => (
-                StatusCodes.Status400BadRequest,
-                "Invalid request value.",
-                "One or more values exceed the allowed length."),
-            _ => (
-                StatusCodes.Status500InternalServerError,
-                "Database update failed.",
-                "An unexpected database error occurred while processing the request.")
+            PostgresErrorCodes.UniqueViolation => (409, "Duplicate resource.",
+                "A resource with the same unique value already exists.", "duplicate_resource"),
+            PostgresErrorCodes.ForeignKeyViolation => (400, "Invalid reference.",
+                "One or more referenced resources do not exist.", "invalid_reference"),
+            PostgresErrorCodes.StringDataRightTruncation => (400, "Invalid request value.",
+                "One or more values exceed the allowed length.", "value_too_long"),
+            PostgresErrorCodes.CheckViolation => (400, "Invalid request value.",
+                "One or more values violate a database constraint.", "constraint_violation"),
+            _ => (500, "Database update failed.",
+                "An unexpected database error occurred while processing the request.",
+                "database_update_failed")
         };
     }
 }

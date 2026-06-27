@@ -30,17 +30,17 @@ public class CreateDirectChatThreadHandler
         var currentUserId = GetCurrentUserId();
 
         if (command.OtherUserId == Guid.Empty)
-            throw new ArgumentException("OtherUserId is required.");
+            throw new ValidationException("OtherUserId is required.");
 
         if (command.OtherUserId == currentUserId)
-            throw new ArgumentException("Cannot create a direct chat with yourself.");
+            throw new ValidationException("Cannot create a direct chat with yourself.");
 
         var otherUserExists = await _identityUserReadService.IsActiveUserAsync(
             command.OtherUserId,
             cancellationToken);
 
         if (!otherUserExists)
-            throw new KeyNotFoundException("Other user was not found or is inactive.");
+            throw new NotFoundException("Other user was not found or is inactive.");
 
         var directKey = BuildDirectKey(currentUserId, command.OtherUserId);
 
@@ -94,7 +94,7 @@ public class CreateDirectChatThreadHandler
     private Guid GetCurrentUserId()
     {
         if (!_currentUserService.IsAuthenticated || _currentUserService.UserId is null)
-            throw new UnauthorizedAccessException("User is not authenticated.");
+            throw new AuthenticationException("User is not authenticated.");
 
         return _currentUserService.UserId.Value;
     }

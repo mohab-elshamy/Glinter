@@ -31,10 +31,10 @@ public class UpsertTravelerProfileCommandHandler
     {
         var errors = _validator.Validate(command);
         if (errors.Count > 0)
-            throw new InvalidOperationException(string.Join(" | ", errors));
+            throw new ValidationException(string.Join(" | ", errors));
 
         if (!_currentUserService.IsAuthenticated || _currentUserService.UserId is null)
-            throw new UnauthorizedAccessException("User is not authenticated.");
+            throw new AuthenticationException("User is not authenticated.");
 
         var userId = _currentUserService.UserId.Value;
         var requestedInterestIds = command.InterestIds.Distinct().ToList();
@@ -44,7 +44,7 @@ public class UpsertTravelerProfileCommandHandler
             .ToListAsync(cancellationToken);
 
         if (interests.Count != requestedInterestIds.Count)
-            throw new InvalidOperationException("One or more interests are invalid.");
+            throw new ValidationException("One or more interests are invalid.");
 
         var profile = await _profilesDbContext.TravelerProfiles
             .Include(x => x.Interests)

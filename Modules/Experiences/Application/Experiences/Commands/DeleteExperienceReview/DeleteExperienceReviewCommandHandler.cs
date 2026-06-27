@@ -38,7 +38,7 @@ public class DeleteExperienceReviewCommandHandler
 
         if (review.TravelerProfileId != travelerProfileId)
         {
-            throw new UnauthorizedAccessException("You can delete only your own reviews.");
+            throw new ForbiddenException("You can delete only your own reviews.");
         }
 
         await _reviewRepository.DeleteAsync(review, cancellationToken);

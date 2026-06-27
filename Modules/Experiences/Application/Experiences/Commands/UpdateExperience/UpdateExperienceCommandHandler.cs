@@ -50,7 +50,7 @@ public class UpdateExperienceCommandHandler
 
         if (experience.ProviderProfileId != providerProfileId)
         {
-            throw new UnauthorizedAccessException("You can update only your own experiences.");
+            throw new ForbiddenException("You can update only your own experiences.");
         }
 
         var categoryExists = await _categoryRepository.ExistsAsync(
@@ -59,7 +59,7 @@ public class UpdateExperienceCommandHandler
 
         if (!categoryExists)
         {
-            throw new InvalidOperationException("Experience category was not found.");
+            throw new NotFoundException("Experience category was not found.");
         }
 
         var vibesExist = await _vibeRepository.ExistsAllAsync(
@@ -68,7 +68,7 @@ public class UpdateExperienceCommandHandler
 
         if (!vibesExist)
         {
-            throw new InvalidOperationException("One or more vibes were not found.");
+            throw new NotFoundException("One or more vibes were not found.");
         }
 
         var region = await _regionReferenceService.GetNeighbourhoodAsync(
@@ -77,7 +77,7 @@ public class UpdateExperienceCommandHandler
 
         if (region is null)
         {
-            throw new InvalidOperationException("Adm3Gid must reference an existing neighbourhood.");
+            throw new NotFoundException("Adm3Gid must reference an existing neighbourhood.");
         }
 
         var duplicateExists = await _experienceRepository.ExistsAsync(
@@ -89,7 +89,7 @@ public class UpdateExperienceCommandHandler
 
         if (duplicateExists)
         {
-            throw new InvalidOperationException(
+            throw new ConflictException(
                 "An experience with the same title already exists in this area for this provider.");
         }
 

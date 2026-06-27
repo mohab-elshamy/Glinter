@@ -40,7 +40,7 @@ public class UpdateExperienceReviewCommandHandler
 
         if (review.TravelerProfileId != travelerProfileId)
         {
-            throw new UnauthorizedAccessException("You can update only your own reviews.");
+            throw new ForbiddenException("You can update only your own reviews.");
         }
 
         review.Rating = command.Rating;

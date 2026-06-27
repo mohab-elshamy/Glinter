@@ -31,26 +31,15 @@ public class NotificationsController : ControllerBase
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 50)
     {
-        try
-        {
-            var result = await _getMyNotificationsHandler.HandleAsync(
-                new GetMyNotificationsQuery
-                {
-                    Page = page,
-                    PageSize = pageSize
-                },
-                cancellationToken);
+        var result = await _getMyNotificationsHandler.HandleAsync(
+            new GetMyNotificationsQuery
+            {
+                Page = page,
+                PageSize = pageSize
+            },
+            cancellationToken);
 
-            return Ok(result);
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return Unauthorized(new { message = ex.Message });
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        return Ok(result);
     }
 
     [HttpPatch("{id:guid}/read")]
@@ -58,45 +47,23 @@ public class NotificationsController : ControllerBase
         Guid id,
         CancellationToken cancellationToken)
     {
-        try
-        {
-            var result = await _markNotificationAsReadHandler.HandleAsync(
-                new MarkNotificationAsReadCommand
-                {
-                    NotificationId = id
-                },
-                cancellationToken);
+        var result = await _markNotificationAsReadHandler.HandleAsync(
+            new MarkNotificationAsReadCommand
+            {
+                NotificationId = id
+            },
+            cancellationToken);
 
-            return Ok(result);
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return Unauthorized(new { message = ex.Message });
-        }
+        return Ok(result);
     }
 
     [HttpPatch("read-all")]
     public async Task<IActionResult> MarkAllAsRead(CancellationToken cancellationToken)
     {
-        try
-        {
-            await _markAllNotificationsAsReadHandler.HandleAsync(
-                new MarkAllNotificationsAsReadCommand(),
-                cancellationToken);
+        await _markAllNotificationsAsReadHandler.HandleAsync(
+            new MarkAllNotificationsAsReadCommand(),
+            cancellationToken);
 
-            return NoContent();
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return Unauthorized(new { message = ex.Message });
-        }
+        return NoContent();
     }
 }

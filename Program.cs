@@ -86,6 +86,7 @@ builder.Services.Configure<ApiBehaviorOptions>(options =>
             Instance = context.HttpContext.Request.Path
         };
 
+        problemDetails.Extensions["errorCode"] = "validation_error";
         problemDetails.Extensions["traceId"] = context.HttpContext.TraceIdentifier;
 
         var result = new BadRequestObjectResult(problemDetails);
@@ -149,12 +150,17 @@ builder.Services.AddRateLimiter(options =>
             Instance = context.HttpContext.Request.Path
         };
 
+        problemDetails.Extensions["errorCode"] = "rate_limit_exceeded";
         problemDetails.Extensions["traceId"] = context.HttpContext.TraceIdentifier;
 
         context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
         context.HttpContext.Response.ContentType = "application/problem+json";
 
-        await context.HttpContext.Response.WriteAsJsonAsync(problemDetails, cancellationToken);
+        await context.HttpContext.Response.WriteAsJsonAsync(
+            problemDetails,
+            options: null,
+            contentType: "application/problem+json",
+            cancellationToken: cancellationToken);
     };
     options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
     {
@@ -283,3 +289,5 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.Run();
+
+public partial class Program;

@@ -44,18 +44,11 @@ public class ExperiencesController : ControllerBase
         [FromQuery] GetExperiencesRequestDto request,
         CancellationToken cancellationToken)
     {
-        try
-        {
-            var result = await _getAllExperiencesHandler.HandleAsync(
-                request.ToQuery(),
-                cancellationToken);
+        var result = await _getAllExperiencesHandler.HandleAsync(
+            request.ToQuery(),
+            cancellationToken);
 
-            return Ok(result);
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        return Ok(result);
     }
 
     [Authorize(Roles = RoleNames.ExperienceProvider)]
@@ -65,22 +58,15 @@ public class ExperiencesController : ControllerBase
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20)
     {
-        try
-        {
-            var result = await _getMyExperiencesHandler.HandleAsync(
-                new GetMyExperiencesQuery
-                {
-                    Page = page,
-                    PageSize = pageSize
-                },
-                cancellationToken);
+        var result = await _getMyExperiencesHandler.HandleAsync(
+            new GetMyExperiencesQuery
+            {
+                Page = page,
+                PageSize = pageSize
+            },
+            cancellationToken);
 
-            return Ok(result);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        return Ok(result);
     }
 
     [HttpGet("{id:guid}")]
@@ -88,26 +74,17 @@ public class ExperiencesController : ControllerBase
         Guid id,
         CancellationToken cancellationToken)
     {
-        try
-        {
-            var result = await _getExperienceByIdHandler.HandleAsync(
-                new GetExperienceByIdQuery
-                {
-                    Id = id
-                },
-                cancellationToken);
-
-            if (result == null)
+        var result = await _getExperienceByIdHandler.HandleAsync(
+            new GetExperienceByIdQuery
             {
-                return NotFound(new { message = "Experience was not found." });
-            }
+                Id = id
+            },
+            cancellationToken);
 
-            return Ok(result);
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        if (result is null)
+            throw new NotFoundException("Experience was not found.");
+
+        return Ok(result);
     }
 
     [Authorize(Roles = RoleNames.ExperienceProvider)]
@@ -116,29 +93,14 @@ public class ExperiencesController : ControllerBase
         [FromBody] CreateExperienceRequestDto request,
         CancellationToken cancellationToken)
     {
-        try
-        {
-            var result = await _createExperienceHandler.HandleAsync(
-                request.ToCommand(),
-                cancellationToken);
+        var result = await _createExperienceHandler.HandleAsync(
+            request.ToCommand(),
+            cancellationToken);
 
-            return CreatedAtAction(
-                nameof(GetById),
-                new { id = result.Id },
-                result);
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
-        }
+        return CreatedAtAction(
+            nameof(GetById),
+            new { id = result.Id },
+            result);
     }
 
     [Authorize(Roles = RoleNames.ExperienceProvider)]
@@ -148,31 +110,14 @@ public class ExperiencesController : ControllerBase
         [FromBody] UpdateExperienceRequestDto request,
         CancellationToken cancellationToken)
     {
-        try
-        {
-            var result = await _updateExperienceHandler.HandleAsync(
-                request.ToCommand(id),
-                cancellationToken);
+        var result = await _updateExperienceHandler.HandleAsync(
+            request.ToCommand(id),
+            cancellationToken);
 
-            if (result == null)
-            {
-                return NotFound(new { message = "Experience was not found." });
-            }
+        if (result is null)
+            throw new NotFoundException("Experience was not found.");
 
-            return Ok(result);
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
-        }
+        return Ok(result);
     }
 
     [Authorize(Roles = RoleNames.ExperienceProvider)]
@@ -181,31 +126,18 @@ public class ExperiencesController : ControllerBase
         Guid id,
         CancellationToken cancellationToken)
     {
-        try
-        {
-            var result = await _setExperienceActiveStatusHandler.HandleAsync(
-                new SetExperienceActiveStatusCommand
-                {
-                    ExperienceId = id,
-                    IsActive = true
-                },
-                cancellationToken);
-
-            if (result == null)
+        var result = await _setExperienceActiveStatusHandler.HandleAsync(
+            new SetExperienceActiveStatusCommand
             {
-                return NotFound(new { message = "Experience was not found." });
-            }
+                ExperienceId = id,
+                IsActive = true
+            },
+            cancellationToken);
 
-            return Ok(result);
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
-        }
+        if (result is null)
+            throw new NotFoundException("Experience was not found.");
+
+        return Ok(result);
     }
 
     [Authorize(Roles = RoleNames.ExperienceProvider)]
@@ -214,30 +146,17 @@ public class ExperiencesController : ControllerBase
         Guid id,
         CancellationToken cancellationToken)
     {
-        try
-        {
-            var result = await _setExperienceActiveStatusHandler.HandleAsync(
-                new SetExperienceActiveStatusCommand
-                {
-                    ExperienceId = id,
-                    IsActive = false
-                },
-                cancellationToken);
-
-            if (result == null)
+        var result = await _setExperienceActiveStatusHandler.HandleAsync(
+            new SetExperienceActiveStatusCommand
             {
-                return NotFound(new { message = "Experience was not found." });
-            }
+                ExperienceId = id,
+                IsActive = false
+            },
+            cancellationToken);
 
-            return Ok(result);
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
-        }
+        if (result is null)
+            throw new NotFoundException("Experience was not found.");
+
+        return Ok(result);
     }
 }

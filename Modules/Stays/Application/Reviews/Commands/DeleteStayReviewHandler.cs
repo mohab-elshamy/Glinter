@@ -25,7 +25,7 @@ public class DeleteStayReviewHandler
         CancellationToken cancellationToken = default)
     {
         if (command.ReviewId == Guid.Empty)
-            throw new ArgumentException("Review id is required.");
+            throw new ValidationException("Review id is required.");
 
         var travelerProfileId = await GetCurrentTravelerProfileIdAsync(cancellationToken);
 
@@ -35,7 +35,7 @@ public class DeleteStayReviewHandler
             return false;
 
         if (review.TravelerProfileId != travelerProfileId)
-            throw new UnauthorizedAccessException("You can delete only your own reviews.");
+            throw new ForbiddenException("You can delete only your own reviews.");
 
         await _stayReviewRepository.DeleteAsync(review, cancellationToken);
         return true;
@@ -44,13 +44,13 @@ public class DeleteStayReviewHandler
     private async Task<Guid> GetCurrentTravelerProfileIdAsync(CancellationToken cancellationToken)
     {
         if (!_currentUserService.IsAuthenticated || _currentUserService.UserId is null)
-            throw new UnauthorizedAccessException("User is not authenticated.");
+            throw new AuthenticationException("User is not authenticated.");
 
         var travelerProfileId = await _profilesReadService.GetTravelerProfileIdByUserIdAsync(
             _currentUserService.UserId.Value,
             cancellationToken);
 
         return travelerProfileId
-               ?? throw new UnauthorizedAccessException("Only travelers can delete stay reviews.");
+               ?? throw new ForbiddenException("Only travelers can delete stay reviews.");
     }
 }

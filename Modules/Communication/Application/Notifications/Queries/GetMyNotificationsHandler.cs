@@ -25,10 +25,10 @@ public class GetMyNotificationsHandler
         var currentUserId = GetCurrentUserId();
 
         if (query.Page < 1 || query.Page > 10000)
-            throw new ArgumentException("Page must be between 1 and 10000.");
+            throw new ValidationException("Page must be between 1 and 10000.");
 
         if (query.PageSize < 1 || query.PageSize > 100)
-            throw new ArgumentException("PageSize must be between 1 and 100.");
+            throw new ValidationException("PageSize must be between 1 and 100.");
 
         var page = query.Page;
         var pageSize = query.PageSize;
@@ -58,7 +58,7 @@ public class GetMyNotificationsHandler
     private Guid GetCurrentUserId()
     {
         if (!_currentUserService.IsAuthenticated || _currentUserService.UserId is null)
-            throw new UnauthorizedAccessException("User is not authenticated.");
+            throw new AuthenticationException("User is not authenticated.");
 
         return _currentUserService.UserId.Value;
     }

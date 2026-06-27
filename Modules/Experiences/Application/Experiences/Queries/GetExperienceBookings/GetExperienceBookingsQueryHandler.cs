@@ -26,7 +26,7 @@ public class GetExperienceBookingsQueryHandler
     {
         if (query.ExperienceId == Guid.Empty)
         {
-            throw new ArgumentException("ExperienceId is required.");
+            throw new ValidationException("ExperienceId is required.");
         }
 
         Glinter.Modules.Experiences.Application.Common.ExperiencePagination.Validate(
@@ -47,7 +47,7 @@ public class GetExperienceBookingsQueryHandler
 
         if (experience.ProviderProfileId != providerProfileId)
         {
-            throw new UnauthorizedAccessException("You can view bookings only for your own experiences.");
+            throw new ForbiddenException("You can view bookings only for your own experiences.");
         }
 
         var bookings = await _bookingRepository.GetByExperienceIdAsync(

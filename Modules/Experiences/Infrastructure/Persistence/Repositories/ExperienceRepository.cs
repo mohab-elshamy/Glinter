@@ -29,7 +29,7 @@ public class ExperienceRepository : IExperienceRepository
             cancellationToken);
 
         if (duplicateExists)
-            throw new InvalidOperationException(
+            throw new ConflictException(
                 "An experience with the same title already exists in this area for this provider.");
 
         await _context.Experiences.AddAsync(experience, cancellationToken);
@@ -218,7 +218,7 @@ public class ExperienceRepository : IExperienceRepository
             cancellationToken);
 
         if (duplicateExists)
-            throw new InvalidOperationException(
+            throw new ConflictException(
                 "An experience with the same title already exists in this area for this provider.");
 
         await _context.SaveChangesAsync(cancellationToken);

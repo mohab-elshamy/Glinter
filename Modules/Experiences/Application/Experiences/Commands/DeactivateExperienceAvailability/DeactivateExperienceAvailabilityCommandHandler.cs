@@ -52,7 +52,7 @@ public class DeactivateExperienceAvailabilityCommandHandler
 
         if (experience.ProviderProfileId != providerProfileId)
         {
-            throw new UnauthorizedAccessException("You can deactivate availability only for your own experiences.");
+            throw new ForbiddenException("You can deactivate availability only for your own experiences.");
         }
 
         availability.IsActive = false;

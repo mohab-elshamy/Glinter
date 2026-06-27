@@ -20,8 +20,8 @@ public class RegisterCommandValidator
         if (string.IsNullOrWhiteSpace(command.Role))
             errors.Add("Role is required.");
 
-        if (!RoleNames.All.Contains(command.Role))
-            errors.Add("Invalid role.");
+        if (!RoleNames.PublicRegistration.Contains(command.Role))
+            errors.Add("Invalid public registration role.");
 
         return errors;
     }

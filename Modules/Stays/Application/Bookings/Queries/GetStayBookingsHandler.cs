@@ -29,17 +29,17 @@ public class GetStayBookingsHandler
         CancellationToken cancellationToken = default)
     {
         if (query.StayId == Guid.Empty)
-            throw new ArgumentException("Stay id is required.");
+            throw new ValidationException("Stay id is required.");
 
         var ownerProfileId = await GetCurrentOwnerProfileIdAsync(cancellationToken);
 
         var stay = await _stayRepository.GetByIdAsync(query.StayId, cancellationToken);
 
         if (stay is null)
-            throw new KeyNotFoundException("Stay not found.");
+            throw new NotFoundException("Stay not found.");
 
         if (stay.OwnerProfileId != ownerProfileId)
-            throw new UnauthorizedAccessException("You can view bookings only for your own stays.");
+            throw new ForbiddenException("You can view bookings only for your own stays.");
 
         var bookings = await _stayBookingRepository.GetByStayIdAsync(query.StayId, cancellationToken);
 
@@ -60,13 +60,13 @@ public class GetStayBookingsHandler
     private async Task<Guid> GetCurrentOwnerProfileIdAsync(CancellationToken cancellationToken)
     {
         if (!_currentUserService.IsAuthenticated || _currentUserService.UserId is null)
-            throw new UnauthorizedAccessException("User is not authenticated.");
+            throw new AuthenticationException("User is not authenticated.");
 
         var ownerProfileId = await _profilesReadService.GetHotelOwnerProfileIdByUserIdAsync(
             _currentUserService.UserId.Value,
             cancellationToken);
 
         return ownerProfileId
-               ?? throw new UnauthorizedAccessException("Only hotel owners can view stay bookings.");
+               ?? throw new ForbiddenException("Only hotel owners can view stay bookings.");
     }
 }

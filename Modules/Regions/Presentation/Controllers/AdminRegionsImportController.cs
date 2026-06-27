@@ -78,20 +78,14 @@ public class AdminRegionsImportController(
         CancellationToken ct)
     {
         if (file is null || file.Length == 0)
-            return BadRequest(new { message = "No file uploaded." });
+            throw new ValidationException("No file uploaded.");
 
         if (file.Length > RegionsUploadLimits.MaxGeoJsonUploadBytes)
-        {
-            return BadRequest(new
-            {
-                message = "GeoJSON file is too large.",
-                maxBytes = RegionsUploadLimits.MaxGeoJsonUploadBytes
-            });
-        }
+            throw new ValidationException($"GeoJSON file is too large. Maximum size is {RegionsUploadLimits.MaxGeoJsonUploadBytes} bytes.");
 
         var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
         if (ext != AllowedExtension)
-            return BadRequest(new { message = $"Only .geojson files are allowed. Got: '{ext}'" });
+            throw new ValidationException($"Only .geojson files are allowed. Got: '{ext}'");
 
         await using var stream = file.OpenReadStream();
         var result = await handler(stream, ct);
