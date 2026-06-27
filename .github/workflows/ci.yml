@@ -1,0 +1,109 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Build, test, and verify EF models
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgis/postgis:18-3.6
+        env:
+          POSTGRES_DB: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: integration_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      GLINTER_TEST_CONNECTION_STRING: Host=localhost;Port=5432;Database=postgres;Username=postgres;Password=integration_password
+      ConnectionStrings__DefaultConnection: Host=localhost;Port=5432;Database=postgres;Username=postgres;Password=integration_password
+      AdminSeed__Email: ci-admin@glinter.test
+      AdminSeed__Password: CIAdminPassword!2026
+      AdminSeed__FullName: CI Admin
+      Jwt__Issuer: Glinter.CI
+      Jwt__Audience: Glinter.CI
+      Jwt__SecretKey: ci-only-jwt-secret-key-with-at-least-32-bytes
+      Jwt__ExpiryMinutes: 60
+      Cors__AllowedOrigins__0: https://ci.example.test
+      RequestLimits__MaxBodyBytes: 52428800
+      RateLimiting__PermitLimit: 10000
+      RateLimiting__WindowMinutes: 1
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+          cache: true
+          cache-dependency-path: |
+            **/*.csproj
+            .config/dotnet-tools.json
+
+      - name: Restore .NET tools
+        run: dotnet tool restore
+
+      - name: Restore
+        run: dotnet restore Glinter.slnx
+
+      - name: Build
+        run: dotnet build Glinter.slnx --configuration Release --no-restore
+
+      - name: Run integration tests
+        run: >-
+          dotnet test tests/Glinter.IntegrationTests/Glinter.IntegrationTests.csproj
+          --configuration Release
+          --no-build
+          --logger "trx;LogFileName=integration-tests.trx"
+
+      - name: Verify EF model snapshots
+        shell: bash
+        run: |
+          set -euo pipefail
+          contexts=(
+            IdentityAccessDbContext
+            ProfilesDbContext
+            RegionsDbContext
+            StaysDbContext
+            ExperiencesDbContext
+            CommunicationDbContext
+          )
+
+          for context in "${contexts[@]}"; do
+            echo "Checking ${context}"
+            dotnet ef migrations has-pending-model-changes \
+              --no-build \
+              --configuration Release \
+              --context "${context}"
+          done
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-results
+          path: "**/TestResults/*.trx"
+          if-no-files-found: warn

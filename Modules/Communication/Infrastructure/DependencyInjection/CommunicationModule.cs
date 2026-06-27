@@ -30,18 +30,24 @@ public static class CommunicationModule
             options.UseNpgsql(connectionString);
         });
 
-        var directThreadPermitLimit = Math.Max(
-            1,
-            configuration.GetValue<int?>(
-                "Communication:RateLimiting:DirectThreadPermitLimit") ?? 10);
-        var messagePermitLimit = Math.Max(
-            1,
-            configuration.GetValue<int?>(
-                "Communication:RateLimiting:MessagePermitLimit") ?? 30);
-        var windowSeconds = Math.Max(
-            1,
-            configuration.GetValue<int?>(
-                "Communication:RateLimiting:WindowSeconds") ?? 60);
+        var directThreadPermitLimit = configuration.GetValue<int?>(
+            "Communication:RateLimiting:DirectThreadPermitLimit") ?? 10;
+        var messagePermitLimit = configuration.GetValue<int?>(
+            "Communication:RateLimiting:MessagePermitLimit") ?? 30;
+        var windowSeconds = configuration.GetValue<int?>(
+            "Communication:RateLimiting:WindowSeconds") ?? 60;
+
+        if (directThreadPermitLimit <= 0)
+            throw new InvalidOperationException(
+                "Communication:RateLimiting:DirectThreadPermitLimit must be greater than zero.");
+
+        if (messagePermitLimit <= 0)
+            throw new InvalidOperationException(
+                "Communication:RateLimiting:MessagePermitLimit must be greater than zero.");
+
+        if (windowSeconds <= 0)
+            throw new InvalidOperationException(
+                "Communication:RateLimiting:WindowSeconds must be greater than zero.");
 
         services.AddRateLimiter(options =>
         {

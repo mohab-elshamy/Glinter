@@ -30,12 +30,16 @@ var maxRequestBodyBytes = builder.Configuration.GetValue<long?>("RequestLimits:M
 if (maxRequestBodyBytes <= 0)
     throw new InvalidOperationException("RequestLimits:MaxBodyBytes must be greater than zero.");
 
-var rateLimitPermitLimit = Math.Max(
-    1,
-    builder.Configuration.GetValue<int?>("RateLimiting:PermitLimit") ?? 120);
-var rateLimitWindowMinutes = Math.Max(
-    1,
-    builder.Configuration.GetValue<int?>("RateLimiting:WindowMinutes") ?? 1);
+var rateLimitPermitLimit =
+    builder.Configuration.GetValue<int?>("RateLimiting:PermitLimit") ?? 120;
+var rateLimitWindowMinutes =
+    builder.Configuration.GetValue<int?>("RateLimiting:WindowMinutes") ?? 1;
+
+if (rateLimitPermitLimit <= 0)
+    throw new InvalidOperationException("RateLimiting:PermitLimit must be greater than zero.");
+
+if (rateLimitWindowMinutes <= 0)
+    throw new InvalidOperationException("RateLimiting:WindowMinutes must be greater than zero.");
 
 builder.WebHost.ConfigureKestrel(options =>
 {
@@ -117,6 +121,23 @@ var allowedOrigins = configuredAllowedOrigins is { Length: > 0 }
 
 if (allowedOrigins.Any(origin => origin == "*"))
     throw new InvalidOperationException("Cors:AllowedOrigins cannot contain a wildcard origin.");
+
+if (!builder.Environment.IsDevelopment() && allowedOrigins.Length == 0)
+    throw new InvalidOperationException(
+        "Cors:AllowedOrigins must contain at least one explicit origin outside Development.");
+
+foreach (var origin in allowedOrigins)
+{
+    if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri) ||
+        (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps) ||
+        uri.AbsolutePath != "/" ||
+        !string.IsNullOrEmpty(uri.Query) ||
+        !string.IsNullOrEmpty(uri.Fragment))
+    {
+        throw new InvalidOperationException(
+            $"Cors:AllowedOrigins contains an invalid origin: '{origin}'.");
+    }
+}
 
 builder.Services.AddCors(options =>
 {
