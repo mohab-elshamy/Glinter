@@ -46,6 +46,10 @@ public sealed class DashboardsMetricsAndCleanupTests : ApiTestBase
         using var ownerJson = await ReadJsonAsync(owner);
         Assert.Equal(0, ownerJson.RootElement.GetProperty("totalStays").GetInt32());
         Assert.Equal(0, ownerJson.RootElement.GetProperty("totalBookings").GetInt32());
+        Assert.Equal(
+            0,
+            ownerJson.RootElement.GetProperty("grossBookingValue").GetArrayLength());
+        Assert.False(ownerJson.RootElement.TryGetProperty("revenue", out _));
 
         var experienceProvider = await SendAsync(
             HttpMethod.Get,
@@ -56,6 +60,10 @@ public sealed class DashboardsMetricsAndCleanupTests : ApiTestBase
         Assert.Equal(
             0,
             providerJson.RootElement.GetProperty("totalExperiences").GetInt32());
+        Assert.Equal(
+            0,
+            providerJson.RootElement.GetProperty("grossBookingValue").GetArrayLength());
+        Assert.False(providerJson.RootElement.TryGetProperty("revenue", out _));
 
         var from = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1));
         var to = DateOnly.FromDateTime(DateTime.UtcNow);
@@ -68,6 +76,8 @@ public sealed class DashboardsMetricsAndCleanupTests : ApiTestBase
         Assert.Equal(2, analyticsJson.RootElement
             .GetProperty("dailyActivity").GetArrayLength());
         Assert.True(analyticsJson.RootElement.GetProperty("newUsers").GetInt32() >= 3);
+        Assert.True(analyticsJson.RootElement.TryGetProperty("grossBookingValue", out _));
+        Assert.False(analyticsJson.RootElement.TryGetProperty("revenue", out _));
     }
 
     [Fact]

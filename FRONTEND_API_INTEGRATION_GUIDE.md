@@ -978,14 +978,14 @@ implemented. In-app and category switches immediately control in-app creation.
 | Method and path | Auth | Behavior |
 |---|---|---|
 | `GET /api/dashboard/admin` | Admin | Platform totals, moderation queues, bookings, and communication activity |
-| `GET /api/dashboard/hotel-owner` | HotelOwner | Owned stays, booking status, upcoming arrivals, reviews, and revenue |
-| `GET /api/dashboard/experience-provider` | ExperienceProvider | Owned Experiences, approval status, capacity, bookings, reviews, and revenue |
-| `GET /api/admin/analytics` | Admin | Date-window daily business activity and currency-grouped revenue |
+| `GET /api/dashboard/hotel-owner` | HotelOwner | Owned stays, booking status, upcoming arrivals, reviews, and gross booking value |
+| `GET /api/dashboard/experience-provider` | ExperienceProvider | Owned Experiences, approval status, capacity, bookings, reviews, and gross booking value |
+| `GET /api/admin/analytics` | Admin | Date-window daily business activity and currency-grouped gross booking value |
 | `GET /metrics` | Admin | Prometheus operational metrics; not intended for frontend use |
 
 Analytics accepts optional `from` and `to` query dates in `YYYY-MM-DD` format.
 The default is the latest 30 UTC calendar days and the maximum range is 366
-days. Missing dates in the range are returned with zero counts. Revenue is
+days. Missing dates in the range are returned with zero counts. Gross booking value is
 always grouped by currency.
 
 Provider dashboard data is scoped from the authenticated user's provider

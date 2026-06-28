@@ -41,4 +41,25 @@ public class IdentityUserReadService : IIdentityUserReadService
                      x.SecurityStamp == securityStamp,
                 cancellationToken);
     }
+
+    public async Task<IReadOnlySet<Guid>> GetActiveUserIdsAsync(
+        IReadOnlyCollection<Guid> userIds,
+        CancellationToken cancellationToken = default)
+    {
+        var distinctUserIds = userIds
+            .Where(x => x != Guid.Empty)
+            .Distinct()
+            .ToArray();
+
+        if (distinctUserIds.Length == 0)
+            return new HashSet<Guid>();
+
+        var activeUserIds = await _dbContext.Users
+            .AsNoTracking()
+            .Where(x => x.IsActive && distinctUserIds.Contains(x.Id))
+            .Select(x => x.Id)
+            .ToListAsync(cancellationToken);
+
+        return activeUserIds.ToHashSet();
+    }
 }

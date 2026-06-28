@@ -1,6 +1,6 @@
 namespace Glinter.Shared.Application.Dashboards;
 
-public sealed class RevenueByCurrencyDto
+public sealed class GrossBookingValueByCurrencyDto
 {
     public string Currency { get; set; } = string.Empty;
     public decimal Amount { get; set; }
@@ -36,7 +36,7 @@ public sealed class HotelOwnerDashboardDto
     public int UpcomingCheckInsNext30Days { get; set; }
     public int ReviewCount { get; set; }
     public double AverageRating { get; set; }
-    public List<RevenueByCurrencyDto> Revenue { get; set; } = [];
+    public List<GrossBookingValueByCurrencyDto> GrossBookingValue { get; set; } = [];
     public DateTime GeneratedAtUtc { get; set; }
 }
 
@@ -56,6 +56,6 @@ public sealed class ExperienceProviderDashboardDto
     public int GuestsBooked { get; set; }
     public int ReviewCount { get; set; }
     public double AverageRating { get; set; }
-    public List<RevenueByCurrencyDto> Revenue { get; set; } = [];
+    public List<GrossBookingValueByCurrencyDto> GrossBookingValue { get; set; } = [];
     public DateTime GeneratedAtUtc { get; set; }
 }

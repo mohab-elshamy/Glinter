@@ -102,7 +102,7 @@ public sealed class DashboardService
         var reviews = _stays.StayReviews.Where(
             review => stays.Any(stay => stay.Id == review.StayId));
 
-        var revenue = await bookings
+        var grossBookingValue = await bookings
             .Where(x => x.Status != "Cancelled")
             .Join(
                 _stays.Stays,
@@ -110,7 +110,7 @@ public sealed class DashboardService
                 stay => stay.Id,
                 (booking, stay) => new { booking.TotalPrice, stay.Currency })
             .GroupBy(x => x.Currency)
-            .Select(x => new RevenueByCurrencyDto
+            .Select(x => new GrossBookingValueByCurrencyDto
             {
                 Currency = x.Key,
                 Amount = x.Sum(value => value.TotalPrice)
@@ -139,7 +139,7 @@ public sealed class DashboardService
             AverageRating = await reviews
                 .Select(x => (double?)x.Rating)
                 .AverageAsync(cancellationToken) ?? 0,
-            Revenue = revenue,
+            GrossBookingValue = grossBookingValue,
             GeneratedAtUtc = now
         };
     }
@@ -162,7 +162,7 @@ public sealed class DashboardService
         var reviews = _experiences.ExperienceReviews.Where(
             review => experiences.Any(experience => experience.Id == review.ExperienceId));
 
-        var revenue = await bookings
+        var grossBookingValue = await bookings
             .Where(x => x.Status != ExperienceBookingStatus.Cancelled)
             .Join(
                 _experiences.Experiences,
@@ -174,7 +174,7 @@ public sealed class DashboardService
                     experience.Currency
                 })
             .GroupBy(x => x.Currency)
-            .Select(x => new RevenueByCurrencyDto
+            .Select(x => new GrossBookingValueByCurrencyDto
             {
                 Currency = x.Key,
                 Amount = x.Sum(value => value.TotalPrice)
@@ -221,7 +221,7 @@ public sealed class DashboardService
             AverageRating = await reviews
                 .Select(x => (double?)x.Rating)
                 .AverageAsync(cancellationToken) ?? 0,
-            Revenue = revenue,
+            GrossBookingValue = grossBookingValue,
             GeneratedAtUtc = now
         };
     }

@@ -215,6 +215,60 @@ public sealed class CommunicationTests : ApiTestBase
         Assert.Equal(userA.UserId, realtimeMessage.SenderUserId);
         Assert.Equal("SignalR integration message", realtimeMessage.Body);
 
+        await Factory.ExecuteAsync(
+            $"""
+             UPDATE chat_participants
+             SET "LeftAtUtc" = NOW()
+             WHERE "ThreadId" = '{threadId}' AND "UserId" = '{userB.UserId}'
+             """);
+        var messageAfterLeaving = new TaskCompletionSource<ChatMessageEventDto>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        participantConnection.On<ChatMessageEventDto>(
+            "MessageReceived",
+            message => messageAfterLeaving.TrySetResult(message));
+
+        var messageAfterLeavingResponse = await SendAsync(
+            HttpMethod.Post,
+            $"/api/chat/threads/{threadId}/messages",
+            userA.Token,
+            new { body = "Message after participant left" });
+        messageAfterLeavingResponse.EnsureSuccessStatusCode();
+        await Assert.ThrowsAsync<TimeoutException>(
+            () => messageAfterLeaving.Task.WaitAsync(TimeSpan.FromSeconds(1)));
+
+        await Factory.ExecuteAsync(
+            $"""
+             UPDATE chat_participants
+             SET "LeftAtUtc" = NULL
+             WHERE "ThreadId" = '{threadId}' AND "UserId" = '{userB.UserId}'
+             """);
+
+        var adminToken = await GetAdminTokenAsync();
+        var deactivate = await SendAsync(
+            HttpMethod.Patch,
+            $"/api/admin/users/{userB.UserId}/status",
+            adminToken,
+            new { isActive = false });
+        deactivate.EnsureSuccessStatusCode();
+
+        var messageAfterDeactivation = new TaskCompletionSource<ChatMessageEventDto>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        participantConnection.On<ChatMessageEventDto>(
+            "MessageReceived",
+            message => messageAfterDeactivation.TrySetResult(message));
+
+        var secondMessageResponse = await SendAsync(
+            HttpMethod.Post,
+            $"/api/chat/threads/{threadId}/messages",
+            userA.Token,
+            new { body = "Message after participant deactivation" });
+        secondMessageResponse.EnsureSuccessStatusCode();
+
+        await Assert.ThrowsAsync<TimeoutException>(
+            () => messageAfterDeactivation.Task.WaitAsync(TimeSpan.FromSeconds(1)));
+        await Assert.ThrowsAnyAsync<Exception>(
+            () => participantConnection.InvokeAsync("JoinThread", threadId));
+
         await using var outsiderConnection = CreateHubConnection(userC.Token);
         await outsiderConnection.StartAsync();
         var exception = await Assert.ThrowsAsync<HubException>(

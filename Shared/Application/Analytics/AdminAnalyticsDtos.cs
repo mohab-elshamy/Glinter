@@ -19,7 +19,7 @@ public sealed class AdminAnalyticsDto
     public int NewExperiences { get; set; }
     public int StayBookings { get; set; }
     public int ExperienceBookings { get; set; }
-    public List<Glinter.Shared.Application.Dashboards.RevenueByCurrencyDto> Revenue { get; set; } =
-        [];
+    public List<Glinter.Shared.Application.Dashboards.GrossBookingValueByCurrencyDto>
+        GrossBookingValue { get; set; } = [];
     public List<DailyBusinessActivityDto> DailyActivity { get; set; } = [];
 }

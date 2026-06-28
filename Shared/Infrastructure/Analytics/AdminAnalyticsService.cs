@@ -69,7 +69,7 @@ public sealed class AdminAnalyticsService
             .Select(x => new DateCount(x.Key, x.Count()))
             .ToListAsync(cancellationToken);
 
-        var stayRevenue = await _stays.StayBookings
+        var stayGrossBookingValue = await _stays.StayBookings
             .Where(x => x.CreatedAtUtc >= fromUtc &&
                         x.CreatedAtUtc < toExclusiveUtc &&
                         x.Status != "Cancelled")
@@ -79,13 +79,13 @@ public sealed class AdminAnalyticsService
                 stay => stay.Id,
                 (booking, stay) => new { booking.TotalPrice, stay.Currency })
             .GroupBy(x => x.Currency)
-            .Select(x => new RevenueByCurrencyDto
+            .Select(x => new GrossBookingValueByCurrencyDto
             {
                 Currency = x.Key,
                 Amount = x.Sum(value => value.TotalPrice)
             })
             .ToListAsync(cancellationToken);
-        var experienceRevenue = await _experiences.ExperienceBookings
+        var experienceGrossBookingValue = await _experiences.ExperienceBookings
             .Where(x => x.CreatedAtUtc >= fromUtc &&
                         x.CreatedAtUtc < toExclusiveUtc &&
                         x.Status != ExperienceBookingStatus.Cancelled)
@@ -99,7 +99,7 @@ public sealed class AdminAnalyticsService
                     experience.Currency
                 })
             .GroupBy(x => x.Currency)
-            .Select(x => new RevenueByCurrencyDto
+            .Select(x => new GrossBookingValueByCurrencyDto
             {
                 Currency = x.Key,
                 Amount = x.Sum(value => value.TotalPrice)
@@ -129,10 +129,10 @@ public sealed class AdminAnalyticsService
             });
         }
 
-        var revenue = stayRevenue
-            .Concat(experienceRevenue)
+        var grossBookingValue = stayGrossBookingValue
+            .Concat(experienceGrossBookingValue)
             .GroupBy(x => x.Currency, StringComparer.OrdinalIgnoreCase)
-            .Select(x => new RevenueByCurrencyDto
+            .Select(x => new GrossBookingValueByCurrencyDto
             {
                 Currency = x.Key.ToUpperInvariant(),
                 Amount = x.Sum(value => value.Amount)
@@ -149,7 +149,7 @@ public sealed class AdminAnalyticsService
             NewExperiences = experiences.Sum(x => x.Count),
             StayBookings = stayBookings.Sum(x => x.Count),
             ExperienceBookings = experienceBookings.Sum(x => x.Count),
-            Revenue = revenue,
+            GrossBookingValue = grossBookingValue,
             DailyActivity = daily
         };
     }
