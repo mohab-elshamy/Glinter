@@ -1,6 +1,8 @@
 using Glinter.IntegrationTests.Infrastructure;
 using Glinter.Shared.Infrastructure.Cleanup;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using Npgsql;
 
 namespace Glinter.IntegrationTests;
 
@@ -105,6 +107,7 @@ public sealed class DashboardsMetricsAndCleanupTests : ApiTestBase
     {
         var user = await CreateUserAsync("Traveler", "cleanup");
         var expiredRevokedTokenId = Guid.NewGuid();
+        var secondExpiredRevokedTokenId = Guid.NewGuid();
         var recentRevokedTokenId = Guid.NewGuid();
         var oldReadNotificationId = Guid.NewGuid();
         var oldUnreadNotificationId = Guid.NewGuid();
@@ -116,6 +119,8 @@ public sealed class DashboardsMetricsAndCleanupTests : ApiTestBase
                  ("Id", "Jti", "UserId", "RevokedAtUtc", "ExpiresAtUtc", "Reason")
              VALUES
                  ('{expiredRevokedTokenId}', '{Guid.NewGuid():N}', '{user.UserId}',
+                  NOW() - INTERVAL '40 days', NOW() - INTERVAL '30 days', 'test'),
+                 ('{secondExpiredRevokedTokenId}', '{Guid.NewGuid():N}', '{user.UserId}',
                   NOW() - INTERVAL '40 days', NOW() - INTERVAL '30 days', 'test'),
                  ('{recentRevokedTokenId}', '{Guid.NewGuid():N}', '{user.UserId}',
                   NOW(), NOW() + INTERVAL '1 day', 'test');
@@ -134,19 +139,64 @@ public sealed class DashboardsMetricsAndCleanupTests : ApiTestBase
 
         using var scope = Factory.Services.CreateScope();
         var cleanup = scope.ServiceProvider.GetRequiredService<DataCleanupService>();
-        var result = await cleanup.RunOnceAsync();
-        Assert.True(result.RevokedTokens >= 1);
-        Assert.True(result.ReadNotifications >= 1);
-        Assert.True(result.UnreadNotifications >= 1);
+        var options = scope.ServiceProvider
+            .GetRequiredService<IOptions<DataCleanupOptions>>()
+            .Value;
+        var originalBatchSize = options.BatchSize;
+        var originalMaxBatches = options.MaxBatchesPerRun;
 
-        var expiredCount = await Factory.ScalarAsync<long>(
-            $"""SELECT count(*) FROM revoked_tokens WHERE "Id" = '{expiredRevokedTokenId}'""");
-        var recentTokenCount = await Factory.ScalarAsync<long>(
-            $"""SELECT count(*) FROM revoked_tokens WHERE "Id" = '{recentRevokedTokenId}'""");
-        var recentNotificationCount = await Factory.ScalarAsync<long>(
-            $"""SELECT count(*) FROM notifications WHERE "Id" = '{recentNotificationId}'""");
-        Assert.Equal(0, expiredCount);
-        Assert.Equal(1, recentTokenCount);
-        Assert.Equal(1, recentNotificationCount);
+        try
+        {
+            await using (var lockConnection = new NpgsqlConnection(Factory.ConnectionString))
+            {
+                await lockConnection.OpenAsync();
+                await using var acquireLock = new NpgsqlCommand(
+                    """
+                    SELECT pg_advisory_lock(
+                        hashtextextended('glinter:data-cleanup', 0))
+                    """,
+                    lockConnection);
+                await acquireLock.ExecuteScalarAsync();
+
+                var skipped = await cleanup.RunOnceAsync();
+                Assert.True(skipped.SkippedDueToLock);
+            }
+
+            options.BatchSize = 1;
+            options.MaxBatchesPerRun = 1;
+            var firstResult = await cleanup.RunOnceAsync();
+            Assert.False(firstResult.SkippedDueToLock);
+            Assert.Equal(1, firstResult.RevokedTokens);
+            Assert.True(firstResult.ReadNotifications >= 1);
+            Assert.True(firstResult.UnreadNotifications >= 1);
+
+            var expiredAfterFirstBatch = await Factory.ScalarAsync<long>(
+                $"""
+                 SELECT count(*) FROM revoked_tokens
+                 WHERE "Id" IN ('{expiredRevokedTokenId}', '{secondExpiredRevokedTokenId}')
+                 """);
+            Assert.Equal(1, expiredAfterFirstBatch);
+
+            var secondResult = await cleanup.RunOnceAsync();
+            Assert.Equal(1, secondResult.RevokedTokens);
+
+            var expiredCount = await Factory.ScalarAsync<long>(
+                $"""
+                 SELECT count(*) FROM revoked_tokens
+                 WHERE "Id" IN ('{expiredRevokedTokenId}', '{secondExpiredRevokedTokenId}')
+                 """);
+            var recentTokenCount = await Factory.ScalarAsync<long>(
+                $"""SELECT count(*) FROM revoked_tokens WHERE "Id" = '{recentRevokedTokenId}'""");
+            var recentNotificationCount = await Factory.ScalarAsync<long>(
+                $"""SELECT count(*) FROM notifications WHERE "Id" = '{recentNotificationId}'""");
+            Assert.Equal(0, expiredCount);
+            Assert.Equal(1, recentTokenCount);
+            Assert.Equal(1, recentNotificationCount);
+        }
+        finally
+        {
+            options.BatchSize = originalBatchSize;
+            options.MaxBatchesPerRun = originalMaxBatches;
+        }
     }
 }

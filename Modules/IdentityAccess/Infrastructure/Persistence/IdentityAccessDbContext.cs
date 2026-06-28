@@ -28,6 +28,8 @@ public class IdentityAccessDbContext
             entity.ToTable("users");
             entity.Property(x => x.FullName).HasMaxLength(200);
             entity.Property(x => x.IsActive).HasDefaultValue(true);
+            entity.HasIndex(x => x.CreatedAtUtc);
+            entity.HasIndex(x => x.IsActive);
         });
 
         builder.Entity<ApplicationRole>(entity =>
@@ -52,6 +54,7 @@ public class IdentityAccessDbContext
 
             entity.HasIndex(x => x.Jti)
                 .IsUnique();
+            entity.HasIndex(x => x.ExpiresAtUtc);
 
             entity.Property(x => x.RevokedAtUtc)
                 .IsRequired();
@@ -72,6 +75,8 @@ public class IdentityAccessDbContext
             entity.Property(x => x.ReplacedByTokenHash).HasMaxLength(64);
             entity.HasIndex(x => x.TokenHash).IsUnique();
             entity.HasIndex(x => new { x.UserId, x.FamilyId });
+            entity.HasIndex(x => x.ExpiresAtUtc);
+            entity.HasIndex(x => x.RevokedAtUtc);
             entity.HasOne(x => x.User)
                 .WithMany()
                 .HasForeignKey(x => x.UserId)
@@ -86,6 +91,8 @@ public class IdentityAccessDbContext
             entity.Property(x => x.TokenHash).HasMaxLength(64).IsRequired();
             entity.HasIndex(x => x.TokenHash).IsUnique();
             entity.HasIndex(x => new { x.UserId, x.ExpiresAtUtc });
+            entity.HasIndex(x => x.ExpiresAtUtc);
+            entity.HasIndex(x => x.ConsumedAtUtc);
             entity.HasOne(x => x.User)
                 .WithMany()
                 .HasForeignKey(x => x.UserId)

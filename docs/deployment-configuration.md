@@ -30,6 +30,8 @@ shape. Prefer environment variables in deployed environments:
 | Chat rate window | `Communication__RateLimiting__WindowSeconds` | Positive seconds |
 | Cleanup enabled | `Cleanup__Enabled` | Run periodic cleanup in this process |
 | Cleanup interval | `Cleanup__IntervalMinutes` | Positive minutes |
+| Cleanup batch size | `Cleanup__BatchSize` | Rows deleted per transaction; 1-10000 |
+| Cleanup batches per run | `Cleanup__MaxBatchesPerRun` | Maximum batches per table; 1-1000 |
 | Revoked-token retention | `Cleanup__RevokedTokenRetentionDays` | Days after token expiry |
 | Refresh-token retention | `Cleanup__RefreshTokenRetentionDays` | Days after expiry/revocation |
 | MFA challenge retention | `Cleanup__MfaChallengeRetentionDays` | Days after expiry/consumption |

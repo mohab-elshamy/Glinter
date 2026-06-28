@@ -139,6 +139,8 @@ var cleanupOptions = builder.Configuration
     .GetSection(DataCleanupOptions.SectionName)
     .Get<DataCleanupOptions>() ?? new DataCleanupOptions();
 if (cleanupOptions.IntervalMinutes <= 0 ||
+    cleanupOptions.BatchSize is < 1 or > 10000 ||
+    cleanupOptions.MaxBatchesPerRun is < 1 or > 1000 ||
     cleanupOptions.RevokedTokenRetentionDays < 0 ||
     cleanupOptions.RefreshTokenRetentionDays < 0 ||
     cleanupOptions.MfaChallengeRetentionDays < 0 ||
@@ -147,7 +149,7 @@ if (cleanupOptions.IntervalMinutes <= 0 ||
     cleanupOptions.ReadNotificationRetentionDays)
 {
     throw new InvalidOperationException(
-        "Cleanup configuration is invalid; interval must be positive and unread notification retention must be at least the read retention.");
+        "Cleanup configuration is invalid; interval and batch limits must be positive, batch size cannot exceed 10000, and unread notification retention must be at least the read retention.");
 }
 builder.Services.Configure<DataCleanupOptions>(
     builder.Configuration.GetSection(DataCleanupOptions.SectionName));

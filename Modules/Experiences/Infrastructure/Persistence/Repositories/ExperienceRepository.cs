@@ -124,12 +124,12 @@ public class ExperienceRepository : IExperienceRepository
 
         if (!string.IsNullOrWhiteSpace(search))
         {
-            var normalizedSearch = search.Trim().ToLower();
+            var searchPattern = CreateContainsPattern(search);
             query = query.Where(x =>
-                x.Title.ToLower().Contains(normalizedSearch) ||
-                x.Description.ToLower().Contains(normalizedSearch) ||
-                x.LocationName.ToLower().Contains(normalizedSearch) ||
-                x.Tags.Any(t => t.Name.ToLower().Contains(normalizedSearch)));
+                EF.Functions.ILike(x.Title, searchPattern, @"\") ||
+                EF.Functions.ILike(x.Description, searchPattern, @"\") ||
+                EF.Functions.ILike(x.LocationName, searchPattern, @"\") ||
+                x.Tags.Any(t => EF.Functions.ILike(t.Name, searchPattern, @"\")));
         }
 
         if (!string.IsNullOrWhiteSpace(currency))
@@ -362,5 +362,14 @@ public class ExperienceRepository : IExperienceRepository
                  hashtextextended({providerProfileId.ToString()}, 0::bigint))
              """,
             cancellationToken);
+    }
+
+    private static string CreateContainsPattern(string value)
+    {
+        var escaped = value.Trim()
+            .Replace(@"\", @"\\")
+            .Replace("%", @"\%")
+            .Replace("_", @"\_");
+        return $"%{escaped}%";
     }
 }

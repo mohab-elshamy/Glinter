@@ -39,6 +39,13 @@ public sealed class DataCleanupWorker : BackgroundService
             using var scope = _scopeFactory.CreateScope();
             var cleanup = scope.ServiceProvider.GetRequiredService<DataCleanupService>();
             var result = await cleanup.RunOnceAsync(cancellationToken);
+            if (result.SkippedDueToLock)
+            {
+                _logger.LogInformation(
+                    "Cleanup skipped because another instance holds the advisory lock.");
+                return;
+            }
+
             _metrics.CleanupCompleted(result.TotalDeleted);
             _logger.LogInformation(
                 "Cleanup completed; deleted {TotalDeleted} rows ({RevokedTokens} revoked tokens, {RefreshTokens} refresh tokens, {MfaChallenges} MFA challenges, {ReadNotifications} read notifications, {UnreadNotifications} unread notifications).",

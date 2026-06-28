@@ -172,12 +172,12 @@ public class StayRepository : IStayRepository
 
         if (!string.IsNullOrWhiteSpace(search))
         {
-            var normalizedSearch = search.Trim().ToLower();
+            var searchPattern = CreateContainsPattern(search);
             query = query.Where(x =>
-                x.Name.ToLower().Contains(normalizedSearch) ||
-                x.Description.ToLower().Contains(normalizedSearch) ||
-                x.Address.ToLower().Contains(normalizedSearch) ||
-                x.Tags.Any(t => t.Name.ToLower().Contains(normalizedSearch)));
+                EF.Functions.ILike(x.Name, searchPattern, @"\") ||
+                EF.Functions.ILike(x.Description, searchPattern, @"\") ||
+                EF.Functions.ILike(x.Address, searchPattern, @"\") ||
+                x.Tags.Any(t => EF.Functions.ILike(t.Name, searchPattern, @"\")));
         }
 
         if (!string.IsNullOrWhiteSpace(currency))
@@ -219,5 +219,14 @@ public class StayRepository : IStayRepository
         var normalizedPageSize = pageSize <= 0 ? 20 : Math.Min(pageSize, 100);
 
         return (normalizedPage, normalizedPageSize);
+    }
+
+    private static string CreateContainsPattern(string value)
+    {
+        var escaped = value.Trim()
+            .Replace(@"\", @"\\")
+            .Replace("%", @"\%")
+            .Replace("_", @"\_");
+        return $"%{escaped}%";
     }
 }

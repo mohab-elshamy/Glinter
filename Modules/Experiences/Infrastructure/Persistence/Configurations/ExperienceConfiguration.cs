@@ -18,6 +18,25 @@ public class ExperienceConfiguration : IEntityTypeConfiguration<Experience>
         builder.HasIndex(x => x.IsActive);
         builder.HasIndex(x => new
         {
+            x.IsActive,
+            x.ApprovalStatus,
+            x.CreatedAtUtc
+        });
+        builder.HasIndex(x => new
+        {
+            x.Adm3Gid,
+            x.IsActive,
+            x.ApprovalStatus
+        });
+        builder.HasIndex(x => new
+        {
+            x.CategoryId,
+            x.IsActive,
+            x.ApprovalStatus
+        });
+        builder.HasIndex(x => new { x.ProviderProfileId, x.CreatedAtUtc });
+        builder.HasIndex(x => new
+        {
             x.ProviderProfileId,
             x.Adm3Gid,
             x.Title

@@ -3,17 +3,20 @@ using System;
 using Glinter.Modules.Stays.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace Glinter.Shared.Infrastructure.Persistence.Migrations
+namespace Glinter.Modules.Stays.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(StaysDbContext))]
-    partial class GlinterDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260628154116_AddSearchAndReportingIndexes")]
+    partial class AddSearchAndReportingIndexes
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

@@ -105,6 +105,13 @@ public sealed class StaysAndExperiencesTests : ApiTestBase
             searchJson.RootElement.EnumerateArray(),
             item => item.GetProperty("id").GetGuid() == stayId);
 
+        var literalWildcardSearch = await Client.GetAsync("/api/stays?search=%25");
+        literalWildcardSearch.EnsureSuccessStatusCode();
+        using var literalWildcardJson = await ReadJsonAsync(literalWildcardSearch);
+        Assert.DoesNotContain(
+            literalWildcardJson.RootElement.EnumerateArray(),
+            item => item.GetProperty("id").GetGuid() == stayId);
+
         var unavailableSearch = await Client.GetAsync(
             $"/api/stays?checkInDate={checkIn:yyyy-MM-dd}&checkOutDate={checkOut:yyyy-MM-dd}");
         unavailableSearch.EnsureSuccessStatusCode();
@@ -253,6 +260,15 @@ public sealed class StaysAndExperiencesTests : ApiTestBase
         using var experienceSearchJson = await ReadJsonAsync(experienceSearch);
         Assert.Contains(
             experienceSearchJson.RootElement.EnumerateArray(),
+            item => item.GetProperty("id").GetGuid() == experienceId);
+
+        var literalExperienceWildcardSearch =
+            await Client.GetAsync("/api/experiences?search=%25");
+        literalExperienceWildcardSearch.EnsureSuccessStatusCode();
+        using var literalExperienceWildcardJson =
+            await ReadJsonAsync(literalExperienceWildcardSearch);
+        Assert.DoesNotContain(
+            literalExperienceWildcardJson.RootElement.EnumerateArray(),
             item => item.GetProperty("id").GetGuid() == experienceId);
 
         var unspecifiedAvailabilitySearch = await Client.GetAsync(
