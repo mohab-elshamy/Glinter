@@ -369,12 +369,12 @@ For create/update location selection, send an ADM3 neighbourhood `gid` as `adm3G
 | `GET /api/Stays/{id}` | Public | Path: `id: UUID` | `200 StayResponseDto` |
 | `GET /api/Stays/by-neighbourhood/{adm3Gid}` | Public | Path: `adm3Gid: integer` | `200 StaySummaryDto[]` |
 | `POST /api/Stays` | Bearer; handler requires HotelOwner profile | `CreateStayRequestDto` body | `201 StayResponseDto` |
-| `PUT /api/Stays/{id}` | Public ⚠ | Path: `id`; `UpdateStayRequestDto` body | `200 StayResponseDto` |
-| `PATCH /api/Stays/{id}/activate` | Public ⚠ | Path: `id` | `200 StayResponseDto` |
-| `PATCH /api/Stays/{id}/deactivate` | Public ⚠ | Path: `id` | `200 StayResponseDto` |
+| `PUT /api/Stays/{id}` | HotelOwner; owning profile | Path: `id`; `UpdateStayRequestDto` body | `200 StayResponseDto` |
+| `PATCH /api/Stays/{id}/activate` | HotelOwner; owning profile | Path: `id` | `200 StayResponseDto` |
+| `PATCH /api/Stays/{id}/deactivate` | HotelOwner; owning profile | Path: `id` | `200 StayResponseDto` |
 | `POST /api/stays/{stayId}/bookings` | Bearer; handler requires Traveler profile | Path: `stayId`; `CreateStayBookingRequestDto` body | `200 StayBookingResponseDto` |
-| `GET /api/stays/{stayId}/bookings` | Public ⚠ | Path: `stayId` | `200 StayBookingResponseDto[]` |
-| `PATCH /api/stay-bookings/{bookingId}/cancel` | Public ⚠ | Path: `bookingId` | `200 StayBookingResponseDto` |
+| `GET /api/stays/{stayId}/bookings` | HotelOwner; owning profile | Path: `stayId` | `200 StayBookingResponseDto[]` |
+| `PATCH /api/stay-bookings/{bookingId}/cancel` | Traveler; owning booking | Path: `bookingId` | `200 StayBookingResponseDto` |
 | `POST /api/stays/{stayId}/reviews` | Bearer; handler requires Traveler profile | Path: `stayId`; `CreateStayReviewRequestDto` body | `200 StayReviewResponseDto` |
 | `GET /api/stays/{stayId}/reviews` | Public | Path: `stayId` | `200 StayReviewResponseDto[]` |
 | `PUT /api/stay-reviews/{reviewId}` | Bearer; owning Traveler | Path: `reviewId`; `UpdateStayReviewRequestDto` body | `200 StayReviewResponseDto` |
@@ -700,7 +700,7 @@ interface ExperienceReviewResponseDto {
 
 ## 8. Regions module
 
-All regular region read and CRUD endpoints are public in the current implementation. The write endpoints should be admin-protected before production.
+Region reads are public. All create, update, delete, and GeoJSON import endpoints require an Admin token.
 
 ### Frontend location-selection flow
 
@@ -729,9 +729,9 @@ Single-item GET endpoints accept optional `geometryAccuracy=0..100`.
 | `GET /api/regions/by-point` | Public | Query: `lat` (-90..90), `lon` (-180..180); always send both | `200 RegionHierarchyGidsDto` |
 | `GET /api/regions/countries` | Public | Shared list query | `200 Adm0Dto[]` |
 | `GET /api/regions/countries/{gid}` | Public | Path: integer `gid`; query `geometryAccuracy?` | `200 Adm0Dto` |
-| `POST /api/regions/countries` | Public ⚠ | `CreateAdm0Request` body | `201 Adm0Dto` |
-| `PUT /api/regions/countries/{gid}` | Public ⚠ | Path: `gid`; `UpdateAdm0Request` body | `200 Adm0Dto` |
-| `DELETE /api/regions/countries/{gid}` | Public ⚠ | Path: `gid` | `204 No Content` |
+| `POST /api/regions/countries` | Admin | `CreateAdm0Request` body | `201 Adm0Dto` |
+| `PUT /api/regions/countries/{gid}` | Admin | Path: `gid`; `UpdateAdm0Request` body | `200 Adm0Dto` |
+| `DELETE /api/regions/countries/{gid}` | Admin | Path: `gid` | `204 No Content` |
 
 ### Governorate endpoints
 
@@ -740,9 +740,9 @@ Single-item GET endpoints accept optional `geometryAccuracy=0..100`.
 | `GET /api/regions/governorates` | Public | Shared list query | `200 Adm1Dto[]` |
 | `GET /api/regions/governorates/{gid}` | Public | Path: `gid`; `geometryAccuracy?` | `200 Adm1Dto` |
 | `GET /api/regions/countries/{adm0Gid}/governorates` | Public | Path: `adm0Gid`; shared list query | `200 Adm1Dto[]` |
-| `POST /api/regions/governorates` | Public ⚠ | `CreateAdm1Request` body | `201 Adm1Dto` |
-| `PUT /api/regions/governorates/{gid}` | Public ⚠ | Path: `gid`; `UpdateAdm1Request` body | `200 Adm1Dto` |
-| `DELETE /api/regions/governorates/{gid}` | Public ⚠ | Path: `gid` | `204 No Content` |
+| `POST /api/regions/governorates` | Admin | `CreateAdm1Request` body | `201 Adm1Dto` |
+| `PUT /api/regions/governorates/{gid}` | Admin | Path: `gid`; `UpdateAdm1Request` body | `200 Adm1Dto` |
+| `DELETE /api/regions/governorates/{gid}` | Admin | Path: `gid` | `204 No Content` |
 
 ### District endpoints
 
@@ -751,9 +751,9 @@ Single-item GET endpoints accept optional `geometryAccuracy=0..100`.
 | `GET /api/regions/districts` | Public | Shared list query | `200 Adm2Dto[]` |
 | `GET /api/regions/districts/{gid}` | Public | Path: `gid`; `geometryAccuracy?` | `200 Adm2Dto` |
 | `GET /api/regions/governorates/{adm1Gid}/districts` | Public | Path: `adm1Gid`; shared list query | `200 Adm2Dto[]` |
-| `POST /api/regions/districts` | Public ⚠ | `CreateAdm2Request` body | `201 Adm2Dto` |
-| `PUT /api/regions/districts/{gid}` | Public ⚠ | Path: `gid`; `UpdateAdm2Request` body | `200 Adm2Dto` |
-| `DELETE /api/regions/districts/{gid}` | Public ⚠ | Path: `gid` | `204 No Content` |
+| `POST /api/regions/districts` | Admin | `CreateAdm2Request` body | `201 Adm2Dto` |
+| `PUT /api/regions/districts/{gid}` | Admin | Path: `gid`; `UpdateAdm2Request` body | `200 Adm2Dto` |
+| `DELETE /api/regions/districts/{gid}` | Admin | Path: `gid` | `204 No Content` |
 
 ### Neighbourhood endpoints
 
@@ -762,9 +762,9 @@ Single-item GET endpoints accept optional `geometryAccuracy=0..100`.
 | `GET /api/regions/neighbourhoods` | Public | Shared list query | `200 Adm3Dto[]` |
 | `GET /api/regions/neighbourhoods/{gid}` | Public | Path: `gid`; `geometryAccuracy?` | `200 Adm3Dto` |
 | `GET /api/regions/districts/{adm2Gid}/neighbourhoods` | Public | Path: `adm2Gid`; shared list query | `200 Adm3Dto[]` |
-| `POST /api/regions/neighbourhoods` | Public ⚠ | `CreateAdm3Request` body | `201 Adm3Dto` |
-| `PUT /api/regions/neighbourhoods/{gid}` | Public ⚠ | Path: `gid`; `UpdateAdm3Request` body | `200 Adm3Dto` |
-| `DELETE /api/regions/neighbourhoods/{gid}` | Public ⚠ | Path: `gid` | `204 No Content` |
+| `POST /api/regions/neighbourhoods` | Admin | `CreateAdm3Request` body | `201 Adm3Dto` |
+| `PUT /api/regions/neighbourhoods/{gid}` | Admin | Path: `gid`; `UpdateAdm3Request` body | `200 Adm3Dto` |
+| `DELETE /api/regions/neighbourhoods/{gid}` | Admin | Path: `gid` | `204 No Content` |
 
 ### Admin GeoJSON imports
 
@@ -981,6 +981,7 @@ implemented. In-app and category switches immediately control in-app creation.
 | `GET /api/dashboard/hotel-owner` | HotelOwner | Owned stays, booking status, upcoming arrivals, reviews, and gross booking value |
 | `GET /api/dashboard/experience-provider` | ExperienceProvider | Owned Experiences, approval status, capacity, bookings, reviews, and gross booking value |
 | `GET /api/admin/analytics` | Admin | Date-window daily business activity and currency-grouped gross booking value |
+| `GET /api/admin/audit-events` | Admin | Paginated administrative mutation history; filters: `actorUserId?`, `action?`, `fromUtc?`, `toUtc?`, `page`, `pageSize` |
 | `GET /metrics` | Admin | Prometheus operational metrics; not intended for frontend use |
 
 Analytics accepts optional `from` and `to` query dates in `YYYY-MM-DD` format.

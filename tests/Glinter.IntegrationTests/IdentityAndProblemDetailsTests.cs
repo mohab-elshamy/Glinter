@@ -65,6 +65,59 @@ public sealed class IdentityAndProblemDetailsTests : ApiTestBase
     }
 
     [Fact]
+    public async Task Administrative_identity_changes_are_audited_and_admin_only()
+    {
+        var target = await CreateUserAsync("Traveler", "audit-target");
+        var otherTraveler = await CreateUserAsync("Traveler", "audit-reader");
+        var adminToken = await GetAdminTokenAsync();
+
+        var assignRole = await SendAsync(
+            HttpMethod.Post,
+            $"/api/admin/users/{target.UserId}/roles",
+            adminToken,
+            new { role = "LocalBuddy" });
+        assignRole.EnsureSuccessStatusCode();
+
+        var deactivate = await SendAsync(
+            HttpMethod.Patch,
+            $"/api/admin/users/{target.UserId}/status",
+            adminToken,
+            new { isActive = false });
+        deactivate.EnsureSuccessStatusCode();
+
+        var forbidden = await SendAsync(
+            HttpMethod.Get,
+            "/api/admin/audit-events",
+            otherTraveler.Token);
+        await AssertProblemAsync(forbidden, 403, "forbidden");
+
+        var audit = await SendAsync(
+            HttpMethod.Get,
+            "/api/admin/audit-events?page=1&pageSize=100",
+            adminToken);
+        audit.EnsureSuccessStatusCode();
+        using var auditJson = await ReadJsonAsync(audit);
+        var items = auditJson.RootElement.GetProperty("items").EnumerateArray().ToList();
+
+        Assert.Contains(
+            items,
+            item =>
+                item.GetProperty("action").GetString() == "AdminUsers.AssignRole" &&
+                item.GetProperty("target").GetString()!.Contains(
+                    target.UserId.ToString(),
+                    StringComparison.OrdinalIgnoreCase) &&
+                item.GetProperty("succeeded").GetBoolean());
+        Assert.Contains(
+            items,
+            item =>
+                item.GetProperty("action").GetString() == "AdminUsers.ChangeUserStatus" &&
+                item.GetProperty("target").GetString()!.Contains(
+                    target.UserId.ToString(),
+                    StringComparison.OrdinalIgnoreCase) &&
+                item.GetProperty("statusCode").GetInt32() == 200);
+    }
+
+    [Fact]
     public async Task Email_confirmation_and_password_reset_invalidate_existing_sessions()
     {
         var email = $"recovery.{Guid.NewGuid():N}@glinter.test";

@@ -27,6 +27,7 @@ using Glinter.Shared.Infrastructure.Logging;
 using Microsoft.Extensions.Logging;
 using Glinter.Shared.Infrastructure.Dashboards;
 using Glinter.Shared.Infrastructure.Analytics;
+using Glinter.Shared.Infrastructure.Auditing;
 using Glinter.Shared.Infrastructure.Metrics;
 using Glinter.Shared.Infrastructure.Cleanup;
 
@@ -133,6 +134,7 @@ builder.Services.AddHealthChecks()
     .AddCheck<PostgresReadinessHealthCheck>("postgres", tags: ["ready"]);
 builder.Services.AddScoped<DashboardService>();
 builder.Services.AddScoped<AdminAnalyticsService>();
+builder.Services.AddScoped<AdminAuditService>();
 builder.Services.AddSingleton<ApplicationMetrics>();
 
 var cleanupOptions = builder.Configuration
@@ -348,6 +350,7 @@ app.UseCors(CorsPolicyName);
 app.UseAuthentication();
 app.UseRateLimiter();
 app.UseAuthorization();
+app.UseMiddleware<AdminAuditMiddleware>();
 
 if (app.Environment.IsDevelopment())
 {
