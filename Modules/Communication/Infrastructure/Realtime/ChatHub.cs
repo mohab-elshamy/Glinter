@@ -1,6 +1,8 @@
 using System.Security.Claims;
+using System.IdentityModel.Tokens.Jwt;
 using Glinter.Modules.Communication.Application.Abstractions;
 using Glinter.Modules.IdentityAccess.Application.Abstractions;
+using Glinter.Modules.IdentityAccess.Domain.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 
@@ -11,15 +13,18 @@ public sealed class ChatHub : Hub
 {
     private readonly IChatThreadRepository _threadRepository;
     private readonly IIdentityUserReadService _userReadService;
+    private readonly ITokenRevocationService _tokenRevocationService;
     private readonly ChatConnectionRegistry _connectionRegistry;
 
     public ChatHub(
         IChatThreadRepository threadRepository,
         IIdentityUserReadService userReadService,
+        ITokenRevocationService tokenRevocationService,
         ChatConnectionRegistry connectionRegistry)
     {
         _threadRepository = threadRepository;
         _userReadService = userReadService;
+        _tokenRevocationService = tokenRevocationService;
         _connectionRegistry = connectionRegistry;
     }
 
@@ -28,12 +33,21 @@ public sealed class ChatHub : Hub
         if (threadId == Guid.Empty)
             throw new HubException("A valid thread id is required.");
 
-        var userId = GetUserId();
-        if (!await _userReadService.IsActiveUserAsync(
-                userId,
+        var registration = GetRegistration();
+        if (registration.ExpiresAtUtc <= DateTime.UtcNow ||
+            !await _userReadService.IsActiveUserWithSecurityStampAsync(
+                registration.UserId,
+                registration.SecurityStamp,
                 Context.ConnectionAborted))
         {
-            throw new HubException("Your account is inactive.");
+            throw new HubException("Your authentication session is no longer valid.");
+        }
+
+        if (await _tokenRevocationService.IsRevokedAsync(
+                registration.Jti,
+                Context.ConnectionAborted))
+        {
+            throw new HubException("Your authentication session is no longer valid.");
         }
 
         var thread = await _threadRepository.GetByIdWithParticipantsAsync(
@@ -43,10 +57,13 @@ public sealed class ChatHub : Hub
         if (thread is null)
             throw new HubException("Chat thread was not found.");
 
-        if (!thread.Participants.Any(x => x.UserId == userId && x.LeftAtUtc == null))
+        if (!thread.Participants.Any(
+                x => x.UserId == registration.UserId && x.LeftAtUtc == null))
+        {
             throw new HubException("You are not a participant in this chat thread.");
+        }
 
-        _connectionRegistry.Join(threadId, Context.ConnectionId, userId);
+        _connectionRegistry.Join(threadId, registration);
     }
 
     public Task LeaveThread(Guid threadId)
@@ -61,11 +78,27 @@ public sealed class ChatHub : Hub
         return base.OnDisconnectedAsync(exception);
     }
 
-    private Guid GetUserId()
+    private ChatConnectionRegistration GetRegistration()
     {
-        var value = Context.User?.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (!Guid.TryParse(value, out var userId))
+        var principal = Context.User;
+        var userIdValue = principal?.FindFirstValue(ClaimTypes.NameIdentifier);
+        var jti = principal?.FindFirstValue(JwtRegisteredClaimNames.Jti);
+        var securityStamp = principal?.FindFirstValue(ClaimNames.SecurityStamp);
+        var expirationValue = principal?.FindFirstValue(JwtRegisteredClaimNames.Exp);
+
+        if (!Guid.TryParse(userIdValue, out var userId) ||
+            string.IsNullOrWhiteSpace(jti) ||
+            string.IsNullOrWhiteSpace(securityStamp) ||
+            !long.TryParse(expirationValue, out var expirationSeconds))
+        {
             throw new HubException("Authentication is required.");
-        return userId;
+        }
+
+        return new ChatConnectionRegistration(
+            Context.ConnectionId,
+            userId,
+            jti,
+            securityStamp,
+            DateTimeOffset.FromUnixTimeSeconds(expirationSeconds).UtcDateTime);
     }
 }

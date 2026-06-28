@@ -6,14 +6,15 @@ public sealed class ChatConnectionRegistry
 {
     private readonly ConcurrentDictionary<
         Guid,
-        ConcurrentDictionary<string, Guid>> _connectionsByThread = new();
+        ConcurrentDictionary<string, ChatConnectionRegistration>> _connectionsByThread =
+        new();
 
-    public void Join(Guid threadId, string connectionId, Guid userId)
+    public void Join(Guid threadId, ChatConnectionRegistration registration)
     {
         var connections = _connectionsByThread.GetOrAdd(
             threadId,
-            _ => new ConcurrentDictionary<string, Guid>());
-        connections[connectionId] = userId;
+            _ => new ConcurrentDictionary<string, ChatConnectionRegistration>());
+        connections[registration.ConnectionId] = registration;
     }
 
     public void Leave(Guid threadId, string connectionId)
@@ -24,7 +25,9 @@ public sealed class ChatConnectionRegistry
         connections.TryRemove(connectionId, out _);
         if (connections.IsEmpty)
             _connectionsByThread.TryRemove(
-                new KeyValuePair<Guid, ConcurrentDictionary<string, Guid>>(
+                new KeyValuePair<
+                    Guid,
+                    ConcurrentDictionary<string, ChatConnectionRegistration>>(
                     threadId,
                     connections));
     }
@@ -35,16 +38,23 @@ public sealed class ChatConnectionRegistry
             Leave(threadId, connectionId);
     }
 
-    public IReadOnlyList<string> GetConnections(
+    public IReadOnlyList<ChatConnectionRegistration> GetRegistrations(
         Guid threadId,
-        IReadOnlySet<Guid> allowedUserIds)
+        IReadOnlySet<Guid> participantUserIds)
     {
         if (!_connectionsByThread.TryGetValue(threadId, out var connections))
             return [];
 
         return connections
-            .Where(x => allowedUserIds.Contains(x.Value))
-            .Select(x => x.Key)
+            .Where(x => participantUserIds.Contains(x.Value.UserId))
+            .Select(x => x.Value)
             .ToArray();
     }
 }
+
+public sealed record ChatConnectionRegistration(
+    string ConnectionId,
+    Guid UserId,
+    string Jti,
+    string SecurityStamp,
+    DateTime ExpiresAtUtc);

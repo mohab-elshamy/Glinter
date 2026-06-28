@@ -17,25 +17,46 @@ public sealed class AdminAuditMiddleware
         };
 
     private readonly RequestDelegate _next;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<AdminAuditMiddleware> _logger;
 
     public AdminAuditMiddleware(
         RequestDelegate next,
+        IServiceScopeFactory scopeFactory,
         ILogger<AdminAuditMiddleware> logger)
     {
         _next = next;
+        _scopeFactory = scopeFactory;
         _logger = logger;
     }
 
-    public async Task InvokeAsync(
-        HttpContext context,
-        AdminAuditService auditService)
+    public async Task InvokeAsync(HttpContext context)
     {
         if (!ShouldAudit(context, out var actorUserId))
         {
             await _next(context);
             return;
         }
+
+        var descriptor = context.GetEndpoint()?.Metadata
+            .GetMetadata<ControllerActionDescriptor>();
+        var auditEvent = new AdminAuditEvent
+        {
+            Id = Guid.NewGuid(),
+            ActorUserId = actorUserId,
+            Action = descriptor is null
+                ? $"{context.Request.Method} {context.Request.Path}"
+                : $"{descriptor.ControllerName}.{descriptor.ActionName}",
+            HttpMethod = context.Request.Method,
+            Path = context.Request.Path.Value ?? string.Empty,
+            Target = BuildTarget(context),
+            StatusCode = StatusCodes.Status102Processing,
+            Succeeded = false,
+            CorrelationId = context.TraceIdentifier,
+            CreatedAtUtc = DateTime.UtcNow
+        };
+
+        await RecordIntentAsync(auditEvent);
 
         Exception? endpointException = null;
         try
@@ -51,30 +72,14 @@ public sealed class AdminAuditMiddleware
         {
             try
             {
-                var descriptor = context.GetEndpoint()?.Metadata
-                    .GetMetadata<ControllerActionDescriptor>();
                 var statusCode = endpointException is null
                     ? context.Response.StatusCode
                     : StatusCodes.Status500InternalServerError;
 
-                await auditService.RecordAsync(
-                    new AdminAuditEvent
-                    {
-                        Id = Guid.NewGuid(),
-                        ActorUserId = actorUserId,
-                        Action = descriptor is null
-                            ? $"{context.Request.Method} {context.Request.Path}"
-                            : $"{descriptor.ControllerName}.{descriptor.ActionName}",
-                        HttpMethod = context.Request.Method,
-                        Path = context.Request.Path.Value ?? string.Empty,
-                        Target = BuildTarget(context),
-                        StatusCode = statusCode,
-                        Succeeded = endpointException is null &&
-                                    statusCode is >= 200 and < 400,
-                        CorrelationId = context.TraceIdentifier,
-                        CreatedAtUtc = DateTime.UtcNow
-                    },
-                    CancellationToken.None);
+                await CompleteIntentAsync(
+                    auditEvent.Id,
+                    statusCode,
+                    endpointException is null && statusCode is >= 200 and < 400);
             }
             catch (Exception auditException)
             {
@@ -85,6 +90,27 @@ public sealed class AdminAuditMiddleware
                     context.Request.Path);
             }
         }
+    }
+
+    private async Task RecordIntentAsync(AdminAuditEvent auditEvent)
+    {
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var auditService = scope.ServiceProvider.GetRequiredService<AdminAuditService>();
+        await auditService.RecordAsync(auditEvent, CancellationToken.None);
+    }
+
+    private async Task CompleteIntentAsync(
+        Guid auditEventId,
+        int statusCode,
+        bool succeeded)
+    {
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var auditService = scope.ServiceProvider.GetRequiredService<AdminAuditService>();
+        await auditService.CompleteAsync(
+            auditEventId,
+            statusCode,
+            succeeded,
+            CancellationToken.None);
     }
 
     private static bool ShouldAudit(HttpContext context, out Guid actorUserId)

@@ -114,7 +114,9 @@ public sealed class IdentityAndProblemDetailsTests : ApiTestBase
                 item.GetProperty("target").GetString()!.Contains(
                     target.UserId.ToString(),
                     StringComparison.OrdinalIgnoreCase) &&
-                item.GetProperty("statusCode").GetInt32() == 200);
+                item.GetProperty("statusCode").GetInt32() == 200 &&
+                item.GetProperty("completedAtUtc").ValueKind !=
+                System.Text.Json.JsonValueKind.Null);
     }
 
     [Fact]

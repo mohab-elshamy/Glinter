@@ -11,7 +11,4 @@ public interface IIdentityUserReadService
         string securityStamp,
         CancellationToken cancellationToken = default);
 
-    Task<IReadOnlySet<Guid>> GetActiveUserIdsAsync(
-        IReadOnlyCollection<Guid> userIds,
-        CancellationToken cancellationToken = default);
 }

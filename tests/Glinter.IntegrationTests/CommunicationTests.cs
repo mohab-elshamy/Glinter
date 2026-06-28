@@ -291,6 +291,47 @@ public sealed class CommunicationTests : ApiTestBase
     }
 
     [Fact]
+    public async Task SignalR_stops_delivery_after_the_joined_token_is_revoked()
+    {
+        var sender = await CreateUserAsync("Traveler", "realtime-revocation-sender");
+        var recipient = await CreateUserAsync("Traveler", "realtime-revocation-recipient");
+
+        var threadResponse = await SendAsync(
+            HttpMethod.Post,
+            "/api/chat/threads/direct",
+            sender.Token,
+            new { otherUserId = recipient.UserId });
+        threadResponse.EnsureSuccessStatusCode();
+        using var threadJson = await ReadJsonAsync(threadResponse);
+        var threadId = threadJson.RootElement.GetProperty("id").GetGuid();
+
+        await using var connection = CreateHubConnection(recipient.Token);
+        var received = new TaskCompletionSource<ChatMessageEventDto>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        connection.On<ChatMessageEventDto>(
+            "MessageReceived",
+            message => received.TrySetResult(message));
+        await connection.StartAsync();
+        await connection.InvokeAsync("JoinThread", threadId);
+
+        var logout = await SendAsync(
+            HttpMethod.Post,
+            "/api/auth/logout",
+            recipient.Token);
+        logout.EnsureSuccessStatusCode();
+
+        var message = await SendAsync(
+            HttpMethod.Post,
+            $"/api/chat/threads/{threadId}/messages",
+            sender.Token,
+            new { body = "Must not reach a revoked session" });
+        message.EnsureSuccessStatusCode();
+
+        await Assert.ThrowsAsync<TimeoutException>(
+            () => received.Task.WaitAsync(TimeSpan.FromSeconds(1)));
+    }
+
+    [Fact]
     public async Task Notification_preferences_are_defaulted_persisted_and_enforced()
     {
         var user = await CreateUserAsync("Traveler", "preferences");

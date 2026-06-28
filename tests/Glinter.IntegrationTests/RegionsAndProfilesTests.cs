@@ -73,6 +73,57 @@ public sealed class RegionsAndProfilesTests : ApiTestBase
     }
 
     [Fact]
+    public async Task Region_write_is_blocked_when_audit_intent_cannot_be_persisted()
+    {
+        var adminToken = await GetAdminTokenAsync();
+        var suffix = Guid.NewGuid().ToString("N")[..10];
+        var pcode = $"A{suffix}";
+
+        await Factory.ExecuteAsync(
+            """
+            CREATE OR REPLACE FUNCTION reject_admin_audit_test()
+            RETURNS trigger
+            LANGUAGE plpgsql
+            AS $$
+            BEGIN
+                RAISE EXCEPTION 'forced audit failure';
+            END;
+            $$;
+
+            CREATE TRIGGER reject_admin_audit_test_trigger
+            BEFORE INSERT ON admin_audit_events
+            FOR EACH ROW EXECUTE FUNCTION reject_admin_audit_test();
+            """);
+
+        try
+        {
+            var response = await SendAsync(
+                HttpMethod.Post,
+                "/api/regions/countries",
+                adminToken,
+                new
+                {
+                    nameEn = $"Audit Protected Country {suffix}",
+                    pcode
+                });
+            await AssertProblemAsync(response, 500, "database_update_failed");
+
+            var persisted = await Factory.ScalarAsync<long>(
+                $"""SELECT count(*) FROM adm0 WHERE pcode = '{pcode}'""");
+            Assert.Equal(0, persisted);
+        }
+        finally
+        {
+            await Factory.ExecuteAsync(
+                """
+                DROP TRIGGER IF EXISTS reject_admin_audit_test_trigger
+                ON admin_audit_events;
+                DROP FUNCTION IF EXISTS reject_admin_audit_test();
+                """);
+        }
+    }
+
+    [Fact]
     public async Task Local_buddy_visibility_follows_verification_status()
     {
         var buddy = await CreateUserAsync("LocalBuddy", "visibility");

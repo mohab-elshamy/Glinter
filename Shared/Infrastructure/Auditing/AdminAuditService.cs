@@ -21,6 +21,25 @@ public sealed class AdminAuditService
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task CompleteAsync(
+        Guid auditEventId,
+        int statusCode,
+        bool succeeded,
+        CancellationToken cancellationToken = default)
+    {
+        var updated = await _dbContext.AdminAuditEvents
+            .Where(x => x.Id == auditEventId)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(x => x.StatusCode, statusCode)
+                    .SetProperty(x => x.Succeeded, succeeded)
+                    .SetProperty(x => x.CompletedAtUtc, DateTime.UtcNow),
+                cancellationToken);
+
+        if (updated != 1)
+            throw new InvalidOperationException("Administrative audit intent was not found.");
+    }
+
     public async Task<AdminAuditPageDto> GetAsync(
         Guid? actorUserId,
         string? action,
@@ -67,7 +86,8 @@ public sealed class AdminAuditService
                     StatusCode = x.StatusCode,
                     Succeeded = x.Succeeded,
                     CorrelationId = x.CorrelationId,
-                    CreatedAtUtc = x.CreatedAtUtc
+                    CreatedAtUtc = x.CreatedAtUtc,
+                    CompletedAtUtc = x.CompletedAtUtc
                 })
                 .ToListAsync(cancellationToken),
             Page = normalizedPage,

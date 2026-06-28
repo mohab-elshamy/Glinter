@@ -12,6 +12,7 @@ public sealed class AdminAuditEvent
     public bool Succeeded { get; set; }
     public string CorrelationId { get; set; } = string.Empty;
     public DateTime CreatedAtUtc { get; set; }
+    public DateTime? CompletedAtUtc { get; set; }
 }
 
 public sealed class AdminAuditEventDto
@@ -26,6 +27,7 @@ public sealed class AdminAuditEventDto
     public bool Succeeded { get; set; }
     public string CorrelationId { get; set; } = string.Empty;
     public DateTime CreatedAtUtc { get; set; }
+    public DateTime? CompletedAtUtc { get; set; }
 }
 
 public sealed class AdminAuditPageDto

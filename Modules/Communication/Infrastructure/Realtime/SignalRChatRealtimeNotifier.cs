@@ -10,6 +10,7 @@ public sealed class SignalRChatRealtimeNotifier : IChatRealtimeNotifier
     private readonly IHubContext<ChatHub> _hubContext;
     private readonly IChatThreadRepository _threadRepository;
     private readonly IIdentityUserReadService _userReadService;
+    private readonly ITokenRevocationService _tokenRevocationService;
     private readonly ChatConnectionRegistry _connectionRegistry;
     private readonly ILogger<SignalRChatRealtimeNotifier> _logger;
 
@@ -17,12 +18,14 @@ public sealed class SignalRChatRealtimeNotifier : IChatRealtimeNotifier
         IHubContext<ChatHub> hubContext,
         IChatThreadRepository threadRepository,
         IIdentityUserReadService userReadService,
+        ITokenRevocationService tokenRevocationService,
         ChatConnectionRegistry connectionRegistry,
         ILogger<SignalRChatRealtimeNotifier> logger)
     {
         _hubContext = hubContext;
         _threadRepository = threadRepository;
         _userReadService = userReadService;
+        _tokenRevocationService = tokenRevocationService;
         _connectionRegistry = connectionRegistry;
         _logger = logger;
     }
@@ -64,18 +67,36 @@ public sealed class SignalRChatRealtimeNotifier : IChatRealtimeNotifier
                 .Select(x => x.UserId)
                 .Distinct()
                 .ToArray();
-            var activeUserIds = await _userReadService.GetActiveUserIdsAsync(
-                participantUserIds,
-                cancellationToken);
-            var connectionIds = _connectionRegistry.GetConnections(
+            var registrations = _connectionRegistry.GetRegistrations(
                 threadId,
-                activeUserIds);
+                participantUserIds.ToHashSet());
 
-            if (connectionIds.Count == 0)
+            if (registrations.Count == 0)
+                return;
+
+            var validConnectionIds = new List<string>(registrations.Count);
+            foreach (var registration in registrations)
+            {
+                var valid = registration.ExpiresAtUtc > DateTime.UtcNow &&
+                            await _userReadService.IsActiveUserWithSecurityStampAsync(
+                                registration.UserId,
+                                registration.SecurityStamp,
+                                cancellationToken) &&
+                            !await _tokenRevocationService.IsRevokedAsync(
+                                registration.Jti,
+                                cancellationToken);
+
+                if (valid)
+                    validConnectionIds.Add(registration.ConnectionId);
+                else
+                    _connectionRegistry.RemoveConnection(registration.ConnectionId);
+            }
+
+            if (validConnectionIds.Count == 0)
                 return;
 
             await _hubContext.Clients
-                .Clients(connectionIds)
+                .Clients(validConnectionIds)
                 .SendAsync(method, payload, cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
