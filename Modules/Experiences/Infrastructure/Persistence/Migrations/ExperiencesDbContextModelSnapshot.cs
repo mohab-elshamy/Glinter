@@ -230,6 +230,49 @@ namespace Glinter.Modules.Experiences.Infrastructure.Persistence.Migrations
                     b.ToTable("experience_categories", (string)null);
                 });
 
+            modelBuilder.Entity("Glinter.Modules.Experiences.Domain.Entities.ExperienceModerationEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<Guid>("ActorUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ExperienceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("NewStatus")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("PreviousStatus")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorUserId", "CreatedAtUtc");
+
+                    b.HasIndex("ExperienceId", "CreatedAtUtc");
+
+                    b.ToTable("experience_moderation_events", (string)null);
+                });
+
             modelBuilder.Entity("Glinter.Modules.Experiences.Domain.Entities.ExperienceReview", b =>
                 {
                     b.Property<Guid>("Id")
@@ -366,6 +409,17 @@ namespace Glinter.Modules.Experiences.Infrastructure.Persistence.Migrations
                     b.Navigation("Experience");
                 });
 
+            modelBuilder.Entity("Glinter.Modules.Experiences.Domain.Entities.ExperienceModerationEvent", b =>
+                {
+                    b.HasOne("Glinter.Modules.Experiences.Domain.Entities.Experience", "Experience")
+                        .WithMany("ModerationHistory")
+                        .HasForeignKey("ExperienceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Experience");
+                });
+
             modelBuilder.Entity("Glinter.Modules.Experiences.Domain.Entities.ExperienceReview", b =>
                 {
                     b.HasOne("Glinter.Modules.Experiences.Domain.Entities.Experience", "Experience")
@@ -414,6 +468,8 @@ namespace Glinter.Modules.Experiences.Infrastructure.Persistence.Migrations
                     b.Navigation("Bookings");
 
                     b.Navigation("ExperienceVibes");
+
+                    b.Navigation("ModerationHistory");
 
                     b.Navigation("Reviews");
 

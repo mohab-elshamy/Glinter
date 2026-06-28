@@ -1,4 +1,5 @@
 using Glinter.Modules.Communication.Application.Abstractions;
+using Glinter.Modules.Communication.Application.Chats.Dtos;
 using Glinter.Modules.IdentityAccess.Application.Abstractions;
 
 namespace Glinter.Modules.Communication.Application.Chats.Commands;
@@ -7,13 +8,16 @@ public class MarkChatThreadAsReadHandler
 {
     private readonly IChatThreadRepository _threadRepository;
     private readonly ICurrentUserService _currentUserService;
+    private readonly IChatRealtimeNotifier _realtimeNotifier;
 
     public MarkChatThreadAsReadHandler(
         IChatThreadRepository threadRepository,
-        ICurrentUserService currentUserService)
+        ICurrentUserService currentUserService,
+        IChatRealtimeNotifier realtimeNotifier)
     {
         _threadRepository = threadRepository;
         _currentUserService = currentUserService;
+        _realtimeNotifier = realtimeNotifier;
     }
 
     public async Task HandleAsync(
@@ -46,9 +50,18 @@ public class MarkChatThreadAsReadHandler
         if (participant is null)
             throw new ConflictException("Chat participation changed while the request was being processed.");
 
-        participant.LastReadAtUtc = DateTime.UtcNow;
+        var readAtUtc = DateTime.UtcNow;
+        participant.LastReadAtUtc = readAtUtc;
 
         await _threadRepository.UpdateParticipantAsync(participant, cancellationToken);
+        await _realtimeNotifier.ThreadReadAsync(
+            new ChatThreadReadEventDto
+            {
+                ThreadId = command.ThreadId,
+                UserId = currentUserId,
+                ReadAtUtc = readAtUtc
+            },
+            cancellationToken);
     }
 
     private Guid GetCurrentUserId()

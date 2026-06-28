@@ -1,6 +1,6 @@
 using Glinter.Modules.IdentityAccess.Application.Abstractions;
 using Glinter.Modules.IdentityAccess.Application.Auth.Dtos;
-using Glinter.Modules.IdentityAccess.Application.Common.Mapping;
+using Glinter.Modules.IdentityAccess.Domain.Constants;
 using Glinter.Modules.IdentityAccess.Domain.Entities;
 using Microsoft.AspNetCore.Identity;
 
@@ -10,20 +10,23 @@ public class LoginCommandHandler
 {
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly SignInManager<ApplicationUser> _signInManager;
-    private readonly IJwtTokenGenerator _jwtTokenGenerator;
+    private readonly IAuthTokenService _authTokenService;
+    private readonly IMfaTicketService _mfaTicketService;
     private readonly LoginCommandValidator _validator = new();
 
     public LoginCommandHandler(
         UserManager<ApplicationUser> userManager,
         SignInManager<ApplicationUser> signInManager,
-        IJwtTokenGenerator jwtTokenGenerator)
+        IAuthTokenService authTokenService,
+        IMfaTicketService mfaTicketService)
     {
         _userManager = userManager;
         _signInManager = signInManager;
-        _jwtTokenGenerator = jwtTokenGenerator;
+        _authTokenService = authTokenService;
+        _mfaTicketService = mfaTicketService;
     }
 
-    public async Task<AuthResponse> HandleAsync(LoginCommand command)
+    public async Task<object> HandleAsync(LoginCommand command)
     {
         var errors = _validator.Validate(command);
         if (errors.Count > 0)
@@ -44,12 +47,25 @@ public class LoginCommandHandler
         if (result.IsLockedOut)
             throw new AuthenticationException("User is temporarily locked. Try again later.");
 
+        if (result.IsNotAllowed && !user.EmailConfirmed)
+            throw new AuthenticationException("Email confirmation is required.");
+
         if (!result.Succeeded)
             throw new AuthenticationException("Invalid email or password.");
 
         var roles = await _userManager.GetRolesAsync(user);
-        var token = _jwtTokenGenerator.GenerateToken(user, roles);
+        if (roles.Contains(RoleNames.Admin))
+        {
+            var purpose = user.TwoFactorEnabled ? "verify" : "setup";
+            var ticket = await _mfaTicketService.CreateAsync(user.Id, purpose);
+            return new MfaChallengeResponse
+            {
+                RequiresSetup = !user.TwoFactorEnabled,
+                MfaTicket = ticket.Value,
+                ExpiresAtUtc = ticket.ExpiresAtUtc
+            };
+        }
 
-        return IdentityAccessMappings.ToAuthResponse(user, roles, token);
+        return await _authTokenService.IssueAsync(user, roles);
     }
 }

@@ -8,7 +8,9 @@ public static class IdentityAccessMappings
     public static AuthResponse ToAuthResponse(
         ApplicationUser user,
         IList<string> roles,
-        string token)
+        string token,
+        string refreshToken,
+        DateTime refreshTokenExpiresAtUtc)
     {
         return new AuthResponse
         {
@@ -16,7 +18,9 @@ public static class IdentityAccessMappings
             FullName = user.FullName,
             Email = user.Email ?? string.Empty,
             Roles = roles.ToList(),
-            Token = token
+            Token = token,
+            RefreshToken = refreshToken,
+            RefreshTokenExpiresAtUtc = refreshTokenExpiresAtUtc
         };
     }
 

@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Security.Claims;
 using System.Threading.RateLimiting;
+using Glinter.Modules.Communication.Infrastructure.Realtime;
 
 namespace Glinter.Modules.Communication.Infrastructure.DependencyInjection;
 
@@ -72,6 +73,8 @@ public static class CommunicationModule
         services.AddScoped<IChatThreadRepository, ChatThreadRepository>();
         services.AddScoped<IChatMessageRepository, ChatMessageRepository>();
         services.AddScoped<INotificationRepository, NotificationRepository>();
+        services.AddScoped<INotificationPreferenceRepository, NotificationPreferenceRepository>();
+        services.AddScoped<IChatRealtimeNotifier, SignalRChatRealtimeNotifier>();
 
         services.AddScoped<CreateDirectChatThreadHandler>();
         services.AddScoped<SendChatMessageHandler>();
@@ -83,6 +86,8 @@ public static class CommunicationModule
         services.AddScoped<GetMyNotificationsHandler>();
         services.AddScoped<MarkNotificationAsReadHandler>();
         services.AddScoped<MarkAllNotificationsAsReadHandler>();
+        services.AddScoped<GetNotificationPreferencesHandler>();
+        services.AddScoped<UpdateNotificationPreferencesHandler>();
 
         return services;
     }

@@ -19,6 +19,13 @@ public interface IExperienceRepository
         int? guests,
         Guid? vibeId,
         string? tag,
+        string? search,
+        string? currency,
+        int? minDurationMinutes,
+        int? maxDurationMinutes,
+        DateTime? availableFromUtc,
+        DateTime? availableToUtc,
+        string sortBy,
         int page,
         int pageSize,
         CancellationToken cancellationToken = default);

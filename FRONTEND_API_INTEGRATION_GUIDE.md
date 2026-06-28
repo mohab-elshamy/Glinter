@@ -1,6 +1,6 @@
 # Glinter Frontend API Integration Guide
 
-Generated from the backend source and the live OpenAPI document on 2026-06-22.
+Generated from the backend source and updated on 2026-06-28.
 
 This is the frontend handoff for all 90 HTTP operations currently exposed by the project. It documents the implementation as it exists today, including authorization gaps that should be fixed before production integration.
 
@@ -21,7 +21,11 @@ This is the frontend handoff for all 90 HTTP operations currently exposed by the
 | Date-only values | `YYYY-MM-DD` |
 | Decimal/money values | JSON numbers |
 
-The JWT currently expires after the configured `Jwt:ExpiryMinutes` value, which is 120 minutes in the development secrets. There is no refresh-token endpoint. When a token expires, the user must log in again. Logout revokes the current token.
+The access JWT expires after the configured `Jwt:ExpiryMinutes` value. Login
+also returns a 30-day, opaque refresh token. Each refresh rotates that token;
+reuse of an older token revokes the complete token family and invalidates its
+access tokens. Logout revokes the current access token and all refresh tokens
+for that user.
 
 ### Frontend HTTP client behavior
 
@@ -29,19 +33,15 @@ The JWT currently expires after the configured `Jwt:ExpiryMinutes` value, which 
 2. Attach the bearer token to every endpoint marked `Bearer` or with a role.
 3. Treat `401` as unauthenticated/expired/revoked and clear the local session.
 4. Treat `403` as authenticated but missing the required role or ownership.
-5. Read backend validation messages from `{ "message": "..." }` when present.
-6. Be prepared for ASP.NET automatic validation errors to use a Problem Details object instead of `{message}`. Error formatting is not globally standardized yet.
+5. Read failed responses as `application/problem+json`.
+6. On refresh failure, clear the complete local session and require login.
 
-## 2. Integration blockers and security warnings
+## 2. Security behavior
 
-These should be resolved before treating the contract as production-ready.
-
-1. **CORS is not configured.** A browser frontend on another origin, such as `http://localhost:5173`, will be blocked until the backend adds `AddCors` and `UseCors` with the frontend origin.
-2. **Public registration accepts the `Admin` role.** The backend's registration validator accepts every value in `RoleNames.All`, including `Admin`. The frontend must never offer `Admin`, but this also requires a backend fix because clients can call the API directly.
-3. **Several mutating endpoints are public.** Stay update/activation, stay booking cancellation, and all regular Region CRUD endpoints currently have no authorization attribute. This guide labels them accurately as `Public ⚠`; they should be protected server-side.
-4. **Swagger security locks are misleading.** Swagger adds the bearer requirement globally, so it visually marks public endpoints as secured. Use the authorization column in this document instead.
-5. **Region list pagination has no metadata.** Region endpoints accept `page` and `pageSize` but return a plain array, not total count/pages.
-6. **`UpdateStayReviewRequestDto.travelerProfileId` is ignored.** The frontend should not depend on it; ownership comes from the authenticated user.
+Public registration cannot create Admin users. New accounts must confirm their
+email before login. Admin login always requires authenticator MFA. Region
+writes and ownership-sensitive stay, experience, communication, and profile
+operations are enforced by the backend.
 
 ## 3. Roles and fixed string values
 
@@ -80,8 +80,16 @@ type ExperienceBookingStatus = "Pending" | "Confirmed" | "Cancelled" | "Complete
 
 | Method and path | Auth | Input | Success response |
 |---|---|---|---|
-| `POST /api/auth/register` | Public | `RegisterRequest` body | `200 AuthResponse` |
-| `POST /api/auth/login` | Public | `LoginRequest` body | `200 AuthResponse` |
+| `POST /api/auth/register` | Public | `RegisterRequest` body | `200 RegisterResponse` |
+| `POST /api/auth/confirm-email` | Public | `ConfirmEmailRequest` body | `200 MessageResponse` |
+| `POST /api/auth/resend-confirmation` | Public | `EmailRequest` body | `200 MessageResponse` |
+| `POST /api/auth/login` | Public | `LoginRequest` body | `200 AuthResponse` or `MfaChallengeResponse` |
+| `POST /api/auth/refresh` | Public | `RefreshTokenRequest` body | `200 AuthResponse` |
+| `POST /api/auth/forgot-password` | Public | `EmailRequest` body | `200 MessageResponse` |
+| `POST /api/auth/reset-password` | Public | `ResetPasswordRequest` body | `200 MessageResponse` |
+| `POST /api/auth/mfa/setup` | Public + MFA ticket | `MfaTicketRequest` body | `200 MfaSetupResponse` |
+| `POST /api/auth/mfa/enable` | Public + MFA ticket | `EnableMfaRequest` body | `200 EnableMfaResponse` |
+| `POST /api/auth/mfa/verify` | Public + MFA ticket | `VerifyMfaRequest` body | `200 AuthResponse` |
 | `GET /api/auth/me` | Bearer | None | `200 CurrentUserResponse` |
 | `POST /api/auth/logout` | Bearer | None | `200 LogoutResponse`; token becomes invalid |
 | `GET /api/admin/users` | Admin | None | `200 UserListItemResponse[]` |
@@ -105,6 +113,21 @@ interface LoginRequest {
   password: string;
 }
 
+interface ConfirmEmailRequest { userId: string; token: string; }
+interface EmailRequest { email: string; }
+interface RefreshTokenRequest { refreshToken: string; }
+interface ResetPasswordRequest {
+  email: string;
+  token: string;
+  newPassword: string;
+}
+interface MfaTicketRequest { mfaTicket: string; }
+interface EnableMfaRequest extends MfaTicketRequest { code: string; }
+interface VerifyMfaRequest extends MfaTicketRequest {
+  code?: string;
+  recoveryCode?: string;
+}
+
 interface AssignRoleRequest {
   role: "Traveler" | "LocalBuddy" | "HotelOwner" | "ExperienceProvider" | "Admin";
 }
@@ -123,6 +146,39 @@ interface AuthResponse {
   email: string;
   roles: string[];
   token: string;
+  refreshToken: string;
+  refreshTokenExpiresAtUtc: string;
+}
+
+interface RegisterResponse {
+  userId: string;
+  email: string;
+  message: string;
+  developmentConfirmationToken?: string | null;
+}
+
+interface MessageResponse {
+  message: string;
+  developmentToken?: string | null;
+}
+
+interface MfaChallengeResponse {
+  requiresMfa: true;
+  requiresSetup: boolean;
+  mfaTicket: string;
+  expiresAtUtc: string;
+}
+
+interface MfaSetupResponse {
+  sharedKey: string;
+  authenticatorUri: string;
+  mfaTicket: string;
+  expiresAtUtc: string;
+}
+
+interface EnableMfaResponse {
+  authentication: AuthResponse;
+  recoveryCodes: string[];
 }
 
 interface CurrentUserResponse {
@@ -156,6 +212,11 @@ interface UserResponse {
 
 Expected failures include `400` for invalid input/duplicate email, `401` for invalid credentials/token, `403` for non-admin access, and `404` for an unknown user.
 
+Confirmation/reset tokens are returned only in Development; deployed clients
+receive them through email links. MFA tickets expire after five minutes and are
+single-use. For first Admin login, call `mfa/setup`, show the URI/key in an
+authenticator app, then call `mfa/enable` with the returned enable ticket.
+
 ## 5. Profiles module
 
 ### Endpoints
@@ -175,6 +236,7 @@ Expected failures include `400` for invalid input/duplicate email, `401` for inv
 | `DELETE /api/profiles/users/{userId}/follow` | Bearer | Path: `userId: UUID` | `200 { message }` |
 | `GET /api/profiles/users/{userId}/follow-status` | Bearer | Path: `userId: UUID` | `200 FollowStatusResponse` |
 | `PATCH /api/admin/local-buddies/{userId}/verification` | Admin | Path: `userId`; `UpdateLocalBuddyVerificationRequest` body | `200 LocalBuddyProfileResponse` |
+| `GET /api/admin/local-buddies/{userId}/verification-history` | Admin | Query: `page`, `pageSize` | `200 LocalBuddyVerificationEventDto[]` |
 
 `PUT` profile endpoints are upserts: they create the role profile on first use and update it later.
 
@@ -214,6 +276,7 @@ interface UpdateProfileImageRequest {
 
 interface UpdateLocalBuddyVerificationRequest {
   verificationStatus: VerificationStatus;
+  moderationNotes?: string | null;
 }
 ```
 
@@ -302,7 +365,7 @@ For create/update location selection, send an ADM3 neighbourhood `gid` as `adm3G
 
 | Method and path | Auth | Input | Success response |
 |---|---|---|---|
-| `GET /api/Stays` | Public | Query: `adm3Gid?`, `minPrice?`, `maxPrice?`, `guests?`, `tag?` | `200 StaySummaryDto[]` |
+| `GET /api/Stays` | Public | Search and pagination query | `200 StaySummaryDto[]` |
 | `GET /api/Stays/{id}` | Public | Path: `id: UUID` | `200 StayResponseDto` |
 | `GET /api/Stays/by-neighbourhood/{adm3Gid}` | Public | Path: `adm3Gid: integer` | `200 StaySummaryDto[]` |
 | `POST /api/Stays` | Bearer; handler requires HotelOwner profile | `CreateStayRequestDto` body | `201 StayResponseDto` |
@@ -323,6 +386,10 @@ For create/update location selection, send an ADM3 neighbourhood `gid` as `adm3G
 - `minPrice` cannot exceed `maxPrice`.
 - `guests`, when supplied, must be greater than zero.
 - `adm3Gid`, when supplied, is an integer neighbourhood `gid` from the Regions module.
+- `search` matches name, description, address, and tags; max 200 characters.
+- `currency` is an exact, case-insensitive currency-code filter.
+- `checkInDate` and `checkOutDate` must be supplied together; unavailable stays are excluded.
+- `sortBy` accepts `newest`, `price_asc`, or `price_desc`.
 
 ### Request bodies
 
@@ -438,7 +505,7 @@ Experience location uses the same Regions contract as stays: `adm3Gid` is a nume
 
 | Method and path | Auth | Input | Success response |
 |---|---|---|---|
-| `GET /api/experiences` | Public | Query: `adm3Gid?`, `categoryId?`, `minPrice?`, `maxPrice?`, `guests?`, `vibeId?`, `tag?` | `200 ExperienceSummaryDto[]` |
+| `GET /api/experiences` | Public | Search and pagination query | `200 ExperienceSummaryDto[]` |
 | `GET /api/experiences/{id}` | Public | Path: `id: UUID` | `200 ExperienceResponseDto` |
 | `GET /api/experiences/my` | ExperienceProvider | None | `200 ExperienceSummaryDto[]` |
 | `POST /api/experiences` | ExperienceProvider | `CreateExperienceRequestDto` body | `201 ExperienceResponseDto` |
@@ -448,7 +515,12 @@ Experience location uses the same Regions contract as stays: `adm3Gid` is a nume
 | `GET /api/experience-categories` | Public | None | `200 ExperienceCategoryResponseDto[]` |
 | `GET /api/vibes` | Public | None | `200 VibeResponseDto[]` |
 
-Listing query rules match stays: prices cannot be negative, minimum cannot exceed maximum, and `guests` must be positive.
+Listing query rules match stays. `search` matches title, description, location,
+and tags. Additional filters are `currency`, `minDurationMinutes`,
+`maxDurationMinutes`, and the paired `availableFromUtc`/`availableToUtc`
+window. `sortBy` accepts `newest`, `price_asc`, `price_desc`, or
+`duration_asc`. Availability filtering also checks remaining slot capacity
+when `guests` is supplied.
 
 ### Availability
 
@@ -484,6 +556,7 @@ Listing query rules match stays: prices cannot be negative, minimum cannot excee
 |---|---|---|---|
 | `GET /api/admin/experiences` | Admin | Query: `approvalStatus?`, `isActive?` | `200 ExperienceSummaryDto[]` |
 | `PATCH /api/admin/experiences/{id}/approval-status` | Admin | Path: `id`; body `SetExperienceApprovalStatusRequestDto` | `200 ExperienceResponseDto` |
+| `GET /api/admin/experiences/{id}/moderation-history` | Admin | Query: `page`, `pageSize` | `200 ExperienceModerationEventDto[]` |
 
 ### Request bodies
 
@@ -529,6 +602,10 @@ interface SetExperienceApprovalStatusRequestDto {
   moderationNotes?: string | null; // max 1000
 }
 ```
+
+Rejected Experience decisions require moderation notes. Creation, Admin
+decisions, and provider updates that reset approval to Pending are recorded in
+append-only moderation history.
 
 Availability slots cannot overlap another active slot. Experiences must be active and approved before booking. A traveler cannot duplicate an active booking for the same slot. Reviews require a completed booking and are limited to one review per traveler/experience.
 
@@ -832,30 +909,114 @@ interface GeoJsonImportResultDto {
 }
 ```
 
-## 9. System endpoint
+## 9. Communication module
+
+### REST endpoints
+
+| Method and path | Auth | Behavior |
+|---|---|---|
+| `GET /api/chat/threads` | Bearer | Lists the current user's threads |
+| `POST /api/chat/threads/direct` | Bearer | Creates or returns a direct thread |
+| `GET /api/chat/threads/{threadId}/messages` | Bearer + participant | Lists messages |
+| `POST /api/chat/threads/{threadId}/messages` | Bearer + participant | Persists and broadcasts a message |
+| `PATCH /api/chat/threads/{threadId}/read` | Bearer + participant | Marks read and broadcasts `ThreadRead` |
+| `GET /api/notifications` | Bearer | Lists in-app notifications |
+| `PATCH /api/notifications/{id}/read` | Bearer | Marks one notification read |
+| `PATCH /api/notifications/read-all` | Bearer | Marks all notifications read |
+| `GET /api/notifications/preferences` | Bearer | Returns saved or default preferences |
+| `PUT /api/notifications/preferences` | Bearer | Replaces the user's preferences |
+
+### SignalR
+
+Connect to `/hubs/chat` with the access JWT. Browser WebSocket clients may pass
+it as the standard `access_token` query value. Call `JoinThread(threadId)`
+before listening; nonparticipants are rejected. `LeaveThread(threadId)` removes
+the subscription.
+
+Server-to-client events:
+
+```ts
+interface ChatMessageEvent {
+  id: string;
+  threadId: string;
+  senderUserId: string;
+  body: string;
+  sentAtUtc: string;
+}
+
+interface ChatThreadReadEvent {
+  threadId: string;
+  userId: string;
+  readAtUtc: string;
+}
+```
+
+- `MessageReceived`: `ChatMessageEvent`
+- `ThreadRead`: `ChatThreadReadEvent`
+
+Messages are sent through the REST endpoint so existing validation and rate
+limits remain authoritative.
+
+### Notification preferences
+
+```ts
+interface NotificationPreference {
+  inAppEnabled: boolean;
+  emailEnabled: boolean;
+  pushEnabled: boolean;
+  chatMessageNotificationsEnabled: boolean;
+  systemNotificationsEnabled: boolean;
+  updatedAtUtc?: string | null;
+}
+```
+
+Email and push selections are persisted, but delivery providers are not yet
+implemented. In-app and category switches immediately control in-app creation.
+
+## 10. Dashboards and analytics
+
+| Method and path | Auth | Behavior |
+|---|---|---|
+| `GET /api/dashboard/admin` | Admin | Platform totals, moderation queues, bookings, and communication activity |
+| `GET /api/dashboard/hotel-owner` | HotelOwner | Owned stays, booking status, upcoming arrivals, reviews, and revenue |
+| `GET /api/dashboard/experience-provider` | ExperienceProvider | Owned Experiences, approval status, capacity, bookings, reviews, and revenue |
+| `GET /api/admin/analytics` | Admin | Date-window daily business activity and currency-grouped revenue |
+| `GET /metrics` | Admin | Prometheus operational metrics; not intended for frontend use |
+
+Analytics accepts optional `from` and `to` query dates in `YYYY-MM-DD` format.
+The default is the latest 30 UTC calendar days and the maximum range is 366
+days. Missing dates in the range are returned with zero counts. Revenue is
+always grouped by currency.
+
+Provider dashboard data is scoped from the authenticated user's provider
+profile; clients do not send a profile ID.
+
+## 11. System endpoints
 
 | Method and path | Auth | Behavior |
 |---|---|---|
 | `GET /` | Public | Returns `302` and redirects to `/swagger` |
+| `GET /health/live` | Public | Process liveness |
+| `GET /health/ready` | Public | PostgreSQL connectivity and migration readiness |
 
-## 10. Recommended frontend integration order
+## 12. Recommended frontend integration order
 
-1. Backend fixes CORS, public admin signup, mutation authorization, and the region/area ID mismatch.
-2. Frontend creates a shared API client with the base URL and bearer-token interceptor.
-3. Integrate register/login/me/logout and role-aware routing.
+1. Frontend creates a shared API client with bearer and refresh-token handling.
+2. Integrate registration, email confirmation, password reset, and login.
+3. Integrate Admin MFA setup/verification and role-aware routing.
 4. Integrate role-specific profile creation because stays/experiences/bookings depend on profile records.
 5. Integrate public lookup data: interests, local buddies, categories, vibes, and regions.
 6. Integrate stays and experiences listing/detail screens.
 7. Integrate Traveler booking/review flows.
 8. Integrate HotelOwner and ExperienceProvider management flows.
 9. Integrate Admin user, verification, moderation, and region import screens.
+10. Add SignalR thread subscriptions and notification preference settings.
+11. Add role-specific dashboards and Admin analytics.
 
-## 11. Current contract caveats
+## 13. Current contract caveats
 
 - There is no API version prefix such as `/api/v1`.
-- There is no refresh-token flow.
-- There is no frontend-facing health-check endpoint.
 - There is no backend file upload for profile images; the client sends an existing HTTP/HTTPS URL.
-- Most controllers return custom `{message}` errors, while framework/model-binding failures may return Problem Details.
+- Failed requests use Problem Details with `errorCode` and `traceId`.
 - Swagger response metadata is incomplete for methods returning `IActionResult`; the response types in this guide come from controller handlers and DTOs.
-- There is currently no automated API test project protecting this contract from regressions.
+- The integration suite covers security-critical module workflows.

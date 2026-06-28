@@ -15,6 +15,13 @@ public class GetAllExperiencesQuery
     public Guid? VibeId { get; set; }
 
     public string? Tag { get; set; }
+    public string? Search { get; set; }
+    public string? Currency { get; set; }
+    public int? MinDurationMinutes { get; set; }
+    public int? MaxDurationMinutes { get; set; }
+    public DateTime? AvailableFromUtc { get; set; }
+    public DateTime? AvailableToUtc { get; set; }
+    public string? SortBy { get; set; }
 
     public int Page { get; set; } = 1;
 

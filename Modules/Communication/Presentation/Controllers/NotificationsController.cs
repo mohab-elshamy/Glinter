@@ -1,5 +1,6 @@
 using Glinter.Modules.Communication.Application.Notifications.Commands;
 using Glinter.Modules.Communication.Application.Notifications.Queries;
+using Glinter.Modules.Communication.Application.Notifications.Dtos;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -14,15 +15,21 @@ public class NotificationsController : ControllerBase
     private readonly GetMyNotificationsHandler _getMyNotificationsHandler;
     private readonly MarkNotificationAsReadHandler _markNotificationAsReadHandler;
     private readonly MarkAllNotificationsAsReadHandler _markAllNotificationsAsReadHandler;
+    private readonly GetNotificationPreferencesHandler _getPreferencesHandler;
+    private readonly UpdateNotificationPreferencesHandler _updatePreferencesHandler;
 
     public NotificationsController(
         GetMyNotificationsHandler getMyNotificationsHandler,
         MarkNotificationAsReadHandler markNotificationAsReadHandler,
-        MarkAllNotificationsAsReadHandler markAllNotificationsAsReadHandler)
+        MarkAllNotificationsAsReadHandler markAllNotificationsAsReadHandler,
+        GetNotificationPreferencesHandler getPreferencesHandler,
+        UpdateNotificationPreferencesHandler updatePreferencesHandler)
     {
         _getMyNotificationsHandler = getMyNotificationsHandler;
         _markNotificationAsReadHandler = markNotificationAsReadHandler;
         _markAllNotificationsAsReadHandler = markAllNotificationsAsReadHandler;
+        _getPreferencesHandler = getPreferencesHandler;
+        _updatePreferencesHandler = updatePreferencesHandler;
     }
 
     [HttpGet]
@@ -66,4 +73,14 @@ public class NotificationsController : ControllerBase
 
         return NoContent();
     }
+
+    [HttpGet("preferences")]
+    public async Task<IActionResult> GetPreferences(CancellationToken cancellationToken) =>
+        Ok(await _getPreferencesHandler.HandleAsync(cancellationToken));
+
+    [HttpPut("preferences")]
+    public async Task<IActionResult> UpdatePreferences(
+        [FromBody] UpdateNotificationPreferenceRequestDto request,
+        CancellationToken cancellationToken) =>
+        Ok(await _updatePreferencesHandler.HandleAsync(request, cancellationToken));
 }

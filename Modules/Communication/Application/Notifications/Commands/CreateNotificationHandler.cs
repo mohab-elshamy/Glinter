@@ -10,16 +10,19 @@ public class CreateNotificationHandler
 {
     private readonly INotificationRepository _notificationRepository;
     private readonly IIdentityUserReadService _identityUserReadService;
+    private readonly INotificationPreferenceRepository _preferenceRepository;
 
     public CreateNotificationHandler(
         INotificationRepository notificationRepository,
-        IIdentityUserReadService identityUserReadService)
+        IIdentityUserReadService identityUserReadService,
+        INotificationPreferenceRepository preferenceRepository)
     {
         _notificationRepository = notificationRepository;
         _identityUserReadService = identityUserReadService;
+        _preferenceRepository = preferenceRepository;
     }
 
-    public async Task<NotificationResponseDto> HandleAsync(
+    public async Task<NotificationResponseDto?> HandleAsync(
         CreateNotificationCommand command,
         CancellationToken cancellationToken = default)
     {
@@ -49,6 +52,14 @@ public class CreateNotificationHandler
 
         if (!Enum.IsDefined(command.Type))
             throw new ValidationException("Notification type is invalid.");
+
+        if (!await _preferenceRepository.IsInAppEnabledAsync(
+                command.UserId,
+                command.Type,
+                cancellationToken))
+        {
+            return null;
+        }
 
         var linkUrl = ValidateAndNormalizeLink(command.LinkUrl);
         var sourceModule = NormalizeOptionalValue(command.SourceModule, 100, "SourceModule");

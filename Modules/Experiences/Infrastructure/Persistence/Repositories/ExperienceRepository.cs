@@ -64,6 +64,13 @@ public class ExperienceRepository : IExperienceRepository
         int? guests,
         Guid? vibeId,
         string? tag,
+        string? search,
+        string? currency,
+        int? minDurationMinutes,
+        int? maxDurationMinutes,
+        DateTime? availableFromUtc,
+        DateTime? availableToUtc,
+        string sortBy,
         int page,
         int pageSize,
         CancellationToken cancellationToken = default)
@@ -115,9 +122,55 @@ public class ExperienceRepository : IExperienceRepository
             query = query.Where(x => x.Tags.Any(t => t.Name.ToLower() == normalizedTag));
         }
 
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var normalizedSearch = search.Trim().ToLower();
+            query = query.Where(x =>
+                x.Title.ToLower().Contains(normalizedSearch) ||
+                x.Description.ToLower().Contains(normalizedSearch) ||
+                x.LocationName.ToLower().Contains(normalizedSearch) ||
+                x.Tags.Any(t => t.Name.ToLower().Contains(normalizedSearch)));
+        }
+
+        if (!string.IsNullOrWhiteSpace(currency))
+        {
+            var normalizedCurrency = currency.Trim().ToUpper();
+            query = query.Where(x => x.Currency == normalizedCurrency);
+        }
+
+        if (minDurationMinutes.HasValue)
+            query = query.Where(x => x.DurationMinutes >= minDurationMinutes.Value);
+
+        if (maxDurationMinutes.HasValue)
+            query = query.Where(x => x.DurationMinutes <= maxDurationMinutes.Value);
+
+        if (availableFromUtc.HasValue && availableToUtc.HasValue)
+        {
+            query = query.Where(x => x.AvailabilitySlots.Any(slot =>
+                slot.IsActive &&
+                slot.StartTimeUtc < availableToUtc.Value &&
+                slot.EndTimeUtc > availableFromUtc.Value &&
+                (!guests.HasValue ||
+                 slot.Capacity - slot.BookedCount >= guests.Value)));
+        }
+
+        query = sortBy switch
+        {
+            "price_asc" => query
+                .OrderBy(x => x.PricePerPerson)
+                .ThenBy(x => x.Id),
+            "price_desc" => query
+                .OrderByDescending(x => x.PricePerPerson)
+                .ThenBy(x => x.Id),
+            "duration_asc" => query
+                .OrderBy(x => x.DurationMinutes)
+                .ThenBy(x => x.Id),
+            _ => query
+                .OrderByDescending(x => x.CreatedAtUtc)
+                .ThenBy(x => x.Id)
+        };
+
         return await query
-            .OrderByDescending(x => x.CreatedAtUtc)
-            .ThenBy(x => x.Id)
             .Skip((pagination.Page - 1) * pagination.PageSize)
             .Take(pagination.PageSize)
             .ToListAsync(cancellationToken);

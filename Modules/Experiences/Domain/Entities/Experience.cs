@@ -53,4 +53,7 @@ public class Experience
     public ICollection<ExperienceVibe> ExperienceVibes { get; set; } = new List<ExperienceVibe>();
 
     public ICollection<ExperienceTag> Tags { get; set; } = new List<ExperienceTag>();
+
+    public ICollection<ExperienceModerationEvent> ModerationHistory { get; set; } =
+        new List<ExperienceModerationEvent>();
 }

@@ -98,6 +98,16 @@ public sealed class RegionsAndProfilesTests : ApiTestBase
             new { verificationStatus = "Approved" });
         approve.EnsureSuccessStatusCode();
 
+        var history = await SendAsync(
+            HttpMethod.Get,
+            $"/api/admin/local-buddies/{buddy.UserId}/verification-history",
+            adminToken);
+        history.EnsureSuccessStatusCode();
+        using var historyJson = await ReadJsonAsync(history);
+        var verificationEvent = Assert.Single(historyJson.RootElement.EnumerateArray());
+        Assert.Equal("Pending", verificationEvent.GetProperty("previousStatus").GetString());
+        Assert.Equal("Approved", verificationEvent.GetProperty("newStatus").GetString());
+
         var publicApproved = await Client.GetAsync($"/api/local-buddies/{buddy.UserId}");
         Assert.Equal(HttpStatusCode.OK, publicApproved.StatusCode);
 

@@ -21,6 +21,8 @@ using Glinter.Modules.IdentityAccess.Application.Auth.Commands.ChangeUserStatus;
 using Glinter.Modules.IdentityAccess.Application.Auth.Queries.GetUserById;
 using Glinter.Modules.IdentityAccess.Application.Auth.Queries.GetUsers;
 using Glinter.Modules.IdentityAccess.Application.Auth.Queries.GetRoles;
+using Glinter.Modules.IdentityAccess.Application.Auth.Commands.SecurityFlows;
+using Glinter.Modules.IdentityAccess.Infrastructure.Email;
 
 
 
@@ -30,7 +32,8 @@ public static class IdentityAccessModule
 {
     public static IServiceCollection AddIdentityAccessModule(
         this IServiceCollection services,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IHostEnvironment environment)
     {
         var connectionString = configuration.GetConnectionString("DefaultConnection")
                                ?? throw new InvalidOperationException("DefaultConnection not found.");
@@ -54,6 +57,7 @@ public static class IdentityAccessModule
                 options.Password.RequireNonAlphanumeric = true;
 
                 options.User.RequireUniqueEmail = true;
+                options.SignIn.RequireConfirmedEmail = true;
 
                 options.Lockout.AllowedForNewUsers = true;
                 options.Lockout.MaxFailedAccessAttempts = 5;
@@ -93,6 +97,17 @@ public static class IdentityAccessModule
 
             options.Events = new JwtBearerEvents
             {
+                OnMessageReceived = context =>
+                {
+                    var accessToken = context.Request.Query["access_token"];
+                    if (!string.IsNullOrWhiteSpace(accessToken) &&
+                        context.HttpContext.Request.Path.StartsWithSegments("/hubs/chat"))
+                    {
+                        context.Token = accessToken;
+                    }
+
+                    return Task.CompletedTask;
+                },
                 OnTokenValidated = async context =>
                 {
                     var jti = context.Principal?.FindFirst(JwtRegisteredClaimNames.Jti)?.Value;
@@ -116,8 +131,11 @@ public static class IdentityAccessModule
                     var userReadService = context.HttpContext.RequestServices
                         .GetRequiredService<IIdentityUserReadService>();
 
-                    var isActiveUser = await userReadService.IsActiveUserAsync(
+                    var securityStamp =
+                        context.Principal?.FindFirstValue(ClaimNames.SecurityStamp);
+                    var isActiveUser = await userReadService.IsActiveUserWithSecurityStampAsync(
                         userId,
+                        securityStamp ?? string.Empty,
                         context.HttpContext.RequestAborted);
                     if (!isActiveUser)
                     {
@@ -178,6 +196,15 @@ public static class IdentityAccessModule
         services.AddScoped<IIdentityUserReadService, IdentityUserReadService>();
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
         services.AddScoped<ITokenRevocationService, TokenRevocationService>();
+        services.AddScoped<IAuthTokenService, AuthTokenService>();
+        services.AddScoped<IMfaTicketService, MfaTicketService>();
+        var emailOptions = configuration
+            .GetSection(IdentityEmailOptions.SectionName)
+            .Get<IdentityEmailOptions>() ?? new IdentityEmailOptions();
+        ValidateIdentityEmailOptions(emailOptions, environment);
+        services.Configure<IdentityEmailOptions>(
+            configuration.GetSection(IdentityEmailOptions.SectionName));
+        services.AddScoped<IIdentityEmailSender, IdentityEmailSender>();
 
         services.AddScoped<RegisterCommandHandler>();
         services.AddScoped<LoginCommandHandler>();
@@ -188,6 +215,8 @@ public static class IdentityAccessModule
         services.AddScoped<GetUsersQueryHandler>();
         services.AddScoped<GetUserByIdQueryHandler>();
         services.AddScoped<GetRolesQueryHandler>();
+        services.AddScoped<AccountRecoveryHandler>();
+        services.AddScoped<MfaFlowHandler>();
 
         return services;
     }
@@ -208,6 +237,36 @@ public static class IdentityAccessModule
 
         if (jwtOptions.ExpiryMinutes <= 0)
             throw new InvalidOperationException("Jwt:ExpiryMinutes must be greater than zero.");
+    }
+
+    private static void ValidateIdentityEmailOptions(
+        IdentityEmailOptions options,
+        IHostEnvironment environment)
+    {
+        if (environment.IsDevelopment())
+            return;
+
+        if (!Uri.TryCreate(options.BaseUrl, UriKind.Absolute, out var baseUri) ||
+            baseUri.Scheme != Uri.UriSchemeHttps)
+        {
+            throw new InvalidOperationException(
+                "IdentityEmail:BaseUrl must be an absolute HTTPS URL outside Development.");
+        }
+
+        if (string.IsNullOrWhiteSpace(options.FromAddress) ||
+            string.IsNullOrWhiteSpace(options.SmtpHost) ||
+            options.SmtpPort is <= 0 or > 65535)
+        {
+            throw new InvalidOperationException(
+                "IdentityEmail FromAddress, SmtpHost, and a valid SmtpPort are required outside Development.");
+        }
+
+        if (string.IsNullOrWhiteSpace(options.SmtpUsername) !=
+            string.IsNullOrWhiteSpace(options.SmtpPassword))
+        {
+            throw new InvalidOperationException(
+                "IdentityEmail SmtpUsername and SmtpPassword must be configured together.");
+        }
     }
 
     private static async Task WriteAuthenticationProblemDetailsAsync(

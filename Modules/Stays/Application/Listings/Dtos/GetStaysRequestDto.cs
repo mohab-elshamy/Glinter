@@ -17,6 +17,19 @@ public class GetStaysRequestDto
     [StringLength(100, ErrorMessage = "Tag cannot exceed 100 characters.")]
     public string? Tag { get; set; }
 
+    [StringLength(200, ErrorMessage = "Search cannot exceed 200 characters.")]
+    public string? Search { get; set; }
+
+    [StringLength(10, ErrorMessage = "Currency cannot exceed 10 characters.")]
+    public string? Currency { get; set; }
+
+    public DateOnly? CheckInDate { get; set; }
+
+    public DateOnly? CheckOutDate { get; set; }
+
+    [StringLength(20, ErrorMessage = "SortBy cannot exceed 20 characters.")]
+    public string? SortBy { get; set; }
+
     [Range(1, 10000, ErrorMessage = "Page must be between 1 and 10000.")]
     public int Page { get; set; } = 1;
 

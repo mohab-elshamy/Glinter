@@ -65,6 +65,157 @@ public sealed class IdentityAndProblemDetailsTests : ApiTestBase
     }
 
     [Fact]
+    public async Task Email_confirmation_and_password_reset_invalidate_existing_sessions()
+    {
+        var email = $"recovery.{Guid.NewGuid():N}@glinter.test";
+        var registration = await Client.PostAsJsonAsync("/api/auth/register", new
+        {
+            fullName = "Recovery User",
+            email,
+            password = GlinterApiFactory.UserPassword,
+            role = "Traveler"
+        });
+        registration.EnsureSuccessStatusCode();
+        using var registrationJson = await ReadJsonAsync(registration);
+
+        var unconfirmedLogin = await Client.PostAsJsonAsync("/api/auth/login", new
+        {
+            email,
+            password = GlinterApiFactory.UserPassword
+        });
+        await AssertProblemAsync(unconfirmedLogin, 401, "authentication_required");
+
+        var confirmation = await Client.PostAsJsonAsync("/api/auth/confirm-email", new
+        {
+            userId = registrationJson.RootElement.GetProperty("userId").GetGuid(),
+            token = registrationJson.RootElement
+                .GetProperty("developmentConfirmationToken").GetString()
+        });
+        confirmation.EnsureSuccessStatusCode();
+
+        var login = await Client.PostAsJsonAsync("/api/auth/login", new
+        {
+            email,
+            password = GlinterApiFactory.UserPassword
+        });
+        login.EnsureSuccessStatusCode();
+        using var loginJson = await ReadJsonAsync(login);
+        var accessToken = loginJson.RootElement.GetProperty("token").GetString()!;
+        var refreshToken = loginJson.RootElement.GetProperty("refreshToken").GetString()!;
+
+        var forgot = await Client.PostAsJsonAsync(
+            "/api/auth/forgot-password",
+            new { email });
+        forgot.EnsureSuccessStatusCode();
+        using var forgotJson = await ReadJsonAsync(forgot);
+        var resetToken = forgotJson.RootElement.GetProperty("developmentToken").GetString();
+
+        const string newPassword = "ReplacementPassword!2026";
+        var reset = await Client.PostAsJsonAsync("/api/auth/reset-password", new
+        {
+            email,
+            token = resetToken,
+            newPassword
+        });
+        reset.EnsureSuccessStatusCode();
+
+        var oldAccess = await SendAsync(HttpMethod.Get, "/api/auth/me", accessToken);
+        await AssertProblemAsync(oldAccess, 401, "authentication_required");
+        var oldRefresh = await Client.PostAsJsonAsync(
+            "/api/auth/refresh",
+            new { refreshToken });
+        await AssertProblemAsync(oldRefresh, 401, "authentication_required");
+
+        var newLogin = await Client.PostAsJsonAsync("/api/auth/login", new
+        {
+            email,
+            password = newPassword
+        });
+        newLogin.EnsureSuccessStatusCode();
+    }
+
+    [Fact]
+    public async Task Refresh_tokens_rotate_and_reuse_revokes_the_whole_family()
+    {
+        var user = await CreateUserAsync("Traveler", "refresh");
+        var rotation = await Client.PostAsJsonAsync(
+            "/api/auth/refresh",
+            new { refreshToken = user.RefreshToken });
+        rotation.EnsureSuccessStatusCode();
+        using var rotationJson = await ReadJsonAsync(rotation);
+        var rotatedAccess = rotationJson.RootElement.GetProperty("token").GetString()!;
+        var rotatedRefresh = rotationJson.RootElement.GetProperty("refreshToken").GetString()!;
+
+        var reuse = await Client.PostAsJsonAsync(
+            "/api/auth/refresh",
+            new { refreshToken = user.RefreshToken });
+        await AssertProblemAsync(reuse, 401, "authentication_required");
+
+        var familyToken = await Client.PostAsJsonAsync(
+            "/api/auth/refresh",
+            new { refreshToken = rotatedRefresh });
+        await AssertProblemAsync(familyToken, 401, "authentication_required");
+
+        var originalAccess = await SendAsync(HttpMethod.Get, "/api/auth/me", user.Token);
+        await AssertProblemAsync(originalAccess, 401, "authentication_required");
+        var replacementAccess = await SendAsync(HttpMethod.Get, "/api/auth/me", rotatedAccess);
+        await AssertProblemAsync(replacementAccess, 401, "authentication_required");
+    }
+
+    [Fact]
+    public async Task Admin_mfa_tickets_are_required_and_single_use()
+    {
+        await GetAdminTokenAsync();
+
+        var login = await Client.PostAsJsonAsync("/api/auth/login", new
+        {
+            email = GlinterApiFactory.AdminEmail,
+            password = GlinterApiFactory.AdminPassword
+        });
+        login.EnsureSuccessStatusCode();
+        using var loginJson = await ReadJsonAsync(login);
+        Assert.True(loginJson.RootElement.GetProperty("requiresMfa").GetBoolean());
+        Assert.False(loginJson.RootElement.GetProperty("requiresSetup").GetBoolean());
+        var ticket = loginJson.RootElement.GetProperty("mfaTicket").GetString()!;
+        var currentCode = GenerateTotp(Factory.AdminMfaSharedKey!);
+        var invalidCode = currentCode == "000000" ? "000001" : "000000";
+
+        var invalid = await Client.PostAsJsonAsync("/api/auth/mfa/verify", new
+        {
+            mfaTicket = ticket,
+            code = invalidCode
+        });
+        await AssertProblemAsync(invalid, 401, "authentication_required");
+
+        var replay = await Client.PostAsJsonAsync("/api/auth/mfa/verify", new
+        {
+            mfaTicket = ticket,
+            code = GenerateTotp(Factory.AdminMfaSharedKey!)
+        });
+        await AssertProblemAsync(replay, 401, "authentication_required");
+
+        var freshLogin = await Client.PostAsJsonAsync("/api/auth/login", new
+        {
+            email = GlinterApiFactory.AdminEmail,
+            password = GlinterApiFactory.AdminPassword
+        });
+        freshLogin.EnsureSuccessStatusCode();
+        using var freshLoginJson = await ReadJsonAsync(freshLogin);
+        var freshTicket = freshLoginJson.RootElement.GetProperty("mfaTicket").GetString()!;
+        var verified = await Client.PostAsJsonAsync("/api/auth/mfa/verify", new
+        {
+            mfaTicket = freshTicket,
+            code = GenerateTotp(Factory.AdminMfaSharedKey!)
+        });
+        verified.EnsureSuccessStatusCode();
+        using var verifiedJson = await ReadJsonAsync(verified);
+        Assert.False(string.IsNullOrWhiteSpace(
+            verifiedJson.RootElement.GetProperty("token").GetString()));
+        Assert.False(string.IsNullOrWhiteSpace(
+            verifiedJson.RootElement.GetProperty("refreshToken").GetString()));
+    }
+
+    [Fact]
     public async Task Common_client_failures_use_problem_details()
     {
         var validation = await Client.PostAsJsonAsync("/api/auth/login", new

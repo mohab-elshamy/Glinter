@@ -17,5 +17,13 @@ public class SetExperienceApprovalStatusCommandValidator
         {
             throw new ValidationException("ModerationNotes cannot exceed 1000 characters.");
         }
+
+        if (command.ApprovalStatus ==
+                Glinter.Modules.Experiences.Domain.Enums.ExperienceApprovalStatus.Rejected &&
+            string.IsNullOrWhiteSpace(command.ModerationNotes))
+        {
+            throw new ValidationException(
+                "ModerationNotes are required when rejecting an experience.");
+        }
     }
 }

@@ -12,6 +12,11 @@ public class GetAllStaysQuery
     public decimal? MaxPrice { get; set; }
     public int? Guests { get; set; }
     public string? Tag { get; set; }
+    public string? Search { get; set; }
+    public string? Currency { get; set; }
+    public DateOnly? CheckInDate { get; set; }
+    public DateOnly? CheckOutDate { get; set; }
+    public string? SortBy { get; set; }
     public int Page { get; set; } = DefaultPage;
     public int PageSize { get; set; } = DefaultPageSize;
 

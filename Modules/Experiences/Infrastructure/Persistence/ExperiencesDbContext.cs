@@ -19,6 +19,8 @@ public class ExperiencesDbContext : DbContext, IExperiencesDbContext
     public DbSet<ExperienceReview> ExperienceReviews => Set<ExperienceReview>();
     public DbSet<ExperienceVibe> ExperienceVibes => Set<ExperienceVibe>();
     public DbSet<ExperienceTag> ExperienceTags => Set<ExperienceTag>();
+    public DbSet<ExperienceModerationEvent> ExperienceModerationEvents =>
+        Set<ExperienceModerationEvent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

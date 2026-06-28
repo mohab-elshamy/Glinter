@@ -25,6 +25,11 @@ public interface IStayRepository
         decimal? maxPrice,
         int? guests,
         string? tag,
+        string? search,
+        string? currency,
+        DateOnly? checkInDate,
+        DateOnly? checkOutDate,
+        string sortBy,
         int page,
         int pageSize,
         CancellationToken cancellationToken = default);

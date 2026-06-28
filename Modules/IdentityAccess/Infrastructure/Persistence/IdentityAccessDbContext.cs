@@ -16,6 +16,8 @@ public class IdentityAccessDbContext
     }
 
     public DbSet<RevokedToken> RevokedTokens => Set<RevokedToken>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<MfaChallenge> MfaChallenges => Set<MfaChallenge>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -59,6 +61,35 @@ public class IdentityAccessDbContext
 
             entity.Property(x => x.Reason)
                 .HasMaxLength(500);
+        });
+
+        builder.Entity<RefreshToken>(entity =>
+        {
+            entity.ToTable("refresh_tokens");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.TokenHash).HasMaxLength(64).IsRequired();
+            entity.Property(x => x.RevocationReason).HasMaxLength(200);
+            entity.Property(x => x.ReplacedByTokenHash).HasMaxLength(64);
+            entity.HasIndex(x => x.TokenHash).IsUnique();
+            entity.HasIndex(x => new { x.UserId, x.FamilyId });
+            entity.HasOne(x => x.User)
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<MfaChallenge>(entity =>
+        {
+            entity.ToTable("mfa_challenges");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Purpose).HasMaxLength(20).IsRequired();
+            entity.Property(x => x.TokenHash).HasMaxLength(64).IsRequired();
+            entity.HasIndex(x => x.TokenHash).IsUnique();
+            entity.HasIndex(x => new { x.UserId, x.ExpiresAtUtc });
+            entity.HasOne(x => x.User)
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

@@ -39,9 +39,10 @@ public sealed class ApiExceptionHandlingMiddleware
             {
                 _logger.LogError(
                     exception,
-                    "An exception occurred after the response started for {Method} {Path}.",
+                    "An exception occurred after the response started for {Method} {Path}; correlation {CorrelationId}.",
                     context.Request.Method,
-                    context.Request.Path);
+                    context.Request.Path,
+                    context.TraceIdentifier);
                 throw;
             }
 
@@ -57,17 +58,19 @@ public sealed class ApiExceptionHandlingMiddleware
         if (statusCode >= StatusCodes.Status500InternalServerError)
         {
             _logger.LogError(exception,
-                "Unhandled exception while processing {Method} {Path}.",
+                "Unhandled exception while processing {Method} {Path}; correlation {CorrelationId}.",
                 context.Request.Method,
-                context.Request.Path);
+                context.Request.Path,
+                context.TraceIdentifier);
         }
         else
         {
             _logger.LogWarning(exception,
-                "Request failed with {StatusCode} while processing {Method} {Path}.",
+                "Request failed with {StatusCode} while processing {Method} {Path}; correlation {CorrelationId}.",
                 statusCode,
                 context.Request.Method,
-                context.Request.Path);
+                context.Request.Path,
+                context.TraceIdentifier);
         }
 
         context.Response.Clear();

@@ -19,8 +19,52 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
+using Glinter.Modules.Communication.Infrastructure.Realtime;
+using Glinter.Shared.Infrastructure.Health;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Glinter.Shared.Infrastructure.Logging;
+using Microsoft.Extensions.Logging;
+using Glinter.Shared.Infrastructure.Dashboards;
+using Glinter.Shared.Infrastructure.Analytics;
+using Glinter.Shared.Infrastructure.Metrics;
+using Glinter.Shared.Infrastructure.Cleanup;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Logging.ClearProviders();
+builder.Logging.Configure(options =>
+{
+    options.ActivityTrackingOptions =
+        ActivityTrackingOptions.TraceId |
+        ActivityTrackingOptions.SpanId |
+        ActivityTrackingOptions.ParentId;
+});
+// Hosting.Diagnostics logs the raw request URL before middleware can redact
+// SignalR's access_token query parameter. The safe request logger below
+// replaces those start/finish records.
+builder.Logging.AddFilter(
+    "Microsoft.AspNetCore.Hosting.Diagnostics",
+    LogLevel.Warning);
+if (builder.Environment.IsDevelopment())
+{
+    builder.Logging.AddSimpleConsole(options =>
+    {
+        options.IncludeScopes = true;
+        options.SingleLine = true;
+        options.TimestampFormat = "yyyy-MM-ddTHH:mm:ss.fffZ ";
+        options.UseUtcTimestamp = true;
+    });
+}
+else
+{
+    builder.Logging.AddJsonConsole(options =>
+    {
+        options.IncludeScopes = true;
+        options.TimestampFormat = "yyyy-MM-ddTHH:mm:ss.fffZ";
+        options.UseUtcTimestamp = true;
+    });
+}
 
 const string CorsPolicyName = "GlinterFrontend";
 
@@ -52,7 +96,7 @@ builder.Services.Configure<FormOptions>(options =>
 });
 
 // Module 1: IdentityAccess
-builder.Services.AddIdentityAccessModule(builder.Configuration);
+builder.Services.AddIdentityAccessModule(builder.Configuration, builder.Environment);
 
 // Module 2: Profiles
 builder.Services.AddProfilesModule(builder.Configuration);
@@ -77,6 +121,39 @@ builder.Services.AddControllers()
     {
         options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
     });
+
+builder.Services.AddSignalR(options =>
+{
+    options.EnableDetailedErrors = builder.Environment.IsDevelopment();
+    options.MaximumReceiveMessageSize = 16 * 1024;
+});
+
+builder.Services.AddHealthChecks()
+    .AddCheck("self", () => HealthCheckResult.Healthy(), tags: ["live"])
+    .AddCheck<PostgresReadinessHealthCheck>("postgres", tags: ["ready"]);
+builder.Services.AddScoped<DashboardService>();
+builder.Services.AddScoped<AdminAnalyticsService>();
+builder.Services.AddSingleton<ApplicationMetrics>();
+
+var cleanupOptions = builder.Configuration
+    .GetSection(DataCleanupOptions.SectionName)
+    .Get<DataCleanupOptions>() ?? new DataCleanupOptions();
+if (cleanupOptions.IntervalMinutes <= 0 ||
+    cleanupOptions.RevokedTokenRetentionDays < 0 ||
+    cleanupOptions.RefreshTokenRetentionDays < 0 ||
+    cleanupOptions.MfaChallengeRetentionDays < 0 ||
+    cleanupOptions.ReadNotificationRetentionDays < 1 ||
+    cleanupOptions.UnreadNotificationRetentionDays <
+    cleanupOptions.ReadNotificationRetentionDays)
+{
+    throw new InvalidOperationException(
+        "Cleanup configuration is invalid; interval must be positive and unread notification retention must be at least the read retention.");
+}
+builder.Services.Configure<DataCleanupOptions>(
+    builder.Configuration.GetSection(DataCleanupOptions.SectionName));
+builder.Services.AddScoped<DataCleanupService>();
+if (cleanupOptions.Enabled)
+    builder.Services.AddHostedService<DataCleanupWorker>();
 
 builder.Services.Configure<ApiBehaviorOptions>(options =>
 {
@@ -148,7 +225,8 @@ builder.Services.AddCors(options =>
             policy
                 .WithOrigins(allowedOrigins)
                 .AllowAnyHeader()
-                .AllowAnyMethod();
+                .AllowAnyMethod()
+                .AllowCredentials();
         }
     });
 });
@@ -242,6 +320,8 @@ builder.Services.AddSwaggerGen(options =>
 
 var app = builder.Build();
 
+app.UseMiddleware<RequestCorrelationMiddleware>();
+app.UseMiddleware<RequestLoggingMiddleware>();
 app.UseMiddleware<ApiExceptionHandlingMiddleware>();
 
 if (!app.Environment.IsDevelopment())
@@ -281,6 +361,18 @@ else
 }
 
 app.MapControllers();
+app.MapHub<ChatHub>("/hubs/chat", options =>
+{
+    options.CloseOnAuthenticationExpiration = true;
+});
+app.MapHealthChecks("/health/live", new HealthCheckOptions
+{
+    Predicate = registration => registration.Tags.Contains("live")
+}).DisableRateLimiting();
+app.MapHealthChecks("/health/ready", new HealthCheckOptions
+{
+    Predicate = registration => registration.Tags.Contains("ready")
+}).DisableRateLimiting();
 
 using (var scope = app.Services.CreateScope())
 {

@@ -126,6 +126,11 @@ public class StayRepository : IStayRepository
         decimal? maxPrice,
         int? guests,
         string? tag,
+        string? search,
+        string? currency,
+        DateOnly? checkInDate,
+        DateOnly? checkOutDate,
+        string sortBy,
         int page,
         int pageSize,
         CancellationToken cancellationToken = default)
@@ -165,9 +170,44 @@ public class StayRepository : IStayRepository
                 x.Tags.Any(t => t.Name.ToLower() == normalizedTag));
         }
 
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var normalizedSearch = search.Trim().ToLower();
+            query = query.Where(x =>
+                x.Name.ToLower().Contains(normalizedSearch) ||
+                x.Description.ToLower().Contains(normalizedSearch) ||
+                x.Address.ToLower().Contains(normalizedSearch) ||
+                x.Tags.Any(t => t.Name.ToLower().Contains(normalizedSearch)));
+        }
+
+        if (!string.IsNullOrWhiteSpace(currency))
+        {
+            var normalizedCurrency = currency.Trim().ToUpper();
+            query = query.Where(x => x.Currency == normalizedCurrency);
+        }
+
+        if (checkInDate.HasValue && checkOutDate.HasValue)
+        {
+            query = query.Where(x => !x.Bookings.Any(booking =>
+                booking.Status != "Cancelled" &&
+                booking.CheckInDate < checkOutDate.Value &&
+                booking.CheckOutDate > checkInDate.Value));
+        }
+
+        query = sortBy switch
+        {
+            "price_asc" => query
+                .OrderBy(x => x.PricePerNight)
+                .ThenBy(x => x.Id),
+            "price_desc" => query
+                .OrderByDescending(x => x.PricePerNight)
+                .ThenBy(x => x.Id),
+            _ => query
+                .OrderByDescending(x => x.CreatedAtUtc)
+                .ThenBy(x => x.Id)
+        };
+
         return await query
-            .OrderByDescending(x => x.CreatedAtUtc)
-            .ThenBy(x => x.Id)
             .Skip((normalizedPage - 1) * normalizedPageSize)
             .Take(normalizedPageSize)
             .ToListAsync(cancellationToken);

@@ -1,7 +1,13 @@
 using System.Reflection;
 using Glinter.IntegrationTests.Infrastructure;
 using Glinter.Modules.Communication.Application.Notifications.Commands;
+using Glinter.Modules.Communication.Application.Chats.Dtos;
+using Glinter.Modules.Communication.Domain.Enums;
 using Glinter.Shared.Application.Exceptions;
+using Microsoft.AspNetCore.Http.Connections;
+using Microsoft.AspNetCore.SignalR;
+using Microsoft.AspNetCore.SignalR.Client;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Glinter.IntegrationTests;
 
@@ -166,4 +172,171 @@ public sealed class CommunicationTests : ApiTestBase
              """);
         Assert.Equal(1, readCount);
     }
+
+    [Fact]
+    public async Task SignalR_delivers_persisted_messages_only_to_thread_participants()
+    {
+        var userA = await CreateUserAsync("Traveler", "realtime-a");
+        var userB = await CreateUserAsync("Traveler", "realtime-b");
+        var userC = await CreateUserAsync("Traveler", "realtime-c");
+
+        var threadResponse = await SendAsync(
+            HttpMethod.Post,
+            "/api/chat/threads/direct",
+            userA.Token,
+            new { otherUserId = userB.UserId });
+        threadResponse.EnsureSuccessStatusCode();
+        using var threadJson = await ReadJsonAsync(threadResponse);
+        var threadId = threadJson.RootElement.GetProperty("id").GetGuid();
+
+        await using var participantConnection = CreateHubConnection(userB.Token);
+        var messageReceived = new TaskCompletionSource<ChatMessageEventDto>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        participantConnection.On<ChatMessageEventDto>(
+            "MessageReceived",
+            message => messageReceived.TrySetResult(message));
+
+        await participantConnection.StartAsync();
+        await participantConnection.InvokeAsync("JoinThread", threadId);
+
+        var messageResponse = await SendAsync(
+            HttpMethod.Post,
+            $"/api/chat/threads/{threadId}/messages",
+            userA.Token,
+            new { body = "SignalR integration message" });
+        messageResponse.EnsureSuccessStatusCode();
+        using var messageJson = await ReadJsonAsync(messageResponse);
+
+        var realtimeMessage = await messageReceived.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal(
+            messageJson.RootElement.GetProperty("id").GetGuid(),
+            realtimeMessage.Id);
+        Assert.Equal(threadId, realtimeMessage.ThreadId);
+        Assert.Equal(userA.UserId, realtimeMessage.SenderUserId);
+        Assert.Equal("SignalR integration message", realtimeMessage.Body);
+
+        await using var outsiderConnection = CreateHubConnection(userC.Token);
+        await outsiderConnection.StartAsync();
+        var exception = await Assert.ThrowsAsync<HubException>(
+            () => outsiderConnection.InvokeAsync("JoinThread", threadId));
+        Assert.Contains("not a participant", exception.Message);
+    }
+
+    [Fact]
+    public async Task SignalR_access_token_query_value_is_never_written_to_logs()
+    {
+        var marker = $"signalr-secret-{Guid.NewGuid():N}";
+        Factory.LogCollector.Clear();
+
+        await Client.GetAsync($"/hubs/chat?id=invalid&access_token={marker}");
+        await Task.Delay(100);
+
+        Assert.DoesNotContain(
+            Factory.LogCollector.Messages,
+            message => message.Contains(marker, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Notification_preferences_are_defaulted_persisted_and_enforced()
+    {
+        var user = await CreateUserAsync("Traveler", "preferences");
+
+        var defaults = await SendAsync(
+            HttpMethod.Get,
+            "/api/notifications/preferences",
+            user.Token);
+        defaults.EnsureSuccessStatusCode();
+        using var defaultsJson = await ReadJsonAsync(defaults);
+        Assert.True(defaultsJson.RootElement.GetProperty("inAppEnabled").GetBoolean());
+        Assert.True(defaultsJson.RootElement
+            .GetProperty("chatMessageNotificationsEnabled").GetBoolean());
+        Assert.True(defaultsJson.RootElement
+            .GetProperty("systemNotificationsEnabled").GetBoolean());
+
+        var concurrentUpdates = await Task.WhenAll(
+            SendAsync(
+                HttpMethod.Put,
+                "/api/notifications/preferences",
+                user.Token,
+                new
+                {
+                    inAppEnabled = true,
+                    emailEnabled = false,
+                    pushEnabled = true,
+                    chatMessageNotificationsEnabled = true,
+                    systemNotificationsEnabled = false
+                }),
+            SendAsync(
+                HttpMethod.Put,
+                "/api/notifications/preferences",
+                user.Token,
+                new
+                {
+                    inAppEnabled = false,
+                    emailEnabled = true,
+                    pushEnabled = false,
+                    chatMessageNotificationsEnabled = false,
+                    systemNotificationsEnabled = true
+                }));
+        foreach (var concurrentUpdate in concurrentUpdates)
+        {
+            concurrentUpdate.EnsureSuccessStatusCode();
+            concurrentUpdate.Dispose();
+        }
+
+        var update = await SendAsync(
+            HttpMethod.Put,
+            "/api/notifications/preferences",
+            user.Token,
+            new
+            {
+                inAppEnabled = true,
+                emailEnabled = true,
+                pushEnabled = false,
+                chatMessageNotificationsEnabled = false,
+                systemNotificationsEnabled = true
+            });
+        update.EnsureSuccessStatusCode();
+
+        using var scope = Factory.Services.CreateScope();
+        var handler = scope.ServiceProvider.GetRequiredService<CreateNotificationHandler>();
+        var chatNotification = await handler.HandleAsync(
+            new CreateNotificationCommand
+            {
+                UserId = user.UserId,
+                Type = NotificationType.ChatMessage,
+                Title = "Hidden chat notification",
+                Body = "This should respect the preference."
+            });
+        Assert.Null(chatNotification);
+
+        var systemNotification = await handler.HandleAsync(
+            new CreateNotificationCommand
+            {
+                UserId = user.UserId,
+                Type = NotificationType.System,
+                Title = "Visible system notification",
+                Body = "This category remains enabled."
+            });
+        Assert.NotNull(systemNotification);
+
+        var preferenceCount = await Factory.ScalarAsync<long>(
+            $"""SELECT count(*) FROM notification_preferences WHERE "UserId" = '{user.UserId}'""");
+        Assert.Equal(1, preferenceCount);
+        var notificationCount = await Factory.ScalarAsync<long>(
+            $"""SELECT count(*) FROM notifications WHERE "UserId" = '{user.UserId}'""");
+        Assert.Equal(1, notificationCount);
+    }
+
+    private HubConnection CreateHubConnection(string token) =>
+        new HubConnectionBuilder()
+            .WithUrl(
+                new Uri(Client.BaseAddress!, "/hubs/chat"),
+                options =>
+                {
+                    options.AccessTokenProvider = () => Task.FromResult<string?>(token);
+                    options.Transports = HttpTransportType.LongPolling;
+                    options.HttpMessageHandlerFactory = _ => Factory.Server.CreateHandler();
+                })
+            .Build();
 }

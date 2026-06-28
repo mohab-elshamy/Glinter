@@ -30,7 +30,9 @@
   <ItemGroup>
     <Compile Remove="tests\**\*.cs" />
     <Content Remove="tests\**\*" />
+    <Content Remove="**\*.log" />
     <None Remove="tests\**\*" />
+    <None Remove="**\*.log" />
   </ItemGroup>
 
   <ItemGroup>

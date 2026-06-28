@@ -70,6 +70,11 @@ public class StaysController : ControllerBase
             MaxPrice = request.MaxPrice,
             Guests = request.Guests,
             Tag = request.Tag,
+            Search = request.Search,
+            Currency = request.Currency,
+            CheckInDate = request.CheckInDate,
+            CheckOutDate = request.CheckOutDate,
+            SortBy = request.SortBy,
             Page = request.Page,
             PageSize = request.PageSize
         };

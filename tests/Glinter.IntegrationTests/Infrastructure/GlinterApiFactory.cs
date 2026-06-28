@@ -14,6 +14,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using Npgsql;
 
@@ -34,6 +35,8 @@ public sealed class GlinterApiFactory : WebApplicationFactory<Program>, IAsyncLi
     private string _adminConnectionString = string.Empty;
 
     public string ConnectionString { get; private set; } = string.Empty;
+    public string? AdminMfaSharedKey { get; set; }
+    public TestLogCollector LogCollector { get; } = new();
 
     public async Task InitializeAsync()
     {
@@ -84,6 +87,7 @@ public sealed class GlinterApiFactory : WebApplicationFactory<Program>, IAsyncLi
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Development");
+        builder.ConfigureLogging(logging => logging.AddProvider(LogCollector));
         builder.ConfigureAppConfiguration((_, configuration) =>
         {
             configuration.AddInMemoryCollection(new Dictionary<string, string?>

@@ -1,6 +1,5 @@
 using Glinter.Modules.IdentityAccess.Application.Abstractions;
 using Glinter.Modules.IdentityAccess.Application.Auth.Dtos;
-using Glinter.Modules.IdentityAccess.Application.Common.Mapping;
 using Glinter.Modules.IdentityAccess.Domain.Entities;
 using Microsoft.AspNetCore.Identity;
 
@@ -9,18 +8,21 @@ namespace Glinter.Modules.IdentityAccess.Application.Auth.Commands.Register;
 public class RegisterCommandHandler
 {
     private readonly UserManager<ApplicationUser> _userManager;
-    private readonly IJwtTokenGenerator _jwtTokenGenerator;
+    private readonly IIdentityEmailSender _emailSender;
+    private readonly IWebHostEnvironment _environment;
     private readonly RegisterCommandValidator _validator = new();
 
     public RegisterCommandHandler(
         UserManager<ApplicationUser> userManager,
-        IJwtTokenGenerator jwtTokenGenerator)
+        IIdentityEmailSender emailSender,
+        IWebHostEnvironment environment)
     {
         _userManager = userManager;
-        _jwtTokenGenerator = jwtTokenGenerator;
+        _emailSender = emailSender;
+        _environment = environment;
     }
 
-    public async Task<AuthResponse> HandleAsync(RegisterCommand command)
+    public async Task<RegisterResponse> HandleAsync(RegisterCommand command)
     {
         var errors = _validator.Validate(command);
         if (errors.Count > 0)
@@ -36,6 +38,7 @@ public class RegisterCommandHandler
             FullName = command.FullName,
             Email = command.Email,
             UserName = command.Email,
+            EmailConfirmed = false,
             IsActive = true
         };
 
@@ -52,9 +55,17 @@ public class RegisterCommandHandler
                 string.Join(" | ", roleResult.Errors.Select(x => x.Description)));
         }
 
-        var roles = await _userManager.GetRolesAsync(user);
-        var token = _jwtTokenGenerator.GenerateToken(user, roles);
+        var confirmationToken = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+        await _emailSender.SendConfirmationAsync(user, confirmationToken);
 
-        return IdentityAccessMappings.ToAuthResponse(user, roles, token);
+        return new RegisterResponse
+        {
+            UserId = user.Id,
+            Email = user.Email ?? string.Empty,
+            Message = "Registration succeeded. Confirm your email before signing in.",
+            DevelopmentConfirmationToken = _environment.IsDevelopment()
+                ? confirmationToken
+                : null
+        };
     }
 }

@@ -209,6 +209,44 @@ namespace Glinter.Modules.Profiles.Infrastructure.Persistence.Migrations
                     b.ToTable("local_buddy_profiles", (string)null);
                 });
 
+            modelBuilder.Entity("Glinter.Modules.Profiles.Domain.Entities.LocalBuddyVerificationEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ActorUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("LocalBuddyUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("NewStatus")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("PreviousStatus")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorUserId", "CreatedAtUtc");
+
+                    b.HasIndex("LocalBuddyUserId", "CreatedAtUtc");
+
+                    b.ToTable("local_buddy_verification_events", (string)null);
+                });
+
             modelBuilder.Entity("Glinter.Modules.Profiles.Domain.Entities.TravelerInterest", b =>
                 {
                     b.Property<Guid>("TravelerProfileId")

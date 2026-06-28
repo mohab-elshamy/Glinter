@@ -5,6 +5,7 @@ using Glinter.Modules.Experiences.Domain.Enums;
 using Glinter.Modules.IdentityAccess.Domain.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Glinter.Modules.Experiences.Application.Experiences.Queries.GetExperienceModerationHistory;
 
 namespace Glinter.Modules.Experiences.Presentation.Controllers;
 
@@ -15,13 +16,16 @@ public class AdminExperiencesController : ControllerBase
 {
     private readonly GetAdminExperiencesQueryHandler _getAdminExperiencesHandler;
     private readonly SetExperienceApprovalStatusCommandHandler _setApprovalStatusHandler;
+    private readonly GetExperienceModerationHistoryHandler _getModerationHistoryHandler;
 
     public AdminExperiencesController(
         GetAdminExperiencesQueryHandler getAdminExperiencesHandler,
-        SetExperienceApprovalStatusCommandHandler setApprovalStatusHandler)
+        SetExperienceApprovalStatusCommandHandler setApprovalStatusHandler,
+        GetExperienceModerationHistoryHandler getModerationHistoryHandler)
     {
         _getAdminExperiencesHandler = getAdminExperiencesHandler;
         _setApprovalStatusHandler = setApprovalStatusHandler;
+        _getModerationHistoryHandler = getModerationHistoryHandler;
     }
 
     [HttpGet]
@@ -87,4 +91,16 @@ public class AdminExperiencesController : ControllerBase
 
         return Ok(result);
     }
+
+    [HttpGet("{id:guid}/moderation-history")]
+    public async Task<ActionResult<List<ExperienceModerationEventDto>>> GetModerationHistory(
+        Guid id,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50,
+        CancellationToken cancellationToken = default) =>
+        Ok(await _getModerationHistoryHandler.HandleAsync(
+            id,
+            page,
+            pageSize,
+            cancellationToken));
 }

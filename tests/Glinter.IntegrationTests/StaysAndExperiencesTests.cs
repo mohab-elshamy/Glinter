@@ -97,6 +97,22 @@ public sealed class StaysAndExperiencesTests : ApiTestBase
         using var bookingBJson = await ReadJsonAsync(rebooking);
         var bookingBId = bookingBJson.RootElement.GetProperty("id").GetGuid();
 
+        var search = await Client.GetAsync(
+            $"/api/stays?search=Integration&currency=EGP&guests=2&sortBy=price_desc");
+        search.EnsureSuccessStatusCode();
+        using var searchJson = await ReadJsonAsync(search);
+        Assert.Contains(
+            searchJson.RootElement.EnumerateArray(),
+            item => item.GetProperty("id").GetGuid() == stayId);
+
+        var unavailableSearch = await Client.GetAsync(
+            $"/api/stays?checkInDate={checkIn:yyyy-MM-dd}&checkOutDate={checkOut:yyyy-MM-dd}");
+        unavailableSearch.EnsureSuccessStatusCode();
+        using var unavailableJson = await ReadJsonAsync(unavailableSearch);
+        Assert.DoesNotContain(
+            unavailableJson.RootElement.EnumerateArray(),
+            item => item.GetProperty("id").GetGuid() == stayId);
+
         var privateBookings = await SendAsync(
             HttpMethod.Get,
             $"/api/stays/{stayId}/bookings",
@@ -190,12 +206,33 @@ public sealed class StaysAndExperiencesTests : ApiTestBase
             experienceBody);
         await AssertProblemAsync(providerViolation, 403, "forbidden");
 
+        var rejectWithoutNotes = await SendAsync(
+            HttpMethod.Patch,
+            $"/api/admin/experiences/{experienceId}/approval-status",
+            adminToken,
+            new { approvalStatus = "Rejected" });
+        await AssertProblemAsync(rejectWithoutNotes, 400, "validation_error");
+
         var approve = await SendAsync(
             HttpMethod.Patch,
             $"/api/admin/experiences/{experienceId}/approval-status",
             adminToken,
             new { approvalStatus = "Approved", moderationNotes = "Integration approval" });
         approve.EnsureSuccessStatusCode();
+
+        var moderationHistory = await SendAsync(
+            HttpMethod.Get,
+            $"/api/admin/experiences/{experienceId}/moderation-history",
+            adminToken);
+        moderationHistory.EnsureSuccessStatusCode();
+        using var moderationHistoryJson = await ReadJsonAsync(moderationHistory);
+        Assert.Contains(
+            moderationHistoryJson.RootElement.EnumerateArray(),
+            item => item.GetProperty("action").GetString() == "Submitted");
+        Assert.Contains(
+            moderationHistoryJson.RootElement.EnumerateArray(),
+            item => item.GetProperty("action").GetString() == "AdminDecision" &&
+                    item.GetProperty("newStatus").GetString() == "Approved");
 
         var start = DateTime.UtcNow.AddDays(5);
         var availability = await SendAsync(
@@ -206,6 +243,25 @@ public sealed class StaysAndExperiencesTests : ApiTestBase
         Assert.Equal(HttpStatusCode.Created, availability.StatusCode);
         using var availabilityJson = await ReadJsonAsync(availability);
         var availabilityId = availabilityJson.RootElement.GetProperty("id").GetGuid();
+
+        var experienceSearch = await Client.GetAsync(
+            $"/api/experiences?search=Integration&currency=EGP&minDurationMinutes=60" +
+            $"&maxDurationMinutes=180&availableFromUtc={Uri.EscapeDataString(start.ToString("O"))}" +
+            $"&availableToUtc={Uri.EscapeDataString(start.AddHours(2).ToString("O"))}" +
+            "&guests=3&sortBy=duration_asc");
+        experienceSearch.EnsureSuccessStatusCode();
+        using var experienceSearchJson = await ReadJsonAsync(experienceSearch);
+        Assert.Contains(
+            experienceSearchJson.RootElement.EnumerateArray(),
+            item => item.GetProperty("id").GetGuid() == experienceId);
+
+        var unspecifiedAvailabilitySearch = await Client.GetAsync(
+            "/api/experiences?availableFromUtc=2026-07-01T10:00:00" +
+            "&availableToUtc=2026-07-01T12:00:00");
+        await AssertProblemAsync(
+            unspecifiedAvailabilitySearch,
+            400,
+            "validation_error");
 
         var bookingA = await SendAsync(
             HttpMethod.Post,
@@ -301,5 +357,17 @@ public sealed class StaysAndExperiencesTests : ApiTestBase
         Assert.Equal(
             "Pending",
             updateJson.RootElement.GetProperty("approvalStatus").GetString());
+
+        var updatedHistory = await SendAsync(
+            HttpMethod.Get,
+            $"/api/admin/experiences/{experienceId}/moderation-history",
+            adminToken);
+        updatedHistory.EnsureSuccessStatusCode();
+        using var updatedHistoryJson = await ReadJsonAsync(updatedHistory);
+        Assert.Contains(
+            updatedHistoryJson.RootElement.EnumerateArray(),
+            item => item.GetProperty("action").GetString() == "ProviderUpdated" &&
+                    item.GetProperty("previousStatus").GetString() == "Approved" &&
+                    item.GetProperty("newStatus").GetString() == "Pending");
     }
 }

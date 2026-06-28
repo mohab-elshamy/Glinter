@@ -13,6 +13,7 @@ public interface IExperiencesDbContext
     DbSet<ExperienceReview> ExperienceReviews { get; }
     DbSet<ExperienceVibe> ExperienceVibes { get; }
     DbSet<ExperienceTag> ExperienceTags { get; }
+    DbSet<ExperienceModerationEvent> ExperienceModerationEvents { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

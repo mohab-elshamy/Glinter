@@ -46,12 +46,37 @@ public class GetAllStaysHandler
         if (!string.IsNullOrWhiteSpace(query.Tag) && query.Tag.Trim().Length > 100)
             throw new ValidationException("Tag cannot exceed 100 characters.");
 
+        if (!string.IsNullOrWhiteSpace(query.Search) && query.Search.Trim().Length > 200)
+            throw new ValidationException("Search cannot exceed 200 characters.");
+
+        if (!string.IsNullOrWhiteSpace(query.Currency) &&
+            query.Currency.Trim().Length > 10)
+            throw new ValidationException("Currency cannot exceed 10 characters.");
+
+        if (query.CheckInDate.HasValue != query.CheckOutDate.HasValue)
+            throw new ValidationException("CheckInDate and CheckOutDate must be provided together.");
+
+        if (query.CheckInDate.HasValue &&
+            query.CheckOutDate!.Value <= query.CheckInDate.Value)
+            throw new ValidationException("CheckOutDate must be after CheckInDate.");
+
+        var sortBy = string.IsNullOrWhiteSpace(query.SortBy)
+            ? "newest"
+            : query.SortBy.Trim().ToLowerInvariant();
+        if (sortBy is not ("newest" or "price_asc" or "price_desc"))
+            throw new ValidationException("SortBy must be newest, price_asc, or price_desc.");
+
         var stays = await _stayRepository.GetFilteredAsync(
             query.Adm3Gid,
             query.MinPrice,
             query.MaxPrice,
             query.Guests,
             query.Tag,
+            query.Search,
+            query.Currency,
+            query.CheckInDate,
+            query.CheckOutDate,
+            sortBy,
             query.Page,
             query.PageSize,
             cancellationToken);

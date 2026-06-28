@@ -11,15 +11,18 @@ public class SendChatMessageHandler
     private readonly IChatThreadRepository _threadRepository;
     private readonly IChatMessageRepository _messageRepository;
     private readonly ICurrentUserService _currentUserService;
+    private readonly IChatRealtimeNotifier _realtimeNotifier;
 
     public SendChatMessageHandler(
         IChatThreadRepository threadRepository,
         IChatMessageRepository messageRepository,
-        ICurrentUserService currentUserService)
+        ICurrentUserService currentUserService,
+        IChatRealtimeNotifier realtimeNotifier)
     {
         _threadRepository = threadRepository;
         _messageRepository = messageRepository;
         _currentUserService = currentUserService;
+        _realtimeNotifier = realtimeNotifier;
     }
 
     public async Task<ChatMessageResponseDto> HandleAsync(
@@ -68,6 +71,17 @@ public class SendChatMessageHandler
             message,
             thread,
             participant,
+            cancellationToken);
+
+        await _realtimeNotifier.MessageCreatedAsync(
+            new ChatMessageEventDto
+            {
+                Id = createdMessage.Id,
+                ThreadId = createdMessage.ThreadId,
+                SenderUserId = createdMessage.SenderUserId,
+                Body = createdMessage.Body,
+                SentAtUtc = createdMessage.SentAtUtc
+            },
             cancellationToken);
 
         return CommunicationMappings.ToMessageResponseDto(createdMessage, currentUserId);
