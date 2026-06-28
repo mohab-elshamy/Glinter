@@ -1,13 +1,12 @@
 using System.Text.Json.Serialization;
 using Glinter.Modules.Communication.Infrastructure.DependencyInjection;
-using Glinter.Modules.Experiences.Infrastructure.DependencyInjection;
-using Glinter.Modules.Experiences.Infrastructure.Persistence;
 using Glinter.Modules.IdentityAccess.Domain.Entities;
 using Glinter.Modules.IdentityAccess.Infrastructure.DependencyInjection;
 using Glinter.Modules.IdentityAccess.Infrastructure.Identity;
 using Glinter.Modules.Profiles.Infrastructure.DependencyInjection;
 using Glinter.Modules.Profiles.Infrastructure.Persistence;
 using Glinter.Modules.Regions.Infrastructure.DependencyInjection;
+using Glinter.Modules.SafetyIndex.Infrastructure.DependencyInjection;
 using Glinter.Modules.Stays.Infrastructure.DependencyInjection;
 using Glinter.Modules.Stays.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
@@ -29,10 +28,12 @@ builder.Services.AddDbContext<StaysDbContext>(options =>
 builder.Services.AddStaysModule();
 
 // Module 5: Experiences
-builder.Services.AddExperiencesModule(builder.Configuration);
 
 // Module 6: Regions (Administrative Boundaries)
 builder.Services.AddRegionsModule(builder.Configuration);
+
+// Module 7: Safety Index
+builder.Services.AddSafetyIndexModule(builder.Configuration);
 
 // Module 9: Communication
 builder.Services.AddCommunicationModule(builder.Configuration);
@@ -114,12 +115,6 @@ using (var scope = app.Services.CreateScope())
 {
     var profilesDbContext = scope.ServiceProvider.GetRequiredService<ProfilesDbContext>();
     await ProfilesSeeder.SeedAsync(profilesDbContext);
-}
-
-using (var scope = app.Services.CreateScope())
-{
-    var experiencesDbContext = scope.ServiceProvider.GetRequiredService<ExperiencesDbContext>();
-    await ExperiencesSeeder.SeedAsync(experiencesDbContext);
 }
 
 app.Run();

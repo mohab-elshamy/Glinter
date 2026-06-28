@@ -114,3 +114,6 @@ node_modules/
 
 appsettings.json
 appsettings.Development.json
+
+Data/
+adm2_gids.txt
