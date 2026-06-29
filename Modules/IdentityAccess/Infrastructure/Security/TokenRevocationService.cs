@@ -24,15 +24,15 @@ public class TokenRevocationService : ITokenRevocationService
     public async Task RevokeCurrentTokenAsync(string? reason = null, CancellationToken cancellationToken = default)
     {
         var user = _httpContextAccessor.HttpContext?.User
-                   ?? throw new UnauthorizedAccessException("No authenticated user.");
+                   ?? throw new AuthenticationException("No authenticated user.");
 
         var jti = user.FindFirstValue(JwtRegisteredClaimNames.Jti);
         if (string.IsNullOrWhiteSpace(jti))
-            throw new UnauthorizedAccessException("Token does not contain jti.");
+            throw new AuthenticationException("Token does not contain jti.");
 
         var expUnix = user.FindFirstValue(JwtRegisteredClaimNames.Exp);
         if (!long.TryParse(expUnix, out var expSeconds))
-            throw new UnauthorizedAccessException("Token does not contain exp.");
+            throw new AuthenticationException("Token does not contain exp.");
 
         var expiresAtUtc = DateTimeOffset.FromUnixTimeSeconds(expSeconds).UtcDateTime;
 

@@ -11,15 +11,18 @@ public class SendChatMessageHandler
     private readonly IChatThreadRepository _threadRepository;
     private readonly IChatMessageRepository _messageRepository;
     private readonly ICurrentUserService _currentUserService;
+    private readonly IChatRealtimeNotifier _realtimeNotifier;
 
     public SendChatMessageHandler(
         IChatThreadRepository threadRepository,
         IChatMessageRepository messageRepository,
-        ICurrentUserService currentUserService)
+        ICurrentUserService currentUserService,
+        IChatRealtimeNotifier realtimeNotifier)
     {
         _threadRepository = threadRepository;
         _messageRepository = messageRepository;
         _currentUserService = currentUserService;
+        _realtimeNotifier = realtimeNotifier;
     }
 
     public async Task<ChatMessageResponseDto> HandleAsync(
@@ -29,27 +32,27 @@ public class SendChatMessageHandler
         var currentUserId = GetCurrentUserId();
 
         if (command.ThreadId == Guid.Empty)
-            throw new ArgumentException("ThreadId is required.");
+            throw new ValidationException("ThreadId is required.");
 
         var body = command.Body?.Trim();
         if (string.IsNullOrWhiteSpace(body))
-            throw new ArgumentException("Message body is required.");
+            throw new ValidationException("Message body is required.");
 
         if (body.Length > 4000)
-            throw new ArgumentException("Message body cannot exceed 4000 characters.");
+            throw new ValidationException("Message body cannot exceed 4000 characters.");
 
         var thread = await _threadRepository.GetByIdWithParticipantsAsync(
             command.ThreadId,
             cancellationToken);
 
         if (thread is null)
-            throw new KeyNotFoundException("Chat thread was not found.");
+            throw new NotFoundException("Chat thread was not found.");
 
         var participant = thread.Participants
             .FirstOrDefault(x => x.UserId == currentUserId && x.LeftAtUtc == null);
 
         if (participant is null)
-            throw new KeyNotFoundException("Chat thread was not found.");
+            throw new ForbiddenException("You are not a participant in this chat thread.");
 
         var now = DateTime.UtcNow;
         var message = new ChatMessage
@@ -70,13 +73,24 @@ public class SendChatMessageHandler
             participant,
             cancellationToken);
 
+        await _realtimeNotifier.MessageCreatedAsync(
+            new ChatMessageEventDto
+            {
+                Id = createdMessage.Id,
+                ThreadId = createdMessage.ThreadId,
+                SenderUserId = createdMessage.SenderUserId,
+                Body = createdMessage.Body,
+                SentAtUtc = createdMessage.SentAtUtc
+            },
+            cancellationToken);
+
         return CommunicationMappings.ToMessageResponseDto(createdMessage, currentUserId);
     }
 
     private Guid GetCurrentUserId()
     {
         if (!_currentUserService.IsAuthenticated || _currentUserService.UserId is null)
-            throw new UnauthorizedAccessException("User is not authenticated.");
+            throw new AuthenticationException("User is not authenticated.");
 
         return _currentUserService.UserId.Value;
     }

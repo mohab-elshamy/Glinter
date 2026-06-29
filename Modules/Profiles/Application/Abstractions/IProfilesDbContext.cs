@@ -20,6 +20,7 @@ public interface IProfilesDbContext
     DbSet<TravelerInterest> TravelerInterests { get; }
 
     DbSet<UserFollow> UserFollows { get; }
+    DbSet<LocalBuddyVerificationEvent> LocalBuddyVerificationEvents { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

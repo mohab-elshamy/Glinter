@@ -28,23 +28,29 @@ public class GetChatThreadMessagesHandler
         var currentUserId = GetCurrentUserId();
 
         if (query.ThreadId == Guid.Empty)
-            throw new ArgumentException("ThreadId is required.");
+            throw new ValidationException("ThreadId is required.");
 
         var thread = await _threadRepository.GetByIdWithParticipantsAsync(
             query.ThreadId,
             cancellationToken);
 
         if (thread is null)
-            throw new KeyNotFoundException("Chat thread was not found.");
+            throw new NotFoundException("Chat thread was not found.");
 
         var isParticipant = thread.Participants
             .Any(x => x.UserId == currentUserId && x.LeftAtUtc == null);
 
         if (!isParticipant)
-            throw new KeyNotFoundException("Chat thread was not found.");
+            throw new ForbiddenException("You are not a participant in this chat thread.");
 
-        var page = query.Page <= 0 ? 1 : query.Page;
-        var pageSize = query.PageSize <= 0 ? 50 : Math.Min(query.PageSize, 100);
+        if (query.Page < 1 || query.Page > 10000)
+            throw new ValidationException("Page must be between 1 and 10000.");
+
+        if (query.PageSize < 1 || query.PageSize > 100)
+            throw new ValidationException("PageSize must be between 1 and 100.");
+
+        var page = query.Page;
+        var pageSize = query.PageSize;
         var skip = (page - 1) * pageSize;
 
         var messages = await _messageRepository.GetByThreadIdAsync(
@@ -62,7 +68,7 @@ public class GetChatThreadMessagesHandler
     private Guid GetCurrentUserId()
     {
         if (!_currentUserService.IsAuthenticated || _currentUserService.UserId is null)
-            throw new UnauthorizedAccessException("User is not authenticated.");
+            throw new AuthenticationException("User is not authenticated.");
 
         return _currentUserService.UserId.Value;
     }

@@ -3,6 +3,7 @@ using Glinter.Modules.Regions.Application.Common.Mapping;
 using Glinter.Modules.Regions.Application.DTOs;
 using Glinter.Modules.Regions.Domain.Entities;
 using NetTopologySuite.IO;
+using Glinter.Shared.Application.Auditing;
 
 namespace Glinter.Modules.Regions.Application.Districts.Commands;
 
@@ -23,7 +24,9 @@ public class UpdateDistrictCommand
     public string? ImageUrl { get; set; }
 }
 
-public class CreateDistrictHandler(IAdm2Repository repository)
+public class CreateDistrictHandler(
+    IAdm2Repository repository,
+    AdminAuditDetailsContext auditDetails)
 {
     public async Task<Adm2Dto> HandleAsync(CreateDistrictCommand command, CancellationToken ct)
     {
@@ -36,16 +39,22 @@ public class CreateDistrictHandler(IAdm2Repository repository)
             ImageUrl = command.ImageUrl,
         };
         var created = await repository.AddAsync(entity, ct);
+        auditDetails.SetChanges(
+            new { Exists = false },
+            DistrictAuditSnapshot.From(created));
         return DistrictCommandMapper.Map(created, false);
     }
 }
 
-public class UpdateDistrictHandler(IAdm2Repository repository)
+public class UpdateDistrictHandler(
+    IAdm2Repository repository,
+    AdminAuditDetailsContext auditDetails)
 {
     public async Task<Adm2Dto?> HandleAsync(UpdateDistrictCommand command, CancellationToken ct)
     {
         var entity = await repository.GetByIdAsync(command.Gid, false, ct);
         if (entity is null) return null;
+        var before = DistrictAuditSnapshot.From(entity);
 
         entity.NameEn = command.NameEn;
         entity.NameAr = command.NameAr;
@@ -53,14 +62,46 @@ public class UpdateDistrictHandler(IAdm2Repository repository)
         entity.UpdatedAt = DateTimeOffset.UtcNow;
 
         var updated = await repository.UpdateAsync(entity, ct);
+        if (updated is not null)
+            auditDetails.SetChanges(before, DistrictAuditSnapshot.From(updated));
         return updated is null ? null : DistrictCommandMapper.Map(updated, false);
     }
 }
 
-public class DeleteDistrictHandler(IAdm2Repository repository)
+public class DeleteDistrictHandler(
+    IAdm2Repository repository,
+    AdminAuditDetailsContext auditDetails)
 {
     public async Task<bool> HandleAsync(int gid, CancellationToken ct)
-        => await repository.DeleteAsync(gid, ct);
+    {
+        var entity = await repository.GetByIdAsync(gid, false, ct);
+        if (entity is null)
+            return false;
+
+        var before = DistrictAuditSnapshot.From(entity);
+        var deleted = await repository.DeleteAsync(gid, ct);
+        if (deleted)
+            auditDetails.SetChanges(before, new { Deleted = true });
+        return deleted;
+    }
+}
+
+internal sealed record DistrictAuditSnapshot(
+    int Gid,
+    int Adm1Gid,
+    string NameEn,
+    string? NameAr,
+    string Pcode,
+    string? ImageUrl)
+{
+    internal static DistrictAuditSnapshot From(Adm2 value) =>
+        new(
+            value.Gid,
+            value.Adm1Gid,
+            value.NameEn,
+            value.NameAr,
+            value.Pcode,
+            value.ImageUrl);
 }
 
 internal static class DistrictCommandMapper

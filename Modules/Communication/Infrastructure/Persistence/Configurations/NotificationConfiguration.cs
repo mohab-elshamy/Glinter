@@ -40,5 +40,7 @@ public class NotificationConfiguration : IEntityTypeConfiguration<Notification>
         builder.HasIndex(x => new { x.UserId, x.CreatedAtUtc });
         builder.HasIndex(x => new { x.UserId, x.ReadAtUtc });
         builder.HasIndex(x => new { x.SourceModule, x.SourceEntityType, x.SourceEntityId });
+        builder.HasIndex(x => x.ReadAtUtc);
+        builder.HasIndex(x => x.CreatedAtUtc);
     }
 }

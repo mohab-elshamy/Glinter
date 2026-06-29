@@ -14,7 +14,7 @@ public class Adm0Repository(RegionsDbContext db) : IAdm0Repository
 
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
-            var s = query.Search.ToLower();
+            var s = query.Search.Trim().ToLower();
             q = q.Where(x =>
                 x.NameEn.ToLower().Contains(s) ||
                 (x.NameAr != null && x.NameAr.ToLower().Contains(s)) ||
@@ -34,8 +34,9 @@ public class Adm0Repository(RegionsDbContext db) : IAdm0Repository
         });
 
         q = q.OrderBy(x => x.NameEn)
-             .Skip((query.Page - 1) * query.PageSize)
-             .Take(query.PageSize);
+             .ThenBy(x => x.Gid)
+             .Skip((query.NormalizedPage - 1) * query.NormalizedPageSize)
+             .Take(query.NormalizedPageSize);
 
         return await q.ToListAsync(ct);
     }

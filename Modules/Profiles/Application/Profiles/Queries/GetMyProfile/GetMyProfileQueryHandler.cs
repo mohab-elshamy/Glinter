@@ -27,7 +27,7 @@ public class GetMyProfileQueryHandler
         CancellationToken cancellationToken = default)
     {
         if (!_currentUserService.IsAuthenticated || _currentUserService.UserId is null)
-            throw new UnauthorizedAccessException("User is not authenticated.");
+            throw new AuthenticationException("User is not authenticated.");
 
         var userId = _currentUserService.UserId.Value;
         var stats = await _profileFollowStatsService.GetCountsAsync(userId, cancellationToken);
@@ -80,6 +80,6 @@ public class GetMyProfileQueryHandler
                 stats.FollowingCount);
         }
 
-        throw new KeyNotFoundException("Profile not found.");
+        throw new NotFoundException("Profile not found.");
     }
 }

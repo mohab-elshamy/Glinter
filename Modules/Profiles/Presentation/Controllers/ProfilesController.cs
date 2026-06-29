@@ -55,22 +55,11 @@ public class ProfilesController : ControllerBase
     [HttpGet("me")]
     public async Task<IActionResult> GetMyProfile(CancellationToken cancellationToken)
     {
-        try
-        {
-            var result = await _getMyProfileQueryHandler.HandleAsync(
-                new GetMyProfileQuery(),
-                cancellationToken);
+        var result = await _getMyProfileQueryHandler.HandleAsync(
+            new GetMyProfileQuery(),
+            cancellationToken);
 
-            return Ok(result);
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return Unauthorized(new { message = ex.Message });
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
+        return Ok(result);
     }
 
     [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = RoleNames.Traveler)]
@@ -79,31 +68,20 @@ public class ProfilesController : ControllerBase
         [FromBody] TravelerProfileRequest request,
         CancellationToken cancellationToken)
     {
-        try
-        {
-            var result = await _upsertTravelerProfileCommandHandler.HandleAsync(
-                new UpsertTravelerProfileCommand
-                {
-                    DisplayName = request.DisplayName,
-                    Bio = request.Bio,
-                    Nationality = request.Nationality,
-                    PreferredBudgetLevel = request.PreferredBudgetLevel,
-                    TravelStyle = request.TravelStyle,
-                    PreferredInterests = request.PreferredInterests,
-                    InterestIds = request.InterestIds
-                },
-                cancellationToken);
+        var result = await _upsertTravelerProfileCommandHandler.HandleAsync(
+            new UpsertTravelerProfileCommand
+            {
+                DisplayName = request.DisplayName,
+                Bio = request.Bio,
+                Nationality = request.Nationality,
+                PreferredBudgetLevel = request.PreferredBudgetLevel,
+                TravelStyle = request.TravelStyle,
+                PreferredInterests = request.PreferredInterests,
+                InterestIds = request.InterestIds
+            },
+            cancellationToken);
 
-            return Ok(result);
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return Unauthorized(new { message = ex.Message });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        return Ok(result);
     }
 
     [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = RoleNames.LocalBuddy)]
@@ -112,29 +90,18 @@ public class ProfilesController : ControllerBase
         [FromBody] LocalBuddyProfileRequest request,
         CancellationToken cancellationToken)
     {
-        try
-        {
-            var result = await _upsertLocalBuddyProfileCommandHandler.HandleAsync(
-                new UpsertLocalBuddyProfileCommand
-                {
-                    DisplayName = request.DisplayName,
-                    Bio = request.Bio,
-                    City = request.City,
-                    Languages = request.Languages,
-                    InterestIds = request.InterestIds
-                },
-                cancellationToken);
+        var result = await _upsertLocalBuddyProfileCommandHandler.HandleAsync(
+            new UpsertLocalBuddyProfileCommand
+            {
+                DisplayName = request.DisplayName,
+                Bio = request.Bio,
+                City = request.City,
+                Languages = request.Languages,
+                InterestIds = request.InterestIds
+            },
+            cancellationToken);
 
-            return Ok(result);
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return Unauthorized(new { message = ex.Message });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        return Ok(result);
     }
 
     [HttpPost("users/{userId:guid}/follow")]
@@ -142,29 +109,14 @@ public class ProfilesController : ControllerBase
         Guid userId,
         CancellationToken cancellationToken)
     {
-        try
-        {
-            var message = await _followUserCommandHandler.HandleAsync(
-                new FollowUserCommand
-                {
-                    FollowedUserId = userId
-                },
-                cancellationToken);
+        var message = await _followUserCommandHandler.HandleAsync(
+            new FollowUserCommand
+            {
+                FollowedUserId = userId
+            },
+            cancellationToken);
 
-            return Ok(new { message });
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return Unauthorized(new { message = ex.Message });
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        return Ok(new { message });
     }
 
     [HttpDelete("users/{userId:guid}/follow")]
@@ -172,25 +124,14 @@ public class ProfilesController : ControllerBase
         Guid userId,
         CancellationToken cancellationToken)
     {
-        try
-        {
-            var message = await _unfollowUserCommandHandler.HandleAsync(
-                new UnfollowUserCommand
-                {
-                    FollowedUserId = userId
-                },
-                cancellationToken);
+        var message = await _unfollowUserCommandHandler.HandleAsync(
+            new UnfollowUserCommand
+            {
+                FollowedUserId = userId
+            },
+            cancellationToken);
 
-            return Ok(new { message });
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return Unauthorized(new { message = ex.Message });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        return Ok(new { message });
     }
 
     [HttpGet("users/{userId:guid}/follow-status")]
@@ -198,25 +139,14 @@ public class ProfilesController : ControllerBase
         Guid userId,
         CancellationToken cancellationToken)
     {
-        try
-        {
-            var result = await _getFollowStatusQueryHandler.HandleAsync(
-                new GetFollowStatusQuery
-                {
-                    FollowedUserId = userId
-                },
-                cancellationToken);
+        var result = await _getFollowStatusQueryHandler.HandleAsync(
+            new GetFollowStatusQuery
+            {
+                FollowedUserId = userId
+            },
+            cancellationToken);
 
-            return Ok(result);
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return Unauthorized(new { message = ex.Message });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        return Ok(result);
     }
 
     [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = RoleNames.HotelOwner)]
@@ -225,28 +155,17 @@ public class ProfilesController : ControllerBase
         [FromBody] HotelOwnerProfileRequest request,
         CancellationToken cancellationToken)
     {
-        try
-        {
-            var result = await _upsertHotelOwnerProfileCommandHandler.HandleAsync(
-                new UpsertHotelOwnerProfileCommand
-                {
-                    BusinessName = request.BusinessName,
-                    ContactPersonName = request.ContactPersonName,
-                    PhoneNumber = request.PhoneNumber,
-                    Description = request.Description
-                },
-                cancellationToken);
+        var result = await _upsertHotelOwnerProfileCommandHandler.HandleAsync(
+            new UpsertHotelOwnerProfileCommand
+            {
+                BusinessName = request.BusinessName,
+                ContactPersonName = request.ContactPersonName,
+                PhoneNumber = request.PhoneNumber,
+                Description = request.Description
+            },
+            cancellationToken);
 
-            return Ok(result);
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return Unauthorized(new { message = ex.Message });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        return Ok(result);
     }
 
     [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = RoleNames.ExperienceProvider)]
@@ -255,28 +174,17 @@ public class ProfilesController : ControllerBase
         [FromBody] ExperienceProviderProfileRequest request,
         CancellationToken cancellationToken)
     {
-        try
-        {
-            var result = await _upsertExperienceProviderProfileCommandHandler.HandleAsync(
-                new UpsertExperienceProviderProfileCommand
-                {
-                    BusinessName = request.BusinessName,
-                    ContactPersonName = request.ContactPersonName,
-                    PhoneNumber = request.PhoneNumber,
-                    Description = request.Description
-                },
-                cancellationToken);
+        var result = await _upsertExperienceProviderProfileCommandHandler.HandleAsync(
+            new UpsertExperienceProviderProfileCommand
+            {
+                BusinessName = request.BusinessName,
+                ContactPersonName = request.ContactPersonName,
+                PhoneNumber = request.PhoneNumber,
+                Description = request.Description
+            },
+            cancellationToken);
 
-            return Ok(result);
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return Unauthorized(new { message = ex.Message });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        return Ok(result);
     }
 
     [HttpPatch("image")]
@@ -284,28 +192,13 @@ public class ProfilesController : ControllerBase
         [FromBody] UpdateProfileImageRequest request,
         CancellationToken cancellationToken)
     {
-        try
-        {
-            var result = await _updateProfileImageCommandHandler.HandleAsync(
-                new UpdateProfileImageCommand
-                {
-                    ProfileImageUrl = request.ProfileImageUrl
-                },
-                cancellationToken);
+        var result = await _updateProfileImageCommandHandler.HandleAsync(
+            new UpdateProfileImageCommand
+            {
+                ProfileImageUrl = request.ProfileImageUrl
+            },
+            cancellationToken);
 
-            return Ok(result);
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return Unauthorized(new { message = ex.Message });
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        return Ok(result);
     }
 }

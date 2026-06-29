@@ -25,6 +25,21 @@ public class UpdateLocalBuddyVerificationCommandValidator
         if (!isValidStatus)
             errors.Add("Verification status must be Pending, Approved, or Rejected.");
 
+        if (!string.IsNullOrWhiteSpace(command.ModerationNotes) &&
+            command.ModerationNotes.Trim().Length > 1000)
+        {
+            errors.Add("Moderation notes cannot exceed 1000 characters.");
+        }
+
+        if (string.Equals(
+                command.VerificationStatus,
+                VerificationStatus.Rejected.ToString(),
+                StringComparison.OrdinalIgnoreCase) &&
+            string.IsNullOrWhiteSpace(command.ModerationNotes))
+        {
+            errors.Add("Moderation notes are required when rejecting a local buddy.");
+        }
+
         return errors;
     }
 }

@@ -5,4 +5,5 @@ public class UpdateLocalBuddyVerificationCommand
     public Guid UserId { get; set; }
 
     public string VerificationStatus { get; set; } = string.Empty;
+    public string? ModerationNotes { get; set; }
 }

@@ -26,6 +26,8 @@ public class ProfilesDbContext : DbContext, IProfilesDbContext
     public DbSet<TravelerInterest> TravelerInterests => Set<TravelerInterest>();
 
     public DbSet<UserFollow> UserFollows => Set<UserFollow>();
+    public DbSet<LocalBuddyVerificationEvent> LocalBuddyVerificationEvents =>
+        Set<LocalBuddyVerificationEvent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

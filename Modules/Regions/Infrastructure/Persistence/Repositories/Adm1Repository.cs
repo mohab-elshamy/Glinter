@@ -14,7 +14,7 @@ public class Adm1Repository(RegionsDbContext db) : IAdm1Repository
 
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
-            var s = query.Search.ToLower();
+            var s = query.Search.Trim().ToLower();
             q = q.Where(x =>
                 x.NameEn.ToLower().Contains(s) ||
                 (x.NameAr != null && x.NameAr.ToLower().Contains(s)) ||
@@ -42,8 +42,9 @@ public class Adm1Repository(RegionsDbContext db) : IAdm1Repository
         var q = BuildQuery(query);
         q = StripGeometry(q);
         return await q.OrderBy(x => x.NameEn)
-                      .Skip((query.Page - 1) * query.PageSize)
-                      .Take(query.PageSize)
+                      .ThenBy(x => x.Gid)
+                      .Skip((query.NormalizedPage - 1) * query.NormalizedPageSize)
+                      .Take(query.NormalizedPageSize)
                       .ToListAsync(ct);
     }
 
@@ -52,8 +53,9 @@ public class Adm1Repository(RegionsDbContext db) : IAdm1Repository
         var q = BuildQuery(query).Where(x => x.Adm0Gid == adm0Gid);
         q = StripGeometry(q);
         return await q.OrderBy(x => x.NameEn)
-                      .Skip((query.Page - 1) * query.PageSize)
-                      .Take(query.PageSize)
+                      .ThenBy(x => x.Gid)
+                      .Skip((query.NormalizedPage - 1) * query.NormalizedPageSize)
+                      .Take(query.NormalizedPageSize)
                       .ToListAsync(ct);
     }
 

@@ -16,6 +16,7 @@ using Glinter.Modules.Profiles.Application.Profiles.Commands.UpsertExperiencePro
 using Glinter.Modules.Profiles.Application.Common.Services;
 using Glinter.Modules.Profiles.Application.Profiles.Commands.UpdateProfileImage;
 using Glinter.Modules.Profiles.Application.Profiles.Commands.UpdateLocalBuddyVerification;
+using Glinter.Modules.Profiles.Application.Profiles.Queries;
 
 using Glinter.Modules.Profiles.Infrastructure.Services;
 namespace Glinter.Modules.Profiles.Infrastructure.DependencyInjection;
@@ -49,6 +50,7 @@ public static class ProfilesModule
         services.AddScoped<ProfileFollowStatsService>();
         services.AddScoped<UpdateProfileImageCommandHandler>();
         services.AddScoped<UpdateLocalBuddyVerificationCommandHandler>();
+        services.AddScoped<GetLocalBuddyVerificationHistoryHandler>();
 
         return services;
     }

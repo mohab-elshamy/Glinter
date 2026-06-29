@@ -23,8 +23,15 @@ public class GetMyNotificationsHandler
         CancellationToken cancellationToken = default)
     {
         var currentUserId = GetCurrentUserId();
-        var page = query.Page <= 0 ? 1 : query.Page;
-        var pageSize = query.PageSize <= 0 ? 50 : Math.Min(query.PageSize, 100);
+
+        if (query.Page < 1 || query.Page > 10000)
+            throw new ValidationException("Page must be between 1 and 10000.");
+
+        if (query.PageSize < 1 || query.PageSize > 100)
+            throw new ValidationException("PageSize must be between 1 and 100.");
+
+        var page = query.Page;
+        var pageSize = query.PageSize;
         var skip = (page - 1) * pageSize;
 
         var notifications = await _notificationRepository.GetByUserIdAsync(
@@ -51,7 +58,7 @@ public class GetMyNotificationsHandler
     private Guid GetCurrentUserId()
     {
         if (!_currentUserService.IsAuthenticated || _currentUserService.UserId is null)
-            throw new UnauthorizedAccessException("User is not authenticated.");
+            throw new AuthenticationException("User is not authenticated.");
 
         return _currentUserService.UserId.Value;
     }

@@ -21,5 +21,6 @@ public class ChatMessageConfiguration : IEntityTypeConfiguration<ChatMessage>
 
         builder.HasIndex(x => new { x.ThreadId, x.SentAtUtc });
         builder.HasIndex(x => x.SenderUserId);
+        builder.HasIndex(x => x.SentAtUtc);
     }
 }

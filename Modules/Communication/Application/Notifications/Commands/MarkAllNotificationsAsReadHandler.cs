@@ -31,7 +31,7 @@ public class MarkAllNotificationsAsReadHandler
     private Guid GetCurrentUserId()
     {
         if (!_currentUserService.IsAuthenticated || _currentUserService.UserId is null)
-            throw new UnauthorizedAccessException("User is not authenticated.");
+            throw new AuthenticationException("User is not authenticated.");
 
         return _currentUserService.UserId.Value;
     }

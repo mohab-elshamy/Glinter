@@ -1,3 +1,4 @@
+using Glinter.Modules.IdentityAccess.Domain.Constants;
 using Glinter.Modules.Regions.Application.Countries.Commands;
 using Glinter.Modules.Regions.Application.Countries.Queries;
 using Glinter.Modules.Regions.Application.Districts.Commands;
@@ -8,6 +9,7 @@ using Glinter.Modules.Regions.Application.Governorates.Queries;
 using Glinter.Modules.Regions.Application.Neighbourhoods.Commands;
 using Glinter.Modules.Regions.Application.Neighbourhoods.Queries;
 using Glinter.Modules.Regions.Application.PointLookup.Queries;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Glinter.Modules.Regions.Presentation.Controllers;
@@ -55,7 +57,10 @@ public class RegionsController(
             Lon = request.Lon,
         }, ct);
 
-        return result is null ? NotFound(new { message = "No region found for point." }) : Ok(result);
+        if (result is null)
+            throw new NotFoundException("No region found for point.");
+
+        return Ok(result);
     }
 
     // ──────────────────────────────────────────────
@@ -77,10 +82,14 @@ public class RegionsController(
             Gid = gid,
             GeometryAccuracy = geometry.GeometryAccuracy,
         }, ct);
-        return result is null ? NotFound(new { message = "Country not found." }) : Ok(result);
+        if (result is null)
+            throw new NotFoundException("Country not found.");
+
+        return Ok(result);
     }
 
     [HttpPost("countries")]
+    [Authorize(Policy = PolicyNames.AdminOnly)]
     public async Task<IActionResult> CreateCountry([FromBody] CreateAdm0Request request, CancellationToken ct)
     {
         var result = await createCountry.HandleAsync(new CreateCountryCommand
@@ -95,6 +104,7 @@ public class RegionsController(
     }
 
     [HttpPut("countries/{gid:int}")]
+    [Authorize(Policy = PolicyNames.AdminOnly)]
     public async Task<IActionResult> UpdateCountry(int gid, [FromBody] UpdateAdm0Request request, CancellationToken ct)
     {
         var result = await updateCountry.HandleAsync(new UpdateCountryCommand
@@ -105,14 +115,21 @@ public class RegionsController(
             ImageUrl = request.ImageUrl,
             FlagUrl = request.FlagUrl,
         }, ct);
-        return result is null ? NotFound(new { message = "Country not found." }) : Ok(result);
+        if (result is null)
+            throw new NotFoundException("Country not found.");
+
+        return Ok(result);
     }
 
     [HttpDelete("countries/{gid:int}")]
+    [Authorize(Policy = PolicyNames.AdminOnly)]
     public async Task<IActionResult> DeleteCountry(int gid, CancellationToken ct)
     {
         var deleted = await deleteCountry.HandleAsync(gid, ct);
-        return deleted ? NoContent() : NotFound(new { message = "Country not found." });
+        if (!deleted)
+            throw new NotFoundException("Country not found.");
+
+        return NoContent();
     }
 
     // ──────────────────────────────────────────────
@@ -134,7 +151,10 @@ public class RegionsController(
             Gid = gid,
             GeometryAccuracy = geometry.GeometryAccuracy,
         }, ct);
-        return result is null ? NotFound(new { message = "Governorate not found." }) : Ok(result);
+        if (result is null)
+            throw new NotFoundException("Governorate not found.");
+
+        return Ok(result);
     }
 
     [HttpGet("countries/{adm0Gid:int}/governorates")]
@@ -148,6 +168,7 @@ public class RegionsController(
     }
 
     [HttpPost("governorates")]
+    [Authorize(Policy = PolicyNames.AdminOnly)]
     public async Task<IActionResult> CreateGovernorate([FromBody] CreateAdm1Request request, CancellationToken ct)
     {
         var result = await createGovernorate.HandleAsync(new CreateGovernorateCommand
@@ -162,6 +183,7 @@ public class RegionsController(
     }
 
     [HttpPut("governorates/{gid:int}")]
+    [Authorize(Policy = PolicyNames.AdminOnly)]
     public async Task<IActionResult> UpdateGovernorate(int gid, [FromBody] UpdateAdm1Request request, CancellationToken ct)
     {
         var result = await updateGovernorate.HandleAsync(new UpdateGovernorateCommand
@@ -171,14 +193,21 @@ public class RegionsController(
             NameAr = request.NameAr,
             ImageUrl = request.ImageUrl,
         }, ct);
-        return result is null ? NotFound(new { message = "Governorate not found." }) : Ok(result);
+        if (result is null)
+            throw new NotFoundException("Governorate not found.");
+
+        return Ok(result);
     }
 
     [HttpDelete("governorates/{gid:int}")]
+    [Authorize(Policy = PolicyNames.AdminOnly)]
     public async Task<IActionResult> DeleteGovernorate(int gid, CancellationToken ct)
     {
         var deleted = await deleteGovernorate.HandleAsync(gid, ct);
-        return deleted ? NoContent() : NotFound(new { message = "Governorate not found." });
+        if (!deleted)
+            throw new NotFoundException("Governorate not found.");
+
+        return NoContent();
     }
 
     // ──────────────────────────────────────────────
@@ -200,7 +229,10 @@ public class RegionsController(
             Gid = gid,
             GeometryAccuracy = geometry.GeometryAccuracy,
         }, ct);
-        return result is null ? NotFound(new { message = "District not found." }) : Ok(result);
+        if (result is null)
+            throw new NotFoundException("District not found.");
+
+        return Ok(result);
     }
 
     [HttpGet("governorates/{adm1Gid:int}/districts")]
@@ -214,6 +246,7 @@ public class RegionsController(
     }
 
     [HttpPost("districts")]
+    [Authorize(Policy = PolicyNames.AdminOnly)]
     public async Task<IActionResult> CreateDistrict([FromBody] CreateAdm2Request request, CancellationToken ct)
     {
         var result = await createDistrict.HandleAsync(new CreateDistrictCommand
@@ -228,6 +261,7 @@ public class RegionsController(
     }
 
     [HttpPut("districts/{gid:int}")]
+    [Authorize(Policy = PolicyNames.AdminOnly)]
     public async Task<IActionResult> UpdateDistrict(int gid, [FromBody] UpdateAdm2Request request, CancellationToken ct)
     {
         var result = await updateDistrict.HandleAsync(new UpdateDistrictCommand
@@ -237,14 +271,21 @@ public class RegionsController(
             NameAr = request.NameAr,
             ImageUrl = request.ImageUrl,
         }, ct);
-        return result is null ? NotFound(new { message = "District not found." }) : Ok(result);
+        if (result is null)
+            throw new NotFoundException("District not found.");
+
+        return Ok(result);
     }
 
     [HttpDelete("districts/{gid:int}")]
+    [Authorize(Policy = PolicyNames.AdminOnly)]
     public async Task<IActionResult> DeleteDistrict(int gid, CancellationToken ct)
     {
         var deleted = await deleteDistrict.HandleAsync(gid, ct);
-        return deleted ? NoContent() : NotFound(new { message = "District not found." });
+        if (!deleted)
+            throw new NotFoundException("District not found.");
+
+        return NoContent();
     }
 
     // ──────────────────────────────────────────────
@@ -266,7 +307,10 @@ public class RegionsController(
             Gid = gid,
             GeometryAccuracy = geometry.GeometryAccuracy,
         }, ct);
-        return result is null ? NotFound(new { message = "Neighbourhood not found." }) : Ok(result);
+        if (result is null)
+            throw new NotFoundException("Neighbourhood not found.");
+
+        return Ok(result);
     }
 
     [HttpGet("districts/{adm2Gid:int}/neighbourhoods")]
@@ -280,6 +324,7 @@ public class RegionsController(
     }
 
     [HttpPost("neighbourhoods")]
+    [Authorize(Policy = PolicyNames.AdminOnly)]
     public async Task<IActionResult> CreateNeighbourhood([FromBody] CreateAdm3Request request, CancellationToken ct)
     {
         var result = await createNeighbourhood.HandleAsync(new CreateNeighbourhoodCommand
@@ -294,6 +339,7 @@ public class RegionsController(
     }
 
     [HttpPut("neighbourhoods/{gid:int}")]
+    [Authorize(Policy = PolicyNames.AdminOnly)]
     public async Task<IActionResult> UpdateNeighbourhood(int gid, [FromBody] UpdateAdm3Request request, CancellationToken ct)
     {
         var result = await updateNeighbourhood.HandleAsync(new UpdateNeighbourhoodCommand
@@ -303,13 +349,20 @@ public class RegionsController(
             NameAr = request.NameAr,
             ImageUrl = request.ImageUrl,
         }, ct);
-        return result is null ? NotFound(new { message = "Neighbourhood not found." }) : Ok(result);
+        if (result is null)
+            throw new NotFoundException("Neighbourhood not found.");
+
+        return Ok(result);
     }
 
     [HttpDelete("neighbourhoods/{gid:int}")]
+    [Authorize(Policy = PolicyNames.AdminOnly)]
     public async Task<IActionResult> DeleteNeighbourhood(int gid, CancellationToken ct)
     {
         var deleted = await deleteNeighbourhood.HandleAsync(gid, ct);
-        return deleted ? NoContent() : NotFound(new { message = "Neighbourhood not found." });
+        if (!deleted)
+            throw new NotFoundException("Neighbourhood not found.");
+
+        return NoContent();
     }
 }

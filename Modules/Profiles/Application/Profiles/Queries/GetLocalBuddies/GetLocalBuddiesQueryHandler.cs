@@ -2,6 +2,7 @@ using Glinter.Modules.Profiles.Application.Abstractions;
 using Glinter.Modules.Profiles.Application.Common.Mapping;
 using Glinter.Modules.Profiles.Application.Common.Services;
 using Glinter.Modules.Profiles.Application.Profiles.Dtos;
+using Glinter.Modules.Profiles.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace Glinter.Modules.Profiles.Application.Profiles.Queries.GetLocalBuddies;
@@ -32,6 +33,7 @@ public class GetLocalBuddiesQueryHandler
         var localBuddiesQuery = _profilesDbContext.LocalBuddyProfiles
             .Include(x => x.Interests)
             .ThenInclude(x => x.Interest)
+            .Where(x => x.VerificationStatus == VerificationStatus.Approved)
             .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(query.City))

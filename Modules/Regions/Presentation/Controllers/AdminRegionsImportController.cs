@@ -6,9 +6,16 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Glinter.Modules.Regions.Presentation.Controllers;
 
+public static class RegionsUploadLimits
+{
+    public const long MaxGeoJsonUploadBytes = 50L * 1024 * 1024;
+}
+
 [ApiController]
 [Route("api/admin/regions")]
 [Authorize(Policy = PolicyNames.AdminOnly)]
+[RequestSizeLimit(RegionsUploadLimits.MaxGeoJsonUploadBytes)]
+[RequestFormLimits(MultipartBodyLengthLimit = RegionsUploadLimits.MaxGeoJsonUploadBytes)]
 public class AdminRegionsImportController(
     IGeoJsonImportService importService,
     LocalFileImportService localFileImportService
@@ -71,11 +78,14 @@ public class AdminRegionsImportController(
         CancellationToken ct)
     {
         if (file is null || file.Length == 0)
-            return BadRequest(new { message = "No file uploaded." });
+            throw new ValidationException("No file uploaded.");
+
+        if (file.Length > RegionsUploadLimits.MaxGeoJsonUploadBytes)
+            throw new ValidationException($"GeoJSON file is too large. Maximum size is {RegionsUploadLimits.MaxGeoJsonUploadBytes} bytes.");
 
         var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
         if (ext != AllowedExtension)
-            return BadRequest(new { message = $"Only .geojson files are allowed. Got: '{ext}'" });
+            throw new ValidationException($"Only .geojson files are allowed. Got: '{ext}'");
 
         await using var stream = file.OpenReadStream();
         var result = await handler(stream, ct);

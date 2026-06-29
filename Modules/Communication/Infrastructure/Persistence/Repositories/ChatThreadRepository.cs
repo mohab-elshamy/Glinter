@@ -1,4 +1,5 @@
 using Glinter.Modules.Communication.Application.Abstractions;
+using Glinter.Modules.Communication.Application.Chats.Dtos;
 using Glinter.Modules.Communication.Domain.Entities;
 using Glinter.Modules.Communication.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
@@ -15,19 +16,18 @@ public class ChatThreadRepository : IChatThreadRepository
         _dbContext = dbContext;
     }
 
-    public async Task<ChatThread?> GetDirectThreadAsync(
-        Guid firstUserId,
-        Guid secondUserId,
+    public async Task<ChatThreadSummaryDto?> GetDirectThreadSummaryAsync(
+        string directKey,
+        Guid currentUserId,
         CancellationToken cancellationToken = default)
     {
-        var userIds = new[] { firstUserId, secondUserId };
-
-        return await _dbContext.ChatThreads
-            .Include(x => x.Participants)
-            .Include(x => x.Messages)
-            .Where(x => x.Type == ChatThreadType.Direct)
-            .Where(x => x.Participants.Count(p => p.LeftAtUtc == null) == 2)
-            .Where(x => x.Participants.Count(p => p.LeftAtUtc == null && userIds.Contains(p.UserId)) == 2)
+        return await ProjectSummaries(
+                _dbContext.ChatThreads
+                    .AsNoTracking()
+                    .Where(x =>
+                        x.Type == ChatThreadType.Direct &&
+                        x.DirectKey == directKey),
+                currentUserId)
             .FirstOrDefaultAsync(cancellationToken);
     }
 
@@ -40,25 +40,25 @@ public class ChatThreadRepository : IChatThreadRepository
             .FirstOrDefaultAsync(x => x.Id == threadId, cancellationToken);
     }
 
-    public async Task<ChatThread?> GetByIdWithParticipantsAndMessagesAsync(
-        Guid threadId,
-        CancellationToken cancellationToken = default)
-    {
-        return await _dbContext.ChatThreads
-            .Include(x => x.Participants)
-            .Include(x => x.Messages)
-            .FirstOrDefaultAsync(x => x.Id == threadId, cancellationToken);
-    }
-
-    public async Task<List<ChatThread>> GetThreadsForUserAsync(
+    public async Task<List<ChatThreadSummaryDto>> GetThreadSummariesForUserAsync(
         Guid userId,
+        int page,
+        int pageSize,
         CancellationToken cancellationToken = default)
     {
-        return await _dbContext.ChatThreads
-            .Include(x => x.Participants)
-            .Include(x => x.Messages)
-            .Where(x => x.Participants.Any(p => p.UserId == userId && p.LeftAtUtc == null))
+        var normalizedPage = page <= 0 ? 1 : Math.Min(page, 10000);
+        var normalizedPageSize = pageSize <= 0 ? 20 : Math.Min(pageSize, 100);
+
+        var query = _dbContext.ChatThreads
+            .AsNoTracking()
+            .Where(x => x.Participants.Any(
+                p => p.UserId == userId && p.LeftAtUtc == null))
             .OrderByDescending(x => x.LastMessageAtUtc ?? x.CreatedAtUtc)
+            .ThenBy(x => x.Id)
+            .Skip((normalizedPage - 1) * normalizedPageSize)
+            .Take(normalizedPageSize);
+
+        return await ProjectSummaries(query, userId)
             .ToListAsync(cancellationToken);
     }
 
@@ -126,5 +126,45 @@ public class ChatThreadRepository : IChatThreadRepository
     {
         return exception.InnerException is PostgresException postgresException &&
                postgresException.SqlState == PostgresErrorCodes.UniqueViolation;
+    }
+
+    private static IQueryable<ChatThreadSummaryDto> ProjectSummaries(
+        IQueryable<ChatThread> query,
+        Guid currentUserId)
+    {
+        return query.Select(thread => new ChatThreadSummaryDto
+        {
+            Id = thread.Id,
+            Type = thread.Type,
+            Title = thread.Title,
+            ParticipantUserIds = thread.Participants
+                .Where(participant => participant.LeftAtUtc == null)
+                .OrderBy(participant => participant.UserId)
+                .Select(participant => participant.UserId)
+                .ToList(),
+            LastMessageBody = thread.Messages
+                .OrderByDescending(message => message.SentAtUtc)
+                .ThenByDescending(message => message.Id)
+                .Select(message => message.Body)
+                .FirstOrDefault(),
+            LastMessageSenderUserId = thread.Messages
+                .OrderByDescending(message => message.SentAtUtc)
+                .ThenByDescending(message => message.Id)
+                .Select(message => (Guid?)message.SenderUserId)
+                .FirstOrDefault(),
+            LastMessageAtUtc = thread.Messages
+                .OrderByDescending(message => message.SentAtUtc)
+                .ThenByDescending(message => message.Id)
+                .Select(message => (DateTime?)message.SentAtUtc)
+                .FirstOrDefault(),
+            UnreadCount = thread.Messages.Count(message =>
+                message.SenderUserId != currentUserId &&
+                !thread.Participants.Any(participant =>
+                    participant.UserId == currentUserId &&
+                    participant.LeftAtUtc == null &&
+                    participant.LastReadAtUtc != null &&
+                    message.SentAtUtc <= participant.LastReadAtUtc.Value)),
+            CreatedAtUtc = thread.CreatedAtUtc
+        });
     }
 }
