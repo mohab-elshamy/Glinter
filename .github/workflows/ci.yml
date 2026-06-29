@@ -45,11 +45,6 @@ jobs:
       Jwt__Audience: Glinter.CI
       Jwt__SecretKey: ci-only-jwt-secret-key-with-at-least-32-bytes
       Jwt__ExpiryMinutes: 60
-      IdentityEmail__BaseUrl: https://ci.example.test
-      IdentityEmail__FromAddress: no-reply@ci.example.test
-      IdentityEmail__SmtpHost: smtp.ci.example.test
-      IdentityEmail__SmtpPort: 587
-      IdentityEmail__EnableSsl: true
       Cors__AllowedOrigins__0: https://ci.example.test
       RequestLimits__MaxBodyBytes: 52428800
       RateLimiting__PermitLimit: 10000

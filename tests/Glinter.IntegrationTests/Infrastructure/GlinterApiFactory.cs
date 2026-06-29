@@ -108,6 +108,7 @@ public sealed class GlinterApiFactory : WebApplicationFactory<Program>, IAsyncLi
                 ["Jwt:Audience"] = JwtAudience,
                 ["Jwt:SecretKey"] = JwtSecret,
                 ["Jwt:ExpiryMinutes"] = "60",
+                ["IdentityEmail:SmtpHost"] = string.Empty,
                 ["RateLimiting:PermitLimit"] = "10000",
                 ["RateLimiting:WindowMinutes"] = "1",
                 ["Communication:RateLimiting:DirectThreadPermitLimit"] = "5",
