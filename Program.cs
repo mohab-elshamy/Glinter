@@ -326,6 +326,34 @@ var app = builder.Build();
 app.UseMiddleware<RequestCorrelationMiddleware>();
 app.UseMiddleware<RequestLoggingMiddleware>();
 app.UseMiddleware<ApiExceptionHandlingMiddleware>();
+app.UseStatusCodePages(async (Microsoft.AspNetCore.Diagnostics.StatusCodeContext statusCodeContext) =>
+{
+    var response = statusCodeContext.HttpContext.Response;
+    var problemDetails = new ProblemDetails
+    {
+        Status = response.StatusCode,
+        Title = response.StatusCode == StatusCodes.Status404NotFound
+            ? "Resource not found"
+            : "Request failed",
+        Detail = response.StatusCode == StatusCodes.Status404NotFound
+            ? "The requested resource was not found."
+            : "The request could not be completed.",
+        Instance = statusCodeContext.HttpContext.Request.Path
+    };
+    problemDetails.Extensions["errorCode"] =
+        response.StatusCode == StatusCodes.Status404NotFound
+            ? "not_found"
+            : "request_failed";
+    problemDetails.Extensions["traceId"] =
+        statusCodeContext.HttpContext.TraceIdentifier;
+
+    response.ContentType = "application/problem+json";
+    await response.WriteAsJsonAsync(
+        problemDetails,
+        options: null,
+        contentType: "application/problem+json",
+        cancellationToken: statusCodeContext.HttpContext.RequestAborted);
+});
 
 if (!app.Environment.IsDevelopment())
 {
