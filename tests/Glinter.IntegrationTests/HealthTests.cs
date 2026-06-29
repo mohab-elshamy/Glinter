@@ -22,6 +22,21 @@ public sealed class HealthTests : ApiTestBase
     }
 
     [Fact]
+    public async Task Development_frontend_origin_can_call_the_api()
+    {
+        const string frontendOrigin = "http://127.0.0.1:8080";
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/health/live");
+        request.Headers.Add("Origin", frontendOrigin);
+
+        var response = await Client.SendAsync(request);
+
+        response.EnsureSuccessStatusCode();
+        Assert.Equal(
+            frontendOrigin,
+            response.Headers.GetValues("Access-Control-Allow-Origin").Single());
+    }
+
+    [Fact]
     public async Task Correlation_ids_are_propagated_and_used_by_problem_details()
     {
         const string correlationId = "frontend-request-123";

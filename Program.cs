@@ -183,21 +183,28 @@ var configuredAllowedOrigins = builder.Configuration
     .GetSection("Cors:AllowedOrigins")
     .Get<string[]>();
 
-var allowedOrigins = configuredAllowedOrigins is { Length: > 0 }
-    ? configuredAllowedOrigins
-        .Where(origin => !string.IsNullOrWhiteSpace(origin))
-        .Select(origin => origin.Trim())
-        .Distinct(StringComparer.OrdinalIgnoreCase)
-        .ToArray()
-    : builder.Environment.IsDevelopment()
-        ?
-        [
-            "http://localhost:3000",
-            "https://localhost:3000",
-            "http://localhost:5173",
-            "https://localhost:5173"
-        ]
-        : [];
+string[] developmentOrigins = builder.Environment.IsDevelopment()
+    ?
+    [
+        "http://localhost:3000",
+        "https://localhost:3000",
+        "http://localhost:5173",
+        "https://localhost:5173",
+        "http://localhost:8080",
+        "https://localhost:8080",
+        "http://127.0.0.1:5173",
+        "https://127.0.0.1:5173",
+        "http://127.0.0.1:8080",
+        "https://127.0.0.1:8080"
+    ]
+    : [];
+
+var allowedOrigins = (configuredAllowedOrigins ?? [])
+    .Concat(developmentOrigins)
+    .Where(origin => !string.IsNullOrWhiteSpace(origin))
+    .Select(origin => origin.Trim())
+    .Distinct(StringComparer.OrdinalIgnoreCase)
+    .ToArray();
 
 if (allowedOrigins.Any(origin => origin == "*"))
     throw new InvalidOperationException("Cors:AllowedOrigins cannot contain a wildcard origin.");
