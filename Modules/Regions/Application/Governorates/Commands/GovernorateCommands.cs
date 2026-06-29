@@ -3,6 +3,7 @@ using Glinter.Modules.Regions.Application.Common.Mapping;
 using Glinter.Modules.Regions.Application.DTOs;
 using Glinter.Modules.Regions.Domain.Entities;
 using NetTopologySuite.IO;
+using Glinter.Shared.Application.Auditing;
 
 namespace Glinter.Modules.Regions.Application.Governorates.Commands;
 
@@ -23,7 +24,9 @@ public class UpdateGovernorateCommand
     public string? ImageUrl { get; set; }
 }
 
-public class CreateGovernorateHandler(IAdm1Repository repository)
+public class CreateGovernorateHandler(
+    IAdm1Repository repository,
+    AdminAuditDetailsContext auditDetails)
 {
     public async Task<Adm1Dto> HandleAsync(CreateGovernorateCommand command, CancellationToken ct)
     {
@@ -36,16 +39,22 @@ public class CreateGovernorateHandler(IAdm1Repository repository)
             ImageUrl = command.ImageUrl,
         };
         var created = await repository.AddAsync(entity, ct);
+        auditDetails.SetChanges(
+            new { Exists = false },
+            GovernorateAuditSnapshot.From(created));
         return GovernorateCommandMapper.Map(created, false);
     }
 }
 
-public class UpdateGovernorateHandler(IAdm1Repository repository)
+public class UpdateGovernorateHandler(
+    IAdm1Repository repository,
+    AdminAuditDetailsContext auditDetails)
 {
     public async Task<Adm1Dto?> HandleAsync(UpdateGovernorateCommand command, CancellationToken ct)
     {
         var entity = await repository.GetByIdAsync(command.Gid, false, ct);
         if (entity is null) return null;
+        var before = GovernorateAuditSnapshot.From(entity);
 
         entity.NameEn = command.NameEn;
         entity.NameAr = command.NameAr;
@@ -53,14 +62,46 @@ public class UpdateGovernorateHandler(IAdm1Repository repository)
         entity.UpdatedAt = DateTimeOffset.UtcNow;
 
         var updated = await repository.UpdateAsync(entity, ct);
+        if (updated is not null)
+            auditDetails.SetChanges(before, GovernorateAuditSnapshot.From(updated));
         return updated is null ? null : GovernorateCommandMapper.Map(updated, false);
     }
 }
 
-public class DeleteGovernorateHandler(IAdm1Repository repository)
+public class DeleteGovernorateHandler(
+    IAdm1Repository repository,
+    AdminAuditDetailsContext auditDetails)
 {
     public async Task<bool> HandleAsync(int gid, CancellationToken ct)
-        => await repository.DeleteAsync(gid, ct);
+    {
+        var entity = await repository.GetByIdAsync(gid, false, ct);
+        if (entity is null)
+            return false;
+
+        var before = GovernorateAuditSnapshot.From(entity);
+        var deleted = await repository.DeleteAsync(gid, ct);
+        if (deleted)
+            auditDetails.SetChanges(before, new { Deleted = true });
+        return deleted;
+    }
+}
+
+internal sealed record GovernorateAuditSnapshot(
+    int Gid,
+    int Adm0Gid,
+    string NameEn,
+    string? NameAr,
+    string Pcode,
+    string? ImageUrl)
+{
+    internal static GovernorateAuditSnapshot From(Adm1 value) =>
+        new(
+            value.Gid,
+            value.Adm0Gid,
+            value.NameEn,
+            value.NameAr,
+            value.Pcode,
+            value.ImageUrl);
 }
 
 internal static class GovernorateCommandMapper

@@ -1,6 +1,7 @@
 using Glinter.Modules.IdentityAccess.Infrastructure.Persistence;
 using Glinter.Shared.Application.Auditing;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace Glinter.Shared.Infrastructure.Auditing;
 
@@ -25,6 +26,7 @@ public sealed class AdminAuditService
         Guid auditEventId,
         int statusCode,
         bool succeeded,
+        string? changeDetailsJson,
         CancellationToken cancellationToken = default)
     {
         var updated = await _dbContext.AdminAuditEvents
@@ -33,6 +35,7 @@ public sealed class AdminAuditService
                 setters => setters
                     .SetProperty(x => x.StatusCode, statusCode)
                     .SetProperty(x => x.Succeeded, succeeded)
+                    .SetProperty(x => x.ChangeDetailsJson, changeDetailsJson)
                     .SetProperty(x => x.CompletedAtUtc, DateTime.UtcNow),
                 cancellationToken);
 
@@ -49,8 +52,15 @@ public sealed class AdminAuditService
         int pageSize,
         CancellationToken cancellationToken = default)
     {
-        if (fromUtc.HasValue && toUtc.HasValue && fromUtc > toUtc)
+        var normalizedFromUtc = NormalizeUtc(fromUtc, nameof(fromUtc));
+        var normalizedToUtc = NormalizeUtc(toUtc, nameof(toUtc));
+
+        if (normalizedFromUtc.HasValue &&
+            normalizedToUtc.HasValue &&
+            normalizedFromUtc > normalizedToUtc)
+        {
             throw new ValidationException("FromUtc must be on or before ToUtc.");
+        }
 
         var normalizedPage = Math.Clamp(page, 1, 10000);
         var normalizedPageSize = Math.Clamp(pageSize, 1, 100);
@@ -63,18 +73,22 @@ public sealed class AdminAuditService
             var normalizedAction = action.Trim();
             query = query.Where(x => x.Action == normalizedAction);
         }
-        if (fromUtc.HasValue)
-            query = query.Where(x => x.CreatedAtUtc >= fromUtc.Value);
-        if (toUtc.HasValue)
-            query = query.Where(x => x.CreatedAtUtc <= toUtc.Value);
+        if (normalizedFromUtc.HasValue)
+            query = query.Where(x => x.CreatedAtUtc >= normalizedFromUtc.Value);
+        if (normalizedToUtc.HasValue)
+            query = query.Where(x => x.CreatedAtUtc <= normalizedToUtc.Value);
+
+        var totalCount = await query.CountAsync(cancellationToken);
+        var events = await query
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .ThenByDescending(x => x.Id)
+            .Skip((normalizedPage - 1) * normalizedPageSize)
+            .Take(normalizedPageSize)
+            .ToListAsync(cancellationToken);
 
         return new AdminAuditPageDto
         {
-            Items = await query
-                .OrderByDescending(x => x.CreatedAtUtc)
-                .ThenByDescending(x => x.Id)
-                .Skip((normalizedPage - 1) * normalizedPageSize)
-                .Take(normalizedPageSize)
+            Items = events
                 .Select(x => new AdminAuditEventDto
                 {
                     Id = x.Id,
@@ -87,12 +101,33 @@ public sealed class AdminAuditService
                     Succeeded = x.Succeeded,
                     CorrelationId = x.CorrelationId,
                     CreatedAtUtc = x.CreatedAtUtc,
-                    CompletedAtUtc = x.CompletedAtUtc
+                    CompletedAtUtc = x.CompletedAtUtc,
+                    Changes = ParseChanges(x.ChangeDetailsJson)
                 })
-                .ToListAsync(cancellationToken),
+                .ToList(),
             Page = normalizedPage,
             PageSize = normalizedPageSize,
-            TotalCount = await query.CountAsync(cancellationToken)
+            TotalCount = totalCount
         };
+    }
+
+    private static DateTime? NormalizeUtc(DateTime? value, string fieldName)
+    {
+        if (!value.HasValue)
+            return null;
+        if (value.Value.Kind == DateTimeKind.Unspecified)
+        {
+            throw new ValidationException(
+                $"{fieldName} must include Z or an explicit UTC offset.");
+        }
+
+        return value.Value.ToUniversalTime();
+    }
+
+    private static JsonElement? ParseChanges(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+        return JsonSerializer.Deserialize<JsonElement>(value);
     }
 }

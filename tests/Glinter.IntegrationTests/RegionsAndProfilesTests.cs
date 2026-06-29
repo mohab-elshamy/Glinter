@@ -42,6 +42,21 @@ public sealed class RegionsAndProfilesTests : ApiTestBase
             adminToken,
             country);
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        using var createdJson = await ReadJsonAsync(created);
+        var countryGid = createdJson.RootElement.GetProperty("gid").GetInt32();
+
+        var updated = await SendAsync(
+            HttpMethod.Put,
+            $"/api/regions/countries/{countryGid}",
+            adminToken,
+            new
+            {
+                nameEn = $"Updated Secured Country {suffix}",
+                nameAr = "Updated",
+                imageUrl = "https://example.test/country.jpg",
+                flagUrl = "https://example.test/flag.jpg"
+            });
+        updated.EnsureSuccessStatusCode();
 
         using var form = new MultipartFormDataContent();
         form.Add(
@@ -69,7 +84,30 @@ public sealed class RegionsAndProfilesTests : ApiTestBase
             item =>
                 item.GetProperty("path").GetString() == "/api/regions/countries" &&
                 item.GetProperty("statusCode").GetInt32() == 201 &&
-                item.GetProperty("succeeded").GetBoolean());
+                item.GetProperty("succeeded").GetBoolean() &&
+                item.GetProperty("changes")
+                    .GetProperty("after")
+                    .GetProperty("pcode")
+                    .GetString() == country.pcode);
+
+        var updateAudit = await SendAsync(
+            HttpMethod.Get,
+            "/api/admin/audit-events?action=Regions.UpdateCountry&pageSize=20",
+            adminToken);
+        updateAudit.EnsureSuccessStatusCode();
+        using var updateAuditJson = await ReadJsonAsync(updateAudit);
+        Assert.Contains(
+            updateAuditJson.RootElement.GetProperty("items").EnumerateArray(),
+            item =>
+                item.GetProperty("target").GetString() == $"gid={countryGid}" &&
+                item.GetProperty("changes")
+                    .GetProperty("before")
+                    .GetProperty("nameEn")
+                    .GetString() == country.nameEn &&
+                item.GetProperty("changes")
+                    .GetProperty("after")
+                    .GetProperty("nameEn")
+                    .GetString() == $"Updated Secured Country {suffix}");
     }
 
     [Fact]

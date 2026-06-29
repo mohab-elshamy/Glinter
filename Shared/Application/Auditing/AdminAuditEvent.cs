@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace Glinter.Shared.Application.Auditing;
 
 public sealed class AdminAuditEvent
@@ -13,6 +15,7 @@ public sealed class AdminAuditEvent
     public string CorrelationId { get; set; } = string.Empty;
     public DateTime CreatedAtUtc { get; set; }
     public DateTime? CompletedAtUtc { get; set; }
+    public string? ChangeDetailsJson { get; set; }
 }
 
 public sealed class AdminAuditEventDto
@@ -28,6 +31,7 @@ public sealed class AdminAuditEventDto
     public string CorrelationId { get; set; } = string.Empty;
     public DateTime CreatedAtUtc { get; set; }
     public DateTime? CompletedAtUtc { get; set; }
+    public JsonElement? Changes { get; set; }
 }
 
 public sealed class AdminAuditPageDto

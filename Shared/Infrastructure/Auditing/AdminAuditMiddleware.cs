@@ -30,7 +30,9 @@ public sealed class AdminAuditMiddleware
         _logger = logger;
     }
 
-    public async Task InvokeAsync(HttpContext context)
+    public async Task InvokeAsync(
+        HttpContext context,
+        AdminAuditDetailsContext auditDetails)
     {
         if (!ShouldAudit(context, out var actorUserId))
         {
@@ -79,7 +81,8 @@ public sealed class AdminAuditMiddleware
                 await CompleteIntentAsync(
                     auditEvent.Id,
                     statusCode,
-                    endpointException is null && statusCode is >= 200 and < 400);
+                    endpointException is null && statusCode is >= 200 and < 400,
+                    auditDetails.ChangeDetailsJson);
             }
             catch (Exception auditException)
             {
@@ -102,7 +105,8 @@ public sealed class AdminAuditMiddleware
     private async Task CompleteIntentAsync(
         Guid auditEventId,
         int statusCode,
-        bool succeeded)
+        bool succeeded,
+        string? changeDetailsJson)
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
         var auditService = scope.ServiceProvider.GetRequiredService<AdminAuditService>();
@@ -110,6 +114,7 @@ public sealed class AdminAuditMiddleware
             auditEventId,
             statusCode,
             succeeded,
+            changeDetailsJson,
             CancellationToken.None);
     }
 

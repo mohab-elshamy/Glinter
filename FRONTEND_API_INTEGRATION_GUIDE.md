@@ -989,6 +989,10 @@ The default is the latest 30 UTC calendar days and the maximum range is 366
 days. Missing dates in the range are returned with zero counts. Gross booking value is
 always grouped by currency.
 
+Audit events include sanitized `changes.before` and `changes.after` objects when
+the operation supports change capture. Audit `fromUtc` and `toUtc` values must
+include `Z` or an explicit UTC offset.
+
 Provider dashboard data is scoped from the authenticated user's provider
 profile; clients do not send a profile ID.
 

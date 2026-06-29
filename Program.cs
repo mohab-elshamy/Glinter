@@ -28,6 +28,7 @@ using Microsoft.Extensions.Logging;
 using Glinter.Shared.Infrastructure.Dashboards;
 using Glinter.Shared.Infrastructure.Analytics;
 using Glinter.Shared.Infrastructure.Auditing;
+using Glinter.Shared.Application.Auditing;
 using Glinter.Shared.Infrastructure.Metrics;
 using Glinter.Shared.Infrastructure.Cleanup;
 
@@ -135,6 +136,7 @@ builder.Services.AddHealthChecks()
 builder.Services.AddScoped<DashboardService>();
 builder.Services.AddScoped<AdminAnalyticsService>();
 builder.Services.AddScoped<AdminAuditService>();
+builder.Services.AddScoped<AdminAuditDetailsContext>();
 builder.Services.AddSingleton<ApplicationMetrics>();
 
 var cleanupOptions = builder.Configuration

@@ -99,24 +99,59 @@ public sealed class IdentityAndProblemDetailsTests : ApiTestBase
         using var auditJson = await ReadJsonAsync(audit);
         var items = auditJson.RootElement.GetProperty("items").EnumerateArray().ToList();
 
-        Assert.Contains(
+        var roleEvent = Assert.Single(
             items,
             item =>
                 item.GetProperty("action").GetString() == "AdminUsers.AssignRole" &&
                 item.GetProperty("target").GetString()!.Contains(
                     target.UserId.ToString(),
-                    StringComparison.OrdinalIgnoreCase) &&
-                item.GetProperty("succeeded").GetBoolean());
+                    StringComparison.OrdinalIgnoreCase));
+        Assert.True(roleEvent.GetProperty("succeeded").GetBoolean());
         Assert.Contains(
+            roleEvent.GetProperty("changes")
+                .GetProperty("before")
+                .GetProperty("roles")
+                .EnumerateArray(),
+            role => role.GetString() == "Traveler");
+        Assert.Contains(
+            roleEvent.GetProperty("changes")
+                .GetProperty("after")
+                .GetProperty("roles")
+                .EnumerateArray(),
+            role => role.GetString() == "LocalBuddy");
+
+        var statusEvent = Assert.Single(
             items,
             item =>
                 item.GetProperty("action").GetString() == "AdminUsers.ChangeUserStatus" &&
                 item.GetProperty("target").GetString()!.Contains(
                     target.UserId.ToString(),
-                    StringComparison.OrdinalIgnoreCase) &&
-                item.GetProperty("statusCode").GetInt32() == 200 &&
-                item.GetProperty("completedAtUtc").ValueKind !=
-                System.Text.Json.JsonValueKind.Null);
+                    StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(200, statusEvent.GetProperty("statusCode").GetInt32());
+        Assert.NotEqual(
+            System.Text.Json.JsonValueKind.Null,
+            statusEvent.GetProperty("completedAtUtc").ValueKind);
+        Assert.True(statusEvent.GetProperty("changes")
+            .GetProperty("before")
+            .GetProperty("isActive")
+            .GetBoolean());
+        Assert.False(statusEvent.GetProperty("changes")
+            .GetProperty("after")
+            .GetProperty("isActive")
+            .GetBoolean());
+
+        var unspecifiedDate = await SendAsync(
+            HttpMethod.Get,
+            "/api/admin/audit-events?fromUtc=2026-06-29T10:00:00",
+            adminToken);
+        await AssertProblemAsync(unspecifiedDate, 400, "validation_error");
+
+        var utcDate = Uri.EscapeDataString(DateTime.UtcNow.AddDays(-1).ToString("O"));
+        var validDate = await SendAsync(
+            HttpMethod.Get,
+            $"/api/admin/audit-events?fromUtc={utcDate}",
+            adminToken);
+        validDate.EnsureSuccessStatusCode();
     }
 
     [Fact]

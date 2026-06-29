@@ -110,6 +110,7 @@ public class IdentityAccessDbContext
             entity.Property(x => x.Path).HasMaxLength(1000).IsRequired();
             entity.Property(x => x.Target).HasMaxLength(1000);
             entity.Property(x => x.CorrelationId).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.ChangeDetailsJson).HasMaxLength(16000);
             entity.HasIndex(x => x.CreatedAtUtc);
             entity.HasIndex(x => new { x.ActorUserId, x.CreatedAtUtc });
             entity.HasIndex(x => new { x.Action, x.CreatedAtUtc });
