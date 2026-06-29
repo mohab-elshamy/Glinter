@@ -3,6 +3,7 @@ using Glinter.Modules.Communication.Infrastructure.DependencyInjection;
 using Glinter.Modules.IdentityAccess.Domain.Entities;
 using Glinter.Modules.IdentityAccess.Infrastructure.DependencyInjection;
 using Glinter.Modules.IdentityAccess.Infrastructure.Identity;
+using Glinter.Modules.Experiences.Infrastructure.DependencyInjection;
 using Glinter.Modules.Profiles.Infrastructure.DependencyInjection;
 using Glinter.Modules.Profiles.Infrastructure.Persistence;
 using Glinter.Modules.Regions.Infrastructure.DependencyInjection;
@@ -28,6 +29,7 @@ builder.Services.AddDbContext<StaysDbContext>(options =>
 builder.Services.AddStaysModule();
 
 // Module 5: Experiences
+builder.Services.AddExperiencesModule(builder.Configuration);
 
 // Module 6: Regions (Administrative Boundaries)
 builder.Services.AddRegionsModule(builder.Configuration);
@@ -42,6 +44,7 @@ builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
         options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
     });
 
 #region Swagger Configurations
