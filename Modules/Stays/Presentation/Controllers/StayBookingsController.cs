@@ -1,7 +1,9 @@
-﻿using Glinter.Modules.Stays.Application.Bookings.Commands;
+using Glinter.Modules.IdentityAccess.Domain.Constants;
+using Glinter.Modules.Stays.Application.Bookings.Commands;
 using Glinter.Modules.Stays.Application.Bookings.Dtos;
 using Glinter.Modules.Stays.Application.Bookings.Queries;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Glinter.Modules.Stays.Presentation.Controllers;
@@ -24,80 +26,53 @@ public class StayBookingController : ControllerBase
         _cancelStayBookingHandler = cancelStayBookingHandler;
     }
 
-    [Authorize]
+    [Authorize(Roles = RoleNames.Traveler)]
     [HttpPost("/api/stays/{stayId:guid}/bookings")]
     public async Task<IActionResult> Create(
         Guid stayId,
         [FromBody] CreateStayBookingRequestDto request,
         CancellationToken cancellationToken)
     {
-        try
+        var command = new CreateStayBookingCommand
         {
-            var command = new CreateStayBookingCommand
-            {
-                StayId = stayId,
-                CheckInDate = request.CheckInDate,
-                CheckOutDate = request.CheckOutDate,
-                GuestCount = request.GuestCount
-            };
+            StayId = stayId,
+            CheckInDate = request.CheckInDate,
+            CheckOutDate = request.CheckOutDate,
+            GuestCount = request.GuestCount
+        };
 
-            var result = await _createStayBookingHandler.HandleAsync(command, cancellationToken);
+        var result = await _createStayBookingHandler.HandleAsync(command, cancellationToken);
 
-            return Ok(result);
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        return Ok(result);
     }
 
+    [Authorize(Roles = RoleNames.HotelOwner)]
     [HttpGet]
     public async Task<IActionResult> GetBookings(Guid stayId, CancellationToken cancellationToken)
     {
-        try
+        var query = new GetStayBookingsQuery
         {
-            var query = new GetStayBookingsQuery
-            {
-                StayId = stayId
-            };
+            StayId = stayId
+        };
 
-            var result = await _getStayBookingsHandler.HandleAsync(query, cancellationToken);
-            return Ok(result);
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
+        var result = await _getStayBookingsHandler.HandleAsync(query, cancellationToken);
+        return Ok(result);
     }
 
+    [Authorize(Roles = RoleNames.Traveler)]
     [HttpPatch("~/api/stay-bookings/{bookingId:guid}/cancel")]
     public async Task<IActionResult> CancelBooking(Guid bookingId, CancellationToken cancellationToken)
     {
-        try
+        var command = new CancelStayBookingCommand
         {
-            var command = new CancelStayBookingCommand
-            {
-                BookingId = bookingId
-            };
+            BookingId = bookingId
+        };
 
-            var result = await _cancelStayBookingHandler.HandleAsync(command, cancellationToken);
+        var result = await _cancelStayBookingHandler.HandleAsync(command, cancellationToken);
 
-            if (result is null)
-                return NotFound(new { message = "Booking not found." });
+        if (result is null)
+            throw new NotFoundException("Booking not found.");
 
-            return Ok(result);
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        return Ok(result);
     }
 }

@@ -44,17 +44,17 @@ public class CancelExperienceBookingCommandHandler
 
         if (booking.TravelerProfileId != travelerProfileId)
         {
-            throw new UnauthorizedAccessException("You can cancel only your own bookings.");
+            throw new ForbiddenException("You can cancel only your own bookings.");
         }
 
         if (booking.Status == ExperienceBookingStatus.Cancelled)
         {
-            throw new InvalidOperationException("Booking is already cancelled.");
+            throw new ConflictException("Booking is already cancelled.");
         }
 
         if (booking.Status == ExperienceBookingStatus.Completed)
         {
-            throw new InvalidOperationException("Completed booking cannot be cancelled.");
+            throw new ConflictException("Completed booking cannot be cancelled.");
         }
 
         booking.Status = ExperienceBookingStatus.Cancelled;
@@ -66,10 +66,14 @@ public class CancelExperienceBookingCommandHandler
 
         if (availability == null)
         {
-            throw new InvalidOperationException("Availability slot was not found.");
+            throw new NotFoundException("Availability slot was not found.");
         }
 
-        availability.BookedCount = Math.Max(0, availability.BookedCount - booking.GuestsCount);
+        if (availability.StartTimeUtc <= DateTime.UtcNow)
+        {
+            throw new ConflictException(
+                "A booking cannot be cancelled after the experience has started.");
+        }
 
         await _bookingRepository.UpdateBookingAndAvailabilityAsync(
             booking,

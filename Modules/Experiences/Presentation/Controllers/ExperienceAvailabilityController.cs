@@ -33,28 +33,23 @@ public class ExperienceAvailabilityController : ControllerBase
     [HttpGet("api/experiences/{experienceId:guid}/availability")]
     public async Task<ActionResult<List<ExperienceAvailabilityResponseDto>>> GetByExperienceId(
         Guid experienceId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20)
     {
-        try
-        {
-            var result = await _getAvailabilityHandler.HandleAsync(
-                new GetExperienceAvailabilityQuery
-                {
-                    ExperienceId = experienceId
-                },
-                cancellationToken);
-
-            if (result == null)
+        var result = await _getAvailabilityHandler.HandleAsync(
+            new GetExperienceAvailabilityQuery
             {
-                return NotFound(new { message = "Experience was not found." });
-            }
+                ExperienceId = experienceId,
+                Page = page,
+                PageSize = pageSize
+            },
+            cancellationToken);
 
-            return Ok(result);
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        if (result is null)
+            throw new NotFoundException("Experience was not found.");
+
+        return Ok(result);
     }
 
     [Authorize(Roles = RoleNames.ExperienceProvider)]
@@ -64,34 +59,17 @@ public class ExperienceAvailabilityController : ControllerBase
         [FromBody] CreateExperienceAvailabilityRequestDto request,
         CancellationToken cancellationToken)
     {
-        try
-        {
-            var result = await _createAvailabilityHandler.HandleAsync(
-                request.ToCommand(experienceId),
-                cancellationToken);
+        var result = await _createAvailabilityHandler.HandleAsync(
+            request.ToCommand(experienceId),
+            cancellationToken);
 
-            if (result == null)
-            {
-                return NotFound(new { message = "Experience was not found." });
-            }
+        if (result is null)
+            throw new NotFoundException("Experience was not found.");
 
-            return CreatedAtAction(
-                nameof(GetByExperienceId),
-                new { experienceId = result.ExperienceId },
-                result);
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
-        }
+        return CreatedAtAction(
+            nameof(GetByExperienceId),
+            new { experienceId = result.ExperienceId },
+            result);
     }
 
     [Authorize(Roles = RoleNames.ExperienceProvider)]
@@ -100,34 +78,17 @@ public class ExperienceAvailabilityController : ControllerBase
         Guid availabilityId,
         CancellationToken cancellationToken)
     {
-        try
-        {
-            var result = await _activateAvailabilityHandler.HandleAsync(
-                new ActivateExperienceAvailabilityCommand
-                {
-                    AvailabilityId = availabilityId
-                },
-                cancellationToken);
-
-            if (result == null)
+        var result = await _activateAvailabilityHandler.HandleAsync(
+            new ActivateExperienceAvailabilityCommand
             {
-                return NotFound(new { message = "Availability slot was not found." });
-            }
+                AvailabilityId = availabilityId
+            },
+            cancellationToken);
 
-            return Ok(result);
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
-        }
+        if (result is null)
+            throw new NotFoundException("Availability slot was not found.");
+
+        return Ok(result);
     }
 
     [Authorize(Roles = RoleNames.ExperienceProvider)]
@@ -136,29 +97,16 @@ public class ExperienceAvailabilityController : ControllerBase
         Guid availabilityId,
         CancellationToken cancellationToken)
     {
-        try
-        {
-            var result = await _deactivateAvailabilityHandler.HandleAsync(
-                new DeactivateExperienceAvailabilityCommand
-                {
-                    AvailabilityId = availabilityId
-                },
-                cancellationToken);
-
-            if (result == null)
+        var result = await _deactivateAvailabilityHandler.HandleAsync(
+            new DeactivateExperienceAvailabilityCommand
             {
-                return NotFound(new { message = "Availability slot was not found." });
-            }
+                AvailabilityId = availabilityId
+            },
+            cancellationToken);
 
-            return Ok(result);
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
-        }
+        if (result is null)
+            throw new NotFoundException("Availability slot was not found.");
+
+        return Ok(result);
     }
 }

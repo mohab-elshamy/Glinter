@@ -29,10 +29,10 @@ public class UpdateProfileImageCommandHandler
     {
         var errors = _validator.Validate(command);
         if (errors.Count > 0)
-            throw new InvalidOperationException(string.Join(" | ", errors));
+            throw new ValidationException(string.Join(" | ", errors));
 
         if (!_currentUserService.IsAuthenticated || _currentUserService.UserId is null)
-            throw new UnauthorizedAccessException("User is not authenticated.");
+            throw new AuthenticationException("User is not authenticated.");
 
         var userId = _currentUserService.UserId.Value;
 
@@ -106,6 +106,6 @@ public class UpdateProfileImageCommandHandler
                 stats.FollowingCount);
         }
 
-        throw new KeyNotFoundException("Profile not found. Create your profile first.");
+        throw new NotFoundException("Profile not found. Create your profile first.");
     }
 }

@@ -16,4 +16,12 @@ public static class RoleNames
         ExperienceProvider,
         Admin
     ];
+
+    public static readonly string[] PublicRegistration =
+    [
+        Traveler,
+        LocalBuddy,
+        HotelOwner,
+        ExperienceProvider
+    ];
 }

@@ -111,7 +111,16 @@ public static class ExperienceRequestMappings
             MaxPrice = request.MaxPrice,
             Guests = request.Guests,
             VibeId = request.VibeId,
-            Tag = request.Tag
+            Tag = request.Tag,
+            Search = request.Search,
+            Currency = request.Currency,
+            MinDurationMinutes = request.MinDurationMinutes,
+            MaxDurationMinutes = request.MaxDurationMinutes,
+            AvailableFromUtc = request.AvailableFromUtc,
+            AvailableToUtc = request.AvailableToUtc,
+            SortBy = request.SortBy,
+            Page = request.Page,
+            PageSize = request.PageSize
         };
     }
 }

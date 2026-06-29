@@ -1,5 +1,6 @@
 using Glinter.Modules.Experiences.Application.Abstractions;
 using Glinter.Modules.Experiences.Domain.Entities;
+using Glinter.Modules.Experiences.Application.Common;
 using Microsoft.EntityFrameworkCore;
 
 namespace Glinter.Modules.Experiences.Infrastructure.Persistence.Repositories;
@@ -21,12 +22,19 @@ public class ExperienceReviewRepository : IExperienceReviewRepository
 
     public async Task<List<ExperienceReview>> GetByExperienceIdAsync(
         Guid experienceId,
+        int page,
+        int pageSize,
         CancellationToken cancellationToken = default)
     {
+        var pagination = ExperiencePagination.Normalize(page, pageSize);
+
         return await _context.ExperienceReviews
             .AsNoTracking()
             .Where(x => x.ExperienceId == experienceId)
             .OrderByDescending(x => x.CreatedAtUtc)
+            .ThenBy(x => x.Id)
+            .Skip((pagination.Page - 1) * pagination.PageSize)
+            .Take(pagination.PageSize)
             .ToListAsync(cancellationToken);
     }
 

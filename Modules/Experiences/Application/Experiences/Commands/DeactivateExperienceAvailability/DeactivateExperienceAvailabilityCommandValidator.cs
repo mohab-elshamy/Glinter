@@ -6,7 +6,7 @@ public class DeactivateExperienceAvailabilityCommandValidator
     {
         if (command.AvailabilityId == Guid.Empty)
         {
-            throw new ArgumentException("AvailabilityId is required.");
+            throw new ValidationException("AvailabilityId is required.");
         }
     }
 }

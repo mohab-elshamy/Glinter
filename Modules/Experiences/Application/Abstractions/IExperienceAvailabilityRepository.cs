@@ -8,6 +8,8 @@ public interface IExperienceAvailabilityRepository
 
     Task<List<ExperienceAvailability>> GetByExperienceIdAsync(
         Guid experienceId,
+        int page,
+        int pageSize,
         CancellationToken cancellationToken = default);
 
     Task<ExperienceAvailability?> GetByIdAsync(

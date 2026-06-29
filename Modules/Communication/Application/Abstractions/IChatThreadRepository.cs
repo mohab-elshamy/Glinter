@@ -1,24 +1,23 @@
 using Glinter.Modules.Communication.Domain.Entities;
+using Glinter.Modules.Communication.Application.Chats.Dtos;
 
 namespace Glinter.Modules.Communication.Application.Abstractions;
 
 public interface IChatThreadRepository
 {
-    Task<ChatThread?> GetDirectThreadAsync(
-        Guid firstUserId,
-        Guid secondUserId,
+    Task<ChatThreadSummaryDto?> GetDirectThreadSummaryAsync(
+        string directKey,
+        Guid currentUserId,
         CancellationToken cancellationToken = default);
 
     Task<ChatThread?> GetByIdWithParticipantsAsync(
         Guid threadId,
         CancellationToken cancellationToken = default);
 
-    Task<ChatThread?> GetByIdWithParticipantsAndMessagesAsync(
-        Guid threadId,
-        CancellationToken cancellationToken = default);
-
-    Task<List<ChatThread>> GetThreadsForUserAsync(
+    Task<List<ChatThreadSummaryDto>> GetThreadSummariesForUserAsync(
         Guid userId,
+        int page,
+        int pageSize,
         CancellationToken cancellationToken = default);
 
     Task<ChatParticipant?> GetParticipantForUpdateAsync(

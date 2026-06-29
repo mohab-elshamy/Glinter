@@ -52,8 +52,7 @@ public class GeoJsonImportService(RegionsDbContext db) : IGeoJsonImportService
         }
         catch (Exception ex)
         {
-            result.Errors.Add($"Failed to parse GeoJSON: {ex.Message}");
-            return result;
+            throw new ValidationException($"Failed to parse GeoJSON: {ex.Message}");
         }
 
         result.TotalFeatures = features.Count;
@@ -93,10 +92,10 @@ public class GeoJsonImportService(RegionsDbContext db) : IGeoJsonImportService
         var props = feature.Attributes;
 
         var pcode = GetString(props, "adm0_pcode", "ADM0_PCODE", "pcode", "PCODE")
-            ?? throw new InvalidOperationException("Missing pcode (adm0_pcode)");
+            ?? throw new ValidationException("Missing pcode (adm0_pcode)");
 
         var nameEn = GetString(props, "adm0_name", "ADM0_EN", "name_en", "NAME_EN", "name")
-            ?? throw new InvalidOperationException("Missing name_en (adm0_name)");
+            ?? throw new ValidationException("Missing name_en (adm0_name)");
 
         var nameAr = GetString(props, "adm0_name1", "ADM0_AR", "name_ar", "NAME_AR");
 
@@ -129,18 +128,18 @@ public class GeoJsonImportService(RegionsDbContext db) : IGeoJsonImportService
         var props = feature.Attributes;
 
         var pcode = GetString(props, "adm1_pcode", "ADM1_PCODE", "pcode", "PCODE")
-            ?? throw new InvalidOperationException("Missing pcode (adm1_pcode)");
+            ?? throw new ValidationException("Missing pcode (adm1_pcode)");
 
         var nameEn = GetString(props, "adm1_name", "ADM1_EN", "name_en", "NAME_EN", "name")
-            ?? throw new InvalidOperationException("Missing name_en (adm1_name)");
+            ?? throw new ValidationException("Missing name_en (adm1_name)");
 
         var nameAr = GetString(props, "adm1_name1", "ADM1_AR", "name_ar", "NAME_AR");
 
         var parentPcode = GetString(props, "adm0_pcode", "ADM0_PCODE")
-            ?? throw new InvalidOperationException("Missing parent pcode (adm0_pcode)");
+            ?? throw new ValidationException("Missing parent pcode (adm0_pcode)");
 
         var parent = await db.Adm0.FirstOrDefaultAsync(x => x.Pcode == parentPcode, ct)
-            ?? throw new InvalidOperationException($"Parent adm0 not found for pcode '{parentPcode}'");
+            ?? throw new ValidationException($"Parent adm0 not found for pcode '{parentPcode}'");
 
         var geom = ExtractMultiPolygon(feature.Geometry, pcode);
 
@@ -173,18 +172,18 @@ public class GeoJsonImportService(RegionsDbContext db) : IGeoJsonImportService
         var props = feature.Attributes;
 
         var pcode = GetString(props, "adm2_pcode", "ADM2_PCODE", "pcode", "PCODE")
-            ?? throw new InvalidOperationException("Missing pcode (adm2_pcode)");
+            ?? throw new ValidationException("Missing pcode (adm2_pcode)");
 
         var nameEn = GetString(props, "adm2_name", "ADM2_EN", "name_en", "NAME_EN", "name")
-            ?? throw new InvalidOperationException("Missing name_en (adm2_name)");
+            ?? throw new ValidationException("Missing name_en (adm2_name)");
 
         var nameAr = GetString(props, "adm2_name1", "ADM2_AR", "name_ar", "NAME_AR");
 
         var parentPcode = GetString(props, "adm1_pcode", "ADM1_PCODE")
-            ?? throw new InvalidOperationException("Missing parent pcode (adm1_pcode)");
+            ?? throw new ValidationException("Missing parent pcode (adm1_pcode)");
 
         var parent = await db.Adm1.FirstOrDefaultAsync(x => x.Pcode == parentPcode, ct)
-            ?? throw new InvalidOperationException($"Parent adm1 not found for pcode '{parentPcode}'");
+            ?? throw new ValidationException($"Parent adm1 not found for pcode '{parentPcode}'");
 
         var geom = ExtractMultiPolygon(feature.Geometry, pcode);
 
@@ -217,17 +216,17 @@ public class GeoJsonImportService(RegionsDbContext db) : IGeoJsonImportService
         var props = feature.Attributes;
 
         var pcode = GetString(props, "adm3_pcode", "ADM3_PCODE", "pcode", "PCODE")
-            ?? throw new InvalidOperationException("Missing pcode (adm3_pcode)");
+            ?? throw new ValidationException("Missing pcode (adm3_pcode)");
 
         var nameEn = GetString(props, "adm3_name", "ADM3_EN", "name_en", "NAME_EN", "name");
 
         var nameAr = GetString(props, "adm3_name1", "ADM3_AR", "name_ar", "NAME_AR");
 
         var parentPcode = GetString(props, "adm2_pcode", "ADM2_PCODE")
-            ?? throw new InvalidOperationException("Missing parent pcode (adm2_pcode)");
+            ?? throw new ValidationException("Missing parent pcode (adm2_pcode)");
 
         var parent = await db.Adm2.FirstOrDefaultAsync(x => x.Pcode == parentPcode, ct)
-            ?? throw new InvalidOperationException($"Parent adm2 not found for pcode '{parentPcode}'");
+            ?? throw new ValidationException($"Parent adm2 not found for pcode '{parentPcode}'");
 
         var geom = ExtractMultiPolygon(feature.Geometry, pcode);
 
@@ -266,7 +265,7 @@ public class GeoJsonImportService(RegionsDbContext db) : IGeoJsonImportService
         using var jr = new Newtonsoft.Json.JsonTextReader(sr);
 
         var collection = serializer.Deserialize<FeatureCollection>(jr)
-            ?? throw new InvalidOperationException("GeoJSON stream is empty or invalid.");
+            ?? throw new ValidationException("GeoJSON stream is empty or invalid.");
 
         return [.. collection];
     }
@@ -275,13 +274,13 @@ public class GeoJsonImportService(RegionsDbContext db) : IGeoJsonImportService
     private static MultiPolygon ExtractMultiPolygon(Geometry? geometry, string pcode)
     {
         if (geometry is null)
-            throw new InvalidOperationException($"Feature '{pcode}' has null geometry.");
+            throw new ValidationException($"Feature '{pcode}' has null geometry.");
 
         MultiPolygon? multi = geometry switch
         {
             MultiPolygon mp => mp,
             Polygon p => new MultiPolygon([p]),
-            _ => throw new InvalidOperationException(
+            _ => throw new ValidationException(
                 $"Feature '{pcode}' has unsupported geometry type '{geometry.GeometryType}'. Expected Polygon or MultiPolygon.")
         };
 

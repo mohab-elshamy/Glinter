@@ -7,26 +7,32 @@ public class LogoutCommandHandler
 {
     private readonly ICurrentUserService _currentUserService;
     private readonly ITokenRevocationService _tokenRevocationService;
+    private readonly IAuthTokenService _authTokenService;
     private readonly LogoutCommandValidator _validator = new();
 
     public LogoutCommandHandler(
         ICurrentUserService currentUserService,
-        ITokenRevocationService tokenRevocationService)
+        ITokenRevocationService tokenRevocationService,
+        IAuthTokenService authTokenService)
     {
         _currentUserService = currentUserService;
         _tokenRevocationService = tokenRevocationService;
+        _authTokenService = authTokenService;
     }
 
     public async Task<LogoutResponse> HandleAsync(LogoutCommand command)
     {
         var errors = _validator.Validate(command);
         if (errors.Count > 0)
-            throw new InvalidOperationException(string.Join(" | ", errors));
+            throw new ValidationException(string.Join(" | ", errors));
 
         if (!_currentUserService.IsAuthenticated || _currentUserService.UserId is null)
-            throw new UnauthorizedAccessException("User is not authenticated.");
+            throw new AuthenticationException("User is not authenticated.");
 
         await _tokenRevocationService.RevokeCurrentTokenAsync("User logout");
+        await _authTokenService.RevokeAllAsync(
+            _currentUserService.UserId.Value,
+            "User logout");
 
         return new LogoutResponse
         {

@@ -4,6 +4,7 @@ using Glinter.Modules.Regions.Application.DTOs;
 using Glinter.Modules.Regions.Domain.Entities;
 using NetTopologySuite.IO;
 using System.Text;
+using Glinter.Shared.Application.Auditing;
 
 namespace Glinter.Modules.Regions.Application.Countries.Commands;
 
@@ -29,7 +30,9 @@ public class UpdateCountryCommand
 
 // ──────── Handlers ────────
 
-public class CreateCountryHandler(IAdm0Repository repository)
+public class CreateCountryHandler(
+    IAdm0Repository repository,
+    AdminAuditDetailsContext auditDetails)
 {
     public async Task<Adm0Dto> HandleAsync(CreateCountryCommand command, CancellationToken ct)
     {
@@ -43,16 +46,22 @@ public class CreateCountryHandler(IAdm0Repository repository)
         };
 
         var created = await repository.AddAsync(entity, ct);
+        auditDetails.SetChanges(
+            new { Exists = false },
+            CountryAuditSnapshot.From(created));
         return CountryMapper.MapToDto(created, false);
     }
 }
 
-public class UpdateCountryHandler(IAdm0Repository repository)
+public class UpdateCountryHandler(
+    IAdm0Repository repository,
+    AdminAuditDetailsContext auditDetails)
 {
     public async Task<Adm0Dto?> HandleAsync(UpdateCountryCommand command, CancellationToken ct)
     {
         var entity = await repository.GetByIdAsync(command.Gid, false, ct);
         if (entity is null) return null;
+        var before = CountryAuditSnapshot.From(entity);
 
         entity.NameEn = command.NameEn;
         entity.NameAr = command.NameAr;
@@ -61,14 +70,46 @@ public class UpdateCountryHandler(IAdm0Repository repository)
         entity.UpdatedAt = DateTimeOffset.UtcNow;
 
         var updated = await repository.UpdateAsync(entity, ct);
+        if (updated is not null)
+            auditDetails.SetChanges(before, CountryAuditSnapshot.From(updated));
         return updated is null ? null : CountryMapper.MapToDto(updated, false);
     }
 }
 
-public class DeleteCountryHandler(IAdm0Repository repository)
+public class DeleteCountryHandler(
+    IAdm0Repository repository,
+    AdminAuditDetailsContext auditDetails)
 {
     public async Task<bool> HandleAsync(int gid, CancellationToken ct)
-        => await repository.DeleteAsync(gid, ct);
+    {
+        var entity = await repository.GetByIdAsync(gid, false, ct);
+        if (entity is null)
+            return false;
+
+        var before = CountryAuditSnapshot.From(entity);
+        var deleted = await repository.DeleteAsync(gid, ct);
+        if (deleted)
+            auditDetails.SetChanges(before, new { Deleted = true });
+        return deleted;
+    }
+}
+
+internal sealed record CountryAuditSnapshot(
+    int Gid,
+    string NameEn,
+    string? NameAr,
+    string Pcode,
+    string? ImageUrl,
+    string? FlagUrl)
+{
+    internal static CountryAuditSnapshot From(Adm0 value) =>
+        new(
+            value.Gid,
+            value.NameEn,
+            value.NameAr,
+            value.Pcode,
+            value.ImageUrl,
+            value.FlagUrl);
 }
 
 // ──────── Shared mapper ────────

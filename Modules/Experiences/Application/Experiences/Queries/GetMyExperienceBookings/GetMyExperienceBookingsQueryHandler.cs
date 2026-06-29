@@ -21,11 +21,17 @@ public class GetMyExperienceBookingsQueryHandler
         GetMyExperienceBookingsQuery query,
         CancellationToken cancellationToken = default)
     {
+        Glinter.Modules.Experiences.Application.Common.ExperiencePagination.Validate(
+            query.Page,
+            query.PageSize);
+
         var travelerProfileId = await _profileResolver
             .GetCurrentTravelerProfileIdAsync(cancellationToken);
 
         var bookings = await _bookingRepository.GetByTravelerProfileIdAsync(
             travelerProfileId,
+            query.Page,
+            query.PageSize,
             cancellationToken);
 
         return bookings

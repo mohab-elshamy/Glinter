@@ -15,6 +15,13 @@ public class ExperienceAvailabilityConfiguration : IEntityTypeConfiguration<Expe
         builder.HasIndex(x => x.ExperienceId);
         builder.HasIndex(x => x.StartTimeUtc);
         builder.HasIndex(x => x.IsActive);
+        builder.HasIndex(x => new
+        {
+            x.ExperienceId,
+            x.IsActive,
+            x.StartTimeUtc,
+            x.EndTimeUtc
+        }).IsCreatedConcurrently();
 
         builder.Property(x => x.StartTimeUtc)
             .IsRequired();

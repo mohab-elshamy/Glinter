@@ -2,6 +2,8 @@ using Glinter.Modules.Experiences.Application.Abstractions;
 using Glinter.Modules.Experiences.Application.Common.Mapping;
 using Glinter.Modules.Experiences.Application.Experiences.Dtos;
 using Glinter.Modules.Experiences.Domain.Entities;
+using Glinter.Modules.IdentityAccess.Application.Abstractions;
+using Glinter.Modules.Experiences.Domain.Enums;
 
 namespace Glinter.Modules.Experiences.Application.Experiences.Commands.CreateExperience;
 
@@ -13,6 +15,7 @@ public class CreateExperienceCommandHandler
     private readonly IExperienceProfileResolver _profileResolver;
     private readonly Glinter.Modules.Regions.Application.Abstractions.IRegionReferenceService _regionReferenceService;
     private readonly CreateExperienceCommandValidator _validator;
+    private readonly ICurrentUserService _currentUserService;
 
     public CreateExperienceCommandHandler(
         IExperienceRepository experienceRepository,
@@ -20,7 +23,8 @@ public class CreateExperienceCommandHandler
         IVibeRepository vibeRepository,
         IExperienceProfileResolver profileResolver,
         Glinter.Modules.Regions.Application.Abstractions.IRegionReferenceService regionReferenceService,
-        CreateExperienceCommandValidator validator)
+        CreateExperienceCommandValidator validator,
+        ICurrentUserService currentUserService)
     {
         _experienceRepository = experienceRepository;
         _categoryRepository = categoryRepository;
@@ -28,6 +32,7 @@ public class CreateExperienceCommandHandler
         _profileResolver = profileResolver;
         _regionReferenceService = regionReferenceService;
         _validator = validator;
+        _currentUserService = currentUserService;
     }
 
     public async Task<ExperienceResponseDto> HandleAsync(
@@ -45,7 +50,7 @@ public class CreateExperienceCommandHandler
 
         if (!categoryExists)
         {
-            throw new InvalidOperationException("Experience category was not found.");
+            throw new NotFoundException("Experience category was not found.");
         }
 
         var vibesExist = await _vibeRepository.ExistsAllAsync(
@@ -54,7 +59,7 @@ public class CreateExperienceCommandHandler
 
         if (!vibesExist)
         {
-            throw new InvalidOperationException("One or more vibes were not found.");
+            throw new NotFoundException("One or more vibes were not found.");
         }
 
         var region = await _regionReferenceService.GetNeighbourhoodAsync(
@@ -63,7 +68,7 @@ public class CreateExperienceCommandHandler
 
         if (region is null)
         {
-            throw new InvalidOperationException("Adm3Gid must reference an existing neighbourhood.");
+            throw new NotFoundException("Adm3Gid must reference an existing neighbourhood.");
         }
 
         var duplicateExists = await _experienceRepository.ExistsAsync(
@@ -74,7 +79,7 @@ public class CreateExperienceCommandHandler
 
         if (duplicateExists)
         {
-            throw new InvalidOperationException("An experience with the same title already exists in this area for this provider.");
+            throw new ConflictException("An experience with the same title already exists in this area for this provider.");
         }
 
         var experienceId = Guid.NewGuid();
@@ -115,7 +120,20 @@ public class CreateExperienceCommandHandler
                     ExperienceId = experienceId,
                     VibeId = x
                 })
-                .ToList()
+                .ToList(),
+            ModerationHistory =
+            [
+                new ExperienceModerationEvent
+                {
+                    Id = Guid.NewGuid(),
+                    ExperienceId = experienceId,
+                    ActorUserId = GetCurrentUserId(),
+                    Action = "Submitted",
+                    PreviousStatus = ExperienceApprovalStatus.Pending,
+                    NewStatus = ExperienceApprovalStatus.Pending,
+                    CreatedAtUtc = DateTime.UtcNow
+                }
+            ]
         };
 
         await _experienceRepository.AddAsync(experience, cancellationToken);
@@ -130,5 +148,12 @@ public class CreateExperienceCommandHandler
         }
 
         return ExperiencesMappings.ToExperienceResponse(createdExperience, region);
+    }
+
+    private Guid GetCurrentUserId()
+    {
+        if (!_currentUserService.IsAuthenticated || _currentUserService.UserId is null)
+            throw new AuthenticationException("User is not authenticated.");
+        return _currentUserService.UserId.Value;
     }
 }

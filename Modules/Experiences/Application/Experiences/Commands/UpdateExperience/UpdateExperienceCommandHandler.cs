@@ -1,6 +1,9 @@
 using Glinter.Modules.Experiences.Application.Abstractions;
 using Glinter.Modules.Experiences.Application.Common.Mapping;
 using Glinter.Modules.Experiences.Application.Experiences.Dtos;
+using Glinter.Modules.Experiences.Domain.Enums;
+using Glinter.Modules.Experiences.Domain.Entities;
+using Glinter.Modules.IdentityAccess.Application.Abstractions;
 
 namespace Glinter.Modules.Experiences.Application.Experiences.Commands.UpdateExperience;
 
@@ -12,6 +15,8 @@ public class UpdateExperienceCommandHandler
     private readonly IExperienceProfileResolver _profileResolver;
     private readonly Glinter.Modules.Regions.Application.Abstractions.IRegionReferenceService _regionReferenceService;
     private readonly UpdateExperienceCommandValidator _validator;
+    private readonly IExperiencesDbContext _dbContext;
+    private readonly ICurrentUserService _currentUserService;
 
     public UpdateExperienceCommandHandler(
         IExperienceRepository experienceRepository,
@@ -19,7 +24,9 @@ public class UpdateExperienceCommandHandler
         IVibeRepository vibeRepository,
         IExperienceProfileResolver profileResolver,
         Glinter.Modules.Regions.Application.Abstractions.IRegionReferenceService regionReferenceService,
-        UpdateExperienceCommandValidator validator)
+        UpdateExperienceCommandValidator validator,
+        IExperiencesDbContext dbContext,
+        ICurrentUserService currentUserService)
     {
         _experienceRepository = experienceRepository;
         _categoryRepository = categoryRepository;
@@ -27,6 +34,8 @@ public class UpdateExperienceCommandHandler
         _profileResolver = profileResolver;
         _regionReferenceService = regionReferenceService;
         _validator = validator;
+        _dbContext = dbContext;
+        _currentUserService = currentUserService;
     }
 
     public async Task<ExperienceResponseDto?> HandleAsync(
@@ -49,7 +58,7 @@ public class UpdateExperienceCommandHandler
 
         if (experience.ProviderProfileId != providerProfileId)
         {
-            throw new UnauthorizedAccessException("You can update only your own experiences.");
+            throw new ForbiddenException("You can update only your own experiences.");
         }
 
         var categoryExists = await _categoryRepository.ExistsAsync(
@@ -58,7 +67,7 @@ public class UpdateExperienceCommandHandler
 
         if (!categoryExists)
         {
-            throw new InvalidOperationException("Experience category was not found.");
+            throw new NotFoundException("Experience category was not found.");
         }
 
         var vibesExist = await _vibeRepository.ExistsAllAsync(
@@ -67,7 +76,7 @@ public class UpdateExperienceCommandHandler
 
         if (!vibesExist)
         {
-            throw new InvalidOperationException("One or more vibes were not found.");
+            throw new NotFoundException("One or more vibes were not found.");
         }
 
         var region = await _regionReferenceService.GetNeighbourhoodAsync(
@@ -76,9 +85,23 @@ public class UpdateExperienceCommandHandler
 
         if (region is null)
         {
-            throw new InvalidOperationException("Adm3Gid must reference an existing neighbourhood.");
+            throw new NotFoundException("Adm3Gid must reference an existing neighbourhood.");
         }
 
+        var duplicateExists = await _experienceRepository.ExistsAsync(
+            providerProfileId,
+            command.Title,
+            command.Adm3Gid,
+            experience.Id,
+            cancellationToken);
+
+        if (duplicateExists)
+        {
+            throw new ConflictException(
+                "An experience with the same title already exists in this area for this provider.");
+        }
+
+        var previousStatus = experience.ApprovalStatus;
         experience.CategoryId = command.CategoryId;
         experience.Adm3Gid = command.Adm3Gid;
         experience.Title = command.Title.Trim();
@@ -90,9 +113,21 @@ public class UpdateExperienceCommandHandler
         experience.MaxGuests = command.MaxGuests;
         experience.Latitude = command.Latitude;
         experience.Longitude = command.Longitude;
+        experience.ApprovalStatus = ExperienceApprovalStatus.Pending;
+        experience.ModerationNotes = null;
+        experience.ModeratedAtUtc = null;
         experience.UpdatedAtUtc = DateTime.UtcNow;
-
-        await _experienceRepository.UpdateAsync(experience, cancellationToken);
+        _dbContext.ExperienceModerationEvents.Add(new ExperienceModerationEvent
+        {
+            Id = Guid.NewGuid(),
+            ExperienceId = experience.Id,
+            ActorUserId = GetCurrentUserId(),
+            Action = "ProviderUpdated",
+            PreviousStatus = previousStatus,
+            NewStatus = ExperienceApprovalStatus.Pending,
+            Notes = "Provider changes require moderation approval.",
+            CreatedAtUtc = DateTime.UtcNow
+        });
 
         await _experienceRepository.ReplaceTagsAsync(
             experience.Id,
@@ -104,6 +139,8 @@ public class UpdateExperienceCommandHandler
             command.VibeIds,
             cancellationToken);
 
+        await _experienceRepository.UpdateAsync(experience, cancellationToken);
+
         var updatedExperience = await _experienceRepository.GetByIdAsync(
             experience.Id,
             cancellationToken);
@@ -111,5 +148,12 @@ public class UpdateExperienceCommandHandler
         return updatedExperience == null
             ? null
             : ExperiencesMappings.ToExperienceResponse(updatedExperience, region);
+    }
+
+    private Guid GetCurrentUserId()
+    {
+        if (!_currentUserService.IsAuthenticated || _currentUserService.UserId is null)
+            throw new AuthenticationException("User is not authenticated.");
+        return _currentUserService.UserId.Value;
     }
 }

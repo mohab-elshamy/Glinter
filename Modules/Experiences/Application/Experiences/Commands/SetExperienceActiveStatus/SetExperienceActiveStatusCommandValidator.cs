@@ -6,7 +6,7 @@ public class SetExperienceActiveStatusCommandValidator
     {
         if (command.ExperienceId == Guid.Empty)
         {
-            throw new ArgumentException("ExperienceId is required.");
+            throw new ValidationException("ExperienceId is required.");
         }
     }
 }

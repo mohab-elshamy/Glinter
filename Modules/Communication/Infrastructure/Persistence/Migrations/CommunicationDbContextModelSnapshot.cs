@@ -46,6 +46,8 @@ namespace Glinter.Modules.Communication.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("SenderUserId");
 
+                    b.HasIndex("SentAtUtc");
+
                     b.HasIndex("ThreadId", "SentAtUtc");
 
                     b.ToTable("chat_messages", (string)null);
@@ -166,6 +168,10 @@ namespace Glinter.Modules.Communication.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CreatedAtUtc");
+
+                    b.HasIndex("ReadAtUtc");
 
                     b.HasIndex("UserId", "CreatedAtUtc");
 

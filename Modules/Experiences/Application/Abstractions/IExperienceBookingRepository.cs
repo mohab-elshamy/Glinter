@@ -8,6 +8,8 @@ public interface IExperienceBookingRepository
 
     Task<List<ExperienceBooking>> GetByExperienceIdAsync(
         Guid experienceId,
+        int page,
+        int pageSize,
         CancellationToken cancellationToken = default);
 
     Task<ExperienceBooking?> GetByIdAsync(
@@ -42,5 +44,7 @@ public interface IExperienceBookingRepository
 
     Task<List<ExperienceBooking>> GetByTravelerProfileIdAsync(
         Guid travelerProfileId,
+        int page,
+        int pageSize,
         CancellationToken cancellationToken = default);
 }

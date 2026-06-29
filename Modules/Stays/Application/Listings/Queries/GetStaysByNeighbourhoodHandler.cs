@@ -20,7 +20,21 @@ public class GetStaysByNeighbourhoodHandler
         GetStaysByNeighbourhoodQuery query,
         CancellationToken cancellationToken = default)
     {
-        var stays = await _stayRepository.GetByAdm3GidAsync(query.Adm3Gid, cancellationToken);
+        if (query.Adm3Gid <= 0)
+            throw new ValidationException("Adm3Gid must be greater than 0.");
+
+        if (query.Page < 1 || query.Page > GetStaysByNeighbourhoodQuery.MaxPage)
+            throw new ValidationException($"Page must be between 1 and {GetStaysByNeighbourhoodQuery.MaxPage}.");
+
+        if (query.PageSize < 1 || query.PageSize > GetStaysByNeighbourhoodQuery.MaxPageSize)
+            throw new ValidationException($"PageSize must be between 1 and {GetStaysByNeighbourhoodQuery.MaxPageSize}.");
+
+        var stays = await _stayRepository.GetByAdm3GidAsync(
+            query.Adm3Gid,
+            query.Page,
+            query.PageSize,
+            cancellationToken);
+
         var region = await _regionReferenceService.GetNeighbourhoodAsync(
             query.Adm3Gid,
             cancellationToken);

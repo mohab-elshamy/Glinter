@@ -19,12 +19,28 @@ public interface IExperienceRepository
         int? guests,
         Guid? vibeId,
         string? tag,
+        string? search,
+        string? currency,
+        int? minDurationMinutes,
+        int? maxDurationMinutes,
+        DateTime? availableFromUtc,
+        DateTime? availableToUtc,
+        string sortBy,
+        int page,
+        int pageSize,
         CancellationToken cancellationToken = default);
 
     Task<bool> ExistsAsync(
         Guid providerProfileId,
         string title,
         int adm3Gid,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> ExistsAsync(
+        Guid providerProfileId,
+        string title,
+        int adm3Gid,
+        Guid excludedExperienceId,
         CancellationToken cancellationToken = default);
 
     Task ReplaceTagsAsync(
@@ -41,6 +57,8 @@ public interface IExperienceRepository
 
     Task<List<Experience>> GetByProviderProfileIdAsync(
         Guid providerProfileId,
+        int page,
+        int pageSize,
         CancellationToken cancellationToken = default);
 
     Task<Experience?> GetPublishedByIdAsync(
@@ -50,5 +68,7 @@ public interface IExperienceRepository
     Task<List<Experience>> GetForAdminAsync(
         ExperienceApprovalStatus? approvalStatus,
         bool? isActive,
+        int page,
+        int pageSize,
         CancellationToken cancellationToken = default);
 }

@@ -1,7 +1,9 @@
-﻿using Glinter.Modules.Stays.Application.Reviews.Commands;
+using Glinter.Modules.IdentityAccess.Domain.Constants;
+using Glinter.Modules.Stays.Application.Reviews.Commands;
 using Glinter.Modules.Stays.Application.Reviews.Dtos;
 using Glinter.Modules.Stays.Application.Reviews.Queries;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Glinter.Modules.Stays.Presentation.Controllers;
@@ -27,118 +29,74 @@ public class StayReviewController : ControllerBase
         _deleteStayReviewHandler = deleteStayReviewHandler;
     }
 
-    [Authorize]
+    [Authorize(Roles = RoleNames.Traveler)]
     [HttpPost]
     public async Task<IActionResult> CreateReview(
         Guid stayId,
         [FromBody] CreateStayReviewRequestDto request,
         CancellationToken cancellationToken)
     {
-        try
+        var command = new CreateStayReviewCommand
         {
-            var command = new CreateStayReviewCommand
-            {
-                StayId = stayId,
-                Rating = request.Rating,
-                Comment = request.Comment
-            };
+            StayId = stayId,
+            Rating = request.Rating,
+            Comment = request.Comment
+        };
 
-            var result = await _createStayReviewHandler.HandleAsync(command, cancellationToken);
-            return Ok(result);
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        var result = await _createStayReviewHandler.HandleAsync(command, cancellationToken);
+        return Ok(result);
     }
 
     [HttpGet]
     public async Task<IActionResult> GetReviews(Guid stayId, CancellationToken cancellationToken)
     {
-        try
+        var query = new GetStayReviewsQuery
         {
-            var query = new GetStayReviewsQuery
-            {
-                StayId = stayId
-            };
+            StayId = stayId
+        };
 
-            var result = await _getStayReviewsHandler.HandleAsync(query, cancellationToken);
-            return Ok(result);
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
+        var result = await _getStayReviewsHandler.HandleAsync(query, cancellationToken);
+        return Ok(result);
     }
 
-    [Authorize]
+    [Authorize(Roles = RoleNames.Traveler)]
     [HttpPut("~/api/stay-reviews/{reviewId:guid}")]
     public async Task<IActionResult> UpdateReview(
         Guid reviewId,
         [FromBody] UpdateStayReviewRequestDto request,
         CancellationToken cancellationToken)
     {
-        try
+        var command = new UpdateStayReviewCommand
         {
-            var command = new UpdateStayReviewCommand
-            {
-                ReviewId = reviewId,
-                Rating = request.Rating,
-                Comment = request.Comment
-            };
+            ReviewId = reviewId,
+            Rating = request.Rating,
+            Comment = request.Comment
+        };
 
-            var result = await _updateStayReviewHandler.HandleAsync(command, cancellationToken);
+        var result = await _updateStayReviewHandler.HandleAsync(command, cancellationToken);
 
-            if (result is null)
-                return NotFound(new { message = "Review not found." });
+        if (result is null)
+            throw new NotFoundException("Review not found.");
 
-            return Ok(result);
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        return Ok(result);
     }
 
-    [Authorize]
+    [Authorize(Roles = RoleNames.Traveler)]
     [HttpDelete("~/api/stay-reviews/{reviewId:guid}")]
     public async Task<IActionResult> DeleteReview(
         Guid reviewId,
         CancellationToken cancellationToken)
     {
-        try
+        var command = new DeleteStayReviewCommand
         {
-            var command = new DeleteStayReviewCommand
-            {
-                ReviewId = reviewId
-            };
+            ReviewId = reviewId
+        };
 
-            var deleted = await _deleteStayReviewHandler.HandleAsync(command, cancellationToken);
+        var deleted = await _deleteStayReviewHandler.HandleAsync(command, cancellationToken);
 
-            if (!deleted)
-                return NotFound(new { message = "Review not found." });
+        if (!deleted)
+            throw new NotFoundException("Review not found.");
 
-            return Ok(new { message = "Review deleted successfully." });
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        return Ok(new { message = "Review deleted successfully." });
     }
 }

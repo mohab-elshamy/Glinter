@@ -24,4 +24,22 @@ public class IdentityUserReadService : IIdentityUserReadService
             .AsNoTracking()
             .AnyAsync(x => x.Id == userId && x.IsActive, cancellationToken);
     }
+
+    public async Task<bool> IsActiveUserWithSecurityStampAsync(
+        Guid userId,
+        string securityStamp,
+        CancellationToken cancellationToken = default)
+    {
+        if (userId == Guid.Empty || string.IsNullOrWhiteSpace(securityStamp))
+            return false;
+
+        return await _dbContext.Users
+            .AsNoTracking()
+            .AnyAsync(
+                x => x.Id == userId &&
+                     x.IsActive &&
+                     x.SecurityStamp == securityStamp,
+                cancellationToken);
+    }
+
 }

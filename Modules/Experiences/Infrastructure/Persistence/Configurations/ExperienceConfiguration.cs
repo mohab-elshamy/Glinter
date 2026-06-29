@@ -16,6 +16,32 @@ public class ExperienceConfiguration : IEntityTypeConfiguration<Experience>
         builder.HasIndex(x => x.CategoryId);
         builder.HasIndex(x => x.Adm3Gid);
         builder.HasIndex(x => x.IsActive);
+        builder.HasIndex(x => new
+        {
+            x.IsActive,
+            x.ApprovalStatus,
+            x.CreatedAtUtc
+        }).IsCreatedConcurrently();
+        builder.HasIndex(x => new
+        {
+            x.Adm3Gid,
+            x.IsActive,
+            x.ApprovalStatus
+        }).IsCreatedConcurrently();
+        builder.HasIndex(x => new
+        {
+            x.CategoryId,
+            x.IsActive,
+            x.ApprovalStatus
+        }).IsCreatedConcurrently();
+        builder.HasIndex(x => new { x.ProviderProfileId, x.CreatedAtUtc })
+            .IsCreatedConcurrently();
+        builder.HasIndex(x => new
+        {
+            x.ProviderProfileId,
+            x.Adm3Gid,
+            x.Title
+        }).IsUnique();
 
         builder.Property(x => x.Title)
             .HasMaxLength(200)

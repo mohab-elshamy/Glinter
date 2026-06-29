@@ -6,13 +6,24 @@ public class SetExperienceApprovalStatusCommandValidator
     {
         if (command.ExperienceId == Guid.Empty)
         {
-            throw new ArgumentException("ExperienceId is required.");
+            throw new ValidationException("ExperienceId is required.");
         }
+
+        if (!Enum.IsDefined(command.ApprovalStatus))
+            throw new ValidationException("ApprovalStatus is invalid.");
 
         if (!string.IsNullOrWhiteSpace(command.ModerationNotes) &&
             command.ModerationNotes.Length > 1000)
         {
-            throw new ArgumentException("ModerationNotes cannot exceed 1000 characters.");
+            throw new ValidationException("ModerationNotes cannot exceed 1000 characters.");
+        }
+
+        if (command.ApprovalStatus ==
+                Glinter.Modules.Experiences.Domain.Enums.ExperienceApprovalStatus.Rejected &&
+            string.IsNullOrWhiteSpace(command.ModerationNotes))
+        {
+            throw new ValidationException(
+                "ModerationNotes are required when rejecting an experience.");
         }
     }
 }

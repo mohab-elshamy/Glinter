@@ -24,8 +24,12 @@ public class GetExperienceReviewsQueryHandler
     {
         if (query.ExperienceId == Guid.Empty)
         {
-            throw new ArgumentException("ExperienceId is required.");
+            throw new ValidationException("ExperienceId is required.");
         }
+
+        Glinter.Modules.Experiences.Application.Common.ExperiencePagination.Validate(
+            query.Page,
+            query.PageSize);
 
         var experience = await _experienceRepository.GetByIdAsync(
             query.ExperienceId,
@@ -43,6 +47,8 @@ public class GetExperienceReviewsQueryHandler
 
         var reviews = await _reviewRepository.GetByExperienceIdAsync(
             query.ExperienceId,
+            query.Page,
+            query.PageSize,
             cancellationToken);
 
         return reviews

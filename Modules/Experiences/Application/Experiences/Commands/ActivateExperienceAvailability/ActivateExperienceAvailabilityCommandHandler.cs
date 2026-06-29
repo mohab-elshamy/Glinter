@@ -52,22 +52,22 @@ public class ActivateExperienceAvailabilityCommandHandler
 
         if (experience.ProviderProfileId != providerProfileId)
         {
-            throw new UnauthorizedAccessException("You can activate availability only for your own experiences.");
+            throw new ForbiddenException("You can activate availability only for your own experiences.");
         }
 
         if (!experience.IsActive)
         {
-            throw new InvalidOperationException("Cannot activate availability for an inactive experience.");
+            throw new ConflictException("Cannot activate availability for an inactive experience.");
         }
 
         if (availability.StartTimeUtc <= DateTime.UtcNow)
         {
-            throw new InvalidOperationException("Cannot activate an availability slot in the past.");
+            throw new ConflictException("Cannot activate an availability slot in the past.");
         }
 
         if (availability.BookedCount > availability.Capacity)
         {
-            throw new InvalidOperationException("Availability booked count cannot be greater than capacity.");
+            throw new ConflictException("Availability booked count cannot be greater than capacity.");
         }
 
         if (availability.IsActive)
@@ -83,7 +83,7 @@ public class ActivateExperienceAvailabilityCommandHandler
 
         if (hasOverlap)
         {
-            throw new InvalidOperationException("Cannot activate this slot because it overlaps with another active slot.");
+            throw new ConflictException("Cannot activate this slot because it overlaps with another active slot.");
         }
 
         availability.IsActive = true;

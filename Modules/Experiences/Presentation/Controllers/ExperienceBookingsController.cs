@@ -41,78 +41,55 @@ public class ExperienceBookingsController : ControllerBase
         [FromBody] CreateExperienceBookingRequestDto request,
         CancellationToken cancellationToken)
     {
-        try
-        {
-            var result = await _createBookingHandler.HandleAsync(
-                request.ToCommand(experienceId),
-                cancellationToken);
+        var result = await _createBookingHandler.HandleAsync(
+            request.ToCommand(experienceId),
+            cancellationToken);
 
-            if (result == null)
-            {
-                return NotFound(new { message = "Experience was not found." });
-            }
+        if (result is null)
+            throw new NotFoundException("Experience was not found.");
 
-            return Ok(result);
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        return Ok(result);
     }
 
     [Authorize(Roles = RoleNames.Traveler)]
     [HttpGet("api/experience-bookings/my")]
     public async Task<ActionResult<List<ExperienceBookingResponseDto>>> GetMyBookings(
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20)
     {
-        try
-        {
-            var result = await _getMyBookingsHandler.HandleAsync(
-                new GetMyExperienceBookingsQuery(),
-                cancellationToken);
+        var result = await _getMyBookingsHandler.HandleAsync(
+            new GetMyExperienceBookingsQuery
+            {
+                Page = page,
+                PageSize = pageSize
+            },
+            cancellationToken);
 
-            return Ok(result);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        return Ok(result);
     }
 
     [Authorize(Roles = RoleNames.ExperienceProvider)]
     [HttpGet("api/experiences/{experienceId:guid}/bookings")]
     public async Task<ActionResult<List<ExperienceBookingResponseDto>>> GetByExperienceId(
         Guid experienceId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20)
     {
-        try
-        {
-            var result = await _getBookingsHandler.HandleAsync(
-                new GetExperienceBookingsQuery
-                {
-                    ExperienceId = experienceId
-                },
-                cancellationToken);
-
-            if (result == null)
+        var result = await _getBookingsHandler.HandleAsync(
+            new GetExperienceBookingsQuery
             {
-                return NotFound(new { message = "Experience was not found." });
-            }
+                ExperienceId = experienceId,
+                Page = page,
+                PageSize = pageSize
+            },
+            cancellationToken);
 
-            return Ok(result);
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
-        }
+        if (result is null)
+            throw new NotFoundException("Experience was not found.");
+
+        return Ok(result);
     }
 
     [Authorize(Roles = RoleNames.Traveler)]
@@ -121,34 +98,17 @@ public class ExperienceBookingsController : ControllerBase
         Guid bookingId,
         CancellationToken cancellationToken)
     {
-        try
-        {
-            var result = await _cancelBookingHandler.HandleAsync(
-                new CancelExperienceBookingCommand
-                {
-                    BookingId = bookingId
-                },
-                cancellationToken);
-
-            if (result == null)
+        var result = await _cancelBookingHandler.HandleAsync(
+            new CancelExperienceBookingCommand
             {
-                return NotFound(new { message = "Booking was not found." });
-            }
+                BookingId = bookingId
+            },
+            cancellationToken);
 
-            return Ok(result);
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
-        }
+        if (result is null)
+            throw new NotFoundException("Booking was not found.");
+
+        return Ok(result);
     }
 
     [Authorize(Roles = RoleNames.ExperienceProvider)]
@@ -157,33 +117,16 @@ public class ExperienceBookingsController : ControllerBase
         Guid bookingId,
         CancellationToken cancellationToken)
     {
-        try
-        {
-            var result = await _completeBookingHandler.HandleAsync(
-                new CompleteExperienceBookingCommand
-                {
-                    BookingId = bookingId
-                },
-                cancellationToken);
-
-            if (result == null)
+        var result = await _completeBookingHandler.HandleAsync(
+            new CompleteExperienceBookingCommand
             {
-                return NotFound(new { message = "Booking was not found." });
-            }
+                BookingId = bookingId
+            },
+            cancellationToken);
 
-            return Ok(result);
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
-        }
+        if (result is null)
+            throw new NotFoundException("Booking was not found.");
+
+        return Ok(result);
     }
 }

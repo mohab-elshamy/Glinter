@@ -23,10 +23,10 @@ public class GetFollowStatusQueryHandler
         CancellationToken cancellationToken = default)
     {
         if (!_currentUserService.IsAuthenticated || _currentUserService.UserId is null)
-            throw new UnauthorizedAccessException("User is not authenticated.");
+            throw new AuthenticationException("User is not authenticated.");
 
         if (query.FollowedUserId == Guid.Empty)
-            throw new InvalidOperationException("Followed user id is required.");
+            throw new ValidationException("Followed user id is required.");
 
         var followerUserId = _currentUserService.UserId.Value;
 

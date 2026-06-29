@@ -4,6 +4,7 @@ using Glinter.Modules.Profiles.Application.Profiles.Dtos;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Glinter.Modules.Profiles.Application.Profiles.Queries;
 
 namespace Glinter.Modules.Profiles.Presentation.Controllers;
 
@@ -13,11 +14,14 @@ namespace Glinter.Modules.Profiles.Presentation.Controllers;
 public class AdminLocalBuddiesController : ControllerBase
 {
     private readonly UpdateLocalBuddyVerificationCommandHandler _updateLocalBuddyVerificationCommandHandler;
+    private readonly GetLocalBuddyVerificationHistoryHandler _historyHandler;
 
     public AdminLocalBuddiesController(
-        UpdateLocalBuddyVerificationCommandHandler updateLocalBuddyVerificationCommandHandler)
+        UpdateLocalBuddyVerificationCommandHandler updateLocalBuddyVerificationCommandHandler,
+        GetLocalBuddyVerificationHistoryHandler historyHandler)
     {
         _updateLocalBuddyVerificationCommandHandler = updateLocalBuddyVerificationCommandHandler;
+        _historyHandler = historyHandler;
     }
 
     [HttpPatch("{userId:guid}/verification")]
@@ -26,25 +30,27 @@ public class AdminLocalBuddiesController : ControllerBase
         [FromBody] UpdateLocalBuddyVerificationRequest request,
         CancellationToken cancellationToken)
     {
-        try
-        {
-            var result = await _updateLocalBuddyVerificationCommandHandler.HandleAsync(
-                new UpdateLocalBuddyVerificationCommand
-                {
-                    UserId = userId,
-                    VerificationStatus = request.VerificationStatus
-                },
-                cancellationToken);
+        var result = await _updateLocalBuddyVerificationCommandHandler.HandleAsync(
+            new UpdateLocalBuddyVerificationCommand
+            {
+                UserId = userId,
+                VerificationStatus = request.VerificationStatus,
+                ModerationNotes = request.ModerationNotes
+            },
+            cancellationToken);
 
-            return Ok(result);
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        return Ok(result);
     }
+
+    [HttpGet("{userId:guid}/verification-history")]
+    public async Task<IActionResult> GetVerificationHistory(
+        Guid userId,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50,
+        CancellationToken cancellationToken = default) =>
+        Ok(await _historyHandler.HandleAsync(
+            userId,
+            page,
+            pageSize,
+            cancellationToken));
 }

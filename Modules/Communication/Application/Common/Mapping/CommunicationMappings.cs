@@ -6,19 +6,8 @@ namespace Glinter.Modules.Communication.Application.Common.Mapping;
 
 public static class CommunicationMappings
 {
-    public static ChatThreadSummaryDto ToThreadSummaryDto(ChatThread thread, Guid currentUserId)
+    public static ChatThreadSummaryDto ToNewThreadSummaryDto(ChatThread thread)
     {
-        var currentParticipant = thread.Participants
-            .FirstOrDefault(x => x.UserId == currentUserId);
-
-        var lastMessage = thread.Messages
-            .OrderByDescending(x => x.SentAtUtc)
-            .FirstOrDefault();
-
-        var unreadCount = thread.Messages.Count(x =>
-            x.SenderUserId != currentUserId &&
-            (currentParticipant?.LastReadAtUtc is null || x.SentAtUtc > currentParticipant.LastReadAtUtc));
-
         return new ChatThreadSummaryDto
         {
             Id = thread.Id,
@@ -29,10 +18,10 @@ public static class CommunicationMappings
                 .Select(x => x.UserId)
                 .OrderBy(x => x)
                 .ToList(),
-            LastMessageBody = lastMessage?.Body,
-            LastMessageSenderUserId = lastMessage?.SenderUserId,
-            LastMessageAtUtc = thread.LastMessageAtUtc,
-            UnreadCount = unreadCount,
+            LastMessageBody = null,
+            LastMessageSenderUserId = null,
+            LastMessageAtUtc = null,
+            UnreadCount = 0,
             CreatedAtUtc = thread.CreatedAtUtc
         };
     }

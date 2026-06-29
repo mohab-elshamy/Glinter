@@ -33,16 +33,19 @@ public class CreateStayReviewHandler
         CancellationToken cancellationToken = default)
     {
         if (command.Rating < 1 || command.Rating > 5)
-            throw new ArgumentException("Rating must be between 1 and 5.");
+            throw new ValidationException("Rating must be between 1 and 5.");
+
+        if ((command.Comment?.Trim().Length ?? 0) > 2000)
+            throw new ValidationException("Comment cannot exceed 2000 characters.");
 
         var stay = await _stayRepository.GetByIdAsync(command.StayId, cancellationToken);
 
         if (stay is null)
-            throw new KeyNotFoundException("Stay not found.");
+            throw new NotFoundException("Stay not found.");
 
         if (!_currentUserService.IsAuthenticated || _currentUserService.UserId is null)
         {
-            throw new UnauthorizedAccessException("User is not authenticated.");
+            throw new AuthenticationException("User is not authenticated.");
         }
 
         var currentUserId = _currentUserService.UserId.Value;
@@ -52,7 +55,7 @@ public class CreateStayReviewHandler
 
         if (travelerProfileId is null)
         {
-            throw new UnauthorizedAccessException("Only travelers can review stays.");
+            throw new ForbiddenException("Only travelers can review stays.");
         }
 
         var today = DateOnly.FromDateTime(DateTime.UtcNow.Date);
@@ -64,7 +67,7 @@ public class CreateStayReviewHandler
             cancellationToken);
 
         if (!hasEligibleBooking)
-            throw new ArgumentException("Traveler is not eligible to review this stay.");
+            throw new ValidationException("Traveler is not eligible to review this stay.");
 
         var alreadyReviewed = await _stayReviewRepository.ExistsAsync(
             command.StayId,
@@ -72,7 +75,7 @@ public class CreateStayReviewHandler
             cancellationToken);
 
         if (alreadyReviewed)
-            throw new ArgumentException("Traveler has already reviewed this stay.");
+            throw new ValidationException("Traveler has already reviewed this stay.");
 
         var review = new StayReview
         {

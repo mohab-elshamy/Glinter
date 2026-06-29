@@ -28,6 +28,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Remove="tests\**\*.cs" />
+    <Content Remove="tests\**\*" />
+    <Content Remove="**\*.log" />
+    <None Remove="tests\**\*" />
+    <None Remove="**\*.log" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Folder Include="Modules\Communication\Application\Abstractions\" />
     <Folder Include="Modules\Communication\Application\Chats\Commands\" />
     <Folder Include="Modules\Communication\Application\Chats\Dtos\" />

@@ -24,11 +24,17 @@ public class GetMyExperiencesQueryHandler
         GetMyExperiencesQuery query,
         CancellationToken cancellationToken = default)
     {
+        Glinter.Modules.Experiences.Application.Common.ExperiencePagination.Validate(
+            query.Page,
+            query.PageSize);
+
         var providerProfileId = await _profileResolver
             .GetCurrentExperienceProviderProfileIdAsync(cancellationToken);
 
         var experiences = await _experienceRepository.GetByProviderProfileIdAsync(
             providerProfileId,
+            query.Page,
+            query.PageSize,
             cancellationToken);
 
         var regions = await _regionReferenceService.GetNeighbourhoodsAsync(

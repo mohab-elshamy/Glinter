@@ -52,6 +52,39 @@ public static class IdentitySeeder
                 throw new InvalidOperationException($"Failed to seed admin user: {errors}");
             }
         }
+        else if (!await userManager.CheckPasswordAsync(adminUser, adminOptions.Password))
+        {
+            var resetToken = await userManager.GeneratePasswordResetTokenAsync(adminUser);
+            var resetResult = await userManager.ResetPasswordAsync(
+                adminUser,
+                resetToken,
+                adminOptions.Password);
+
+            if (!resetResult.Succeeded)
+            {
+                var errors = string.Join(" | ", resetResult.Errors.Select(x => x.Description));
+                throw new InvalidOperationException($"Failed to reset seeded admin password: {errors}");
+            }
+        }
+
+        if (await userManager.IsLockedOutAsync(adminUser))
+        {
+            var unlockResult = await userManager.SetLockoutEndDateAsync(adminUser, null);
+
+            if (!unlockResult.Succeeded)
+            {
+                var errors = string.Join(" | ", unlockResult.Errors.Select(x => x.Description));
+                throw new InvalidOperationException($"Failed to unlock seeded admin user: {errors}");
+            }
+        }
+
+        var accessFailedResetResult = await userManager.ResetAccessFailedCountAsync(adminUser);
+
+        if (!accessFailedResetResult.Succeeded)
+        {
+            var errors = string.Join(" | ", accessFailedResetResult.Errors.Select(x => x.Description));
+            throw new InvalidOperationException($"Failed to reset seeded admin access failures: {errors}");
+        }
 
         if (!await userManager.IsInRoleAsync(adminUser, RoleNames.Admin))
         {

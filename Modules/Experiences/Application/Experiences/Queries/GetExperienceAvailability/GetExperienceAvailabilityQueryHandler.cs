@@ -24,8 +24,12 @@ public class GetExperienceAvailabilityQueryHandler
     {
         if (query.ExperienceId == Guid.Empty)
         {
-            throw new ArgumentException("ExperienceId is required.");
+            throw new ValidationException("ExperienceId is required.");
         }
+
+        Glinter.Modules.Experiences.Application.Common.ExperiencePagination.Validate(
+            query.Page,
+            query.PageSize);
 
         var experience = await _experienceRepository.GetByIdAsync(
             query.ExperienceId,
@@ -43,11 +47,11 @@ public class GetExperienceAvailabilityQueryHandler
 
         var availability = await _availabilityRepository.GetByExperienceIdAsync(
             query.ExperienceId,
+            query.Page,
+            query.PageSize,
             cancellationToken);
 
         return availability
-            .Where(x => x.IsActive)
-            .OrderBy(x => x.StartTimeUtc)
             .Select(ExperiencesMappings.ToAvailabilityResponse)
             .ToList();
     }

@@ -43,7 +43,7 @@ public class SetExperienceActiveStatusCommandHandler
 
         if (experience.ProviderProfileId != providerProfileId)
         {
-            throw new UnauthorizedAccessException("You can change status only for your own experiences.");
+            throw new ForbiddenException("You can change status only for your own experiences.");
         }
 
         experience.IsActive = command.IsActive;

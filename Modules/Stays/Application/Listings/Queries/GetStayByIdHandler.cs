@@ -18,9 +18,12 @@ public class GetStayByIdHandler
 
     public async Task<StayResponseDto?> HandleAsync(GetStayByIdQuery query, CancellationToken cancellationToken = default)
     {
+        if (query.Id == Guid.Empty)
+            throw new ValidationException("Stay id is required.");
+
         var stay = await _stayRepository.GetByIdAsync(query.Id, cancellationToken);
 
-        if (stay is null)
+        if (stay is null || !stay.IsActive)
             return null;
 
         var region = await _regionReferenceService.GetNeighbourhoodAsync(

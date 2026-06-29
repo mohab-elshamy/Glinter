@@ -25,7 +25,7 @@ public class MarkNotificationAsReadHandler
         var currentUserId = GetCurrentUserId();
 
         if (command.NotificationId == Guid.Empty)
-            throw new ArgumentException("NotificationId is required.");
+            throw new ValidationException("NotificationId is required.");
 
         var notification = await _notificationRepository.GetByIdForUserAsync(
             command.NotificationId,
@@ -33,7 +33,7 @@ public class MarkNotificationAsReadHandler
             cancellationToken);
 
         if (notification is null)
-            throw new KeyNotFoundException("Notification was not found.");
+            throw new NotFoundException("Notification was not found.");
 
         notification.ReadAtUtc ??= DateTime.UtcNow;
 
@@ -45,7 +45,7 @@ public class MarkNotificationAsReadHandler
     private Guid GetCurrentUserId()
     {
         if (!_currentUserService.IsAuthenticated || _currentUserService.UserId is null)
-            throw new UnauthorizedAccessException("User is not authenticated.");
+            throw new AuthenticationException("User is not authenticated.");
 
         return _currentUserService.UserId.Value;
     }

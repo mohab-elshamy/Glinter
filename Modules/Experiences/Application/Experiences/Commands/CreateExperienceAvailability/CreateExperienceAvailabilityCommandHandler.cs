@@ -44,12 +44,12 @@ public class CreateExperienceAvailabilityCommandHandler
 
         if (experience.ProviderProfileId != providerProfileId)
         {
-            throw new UnauthorizedAccessException("You can add availability only to your own experiences.");
+            throw new ForbiddenException("You can add availability only to your own experiences.");
         }
 
         if (!experience.IsActive)
         {
-            throw new InvalidOperationException("Cannot add availability to an inactive experience.");
+            throw new ConflictException("Cannot add availability to an inactive experience.");
         }
 
         var hasOverlap = await _availabilityRepository.HasOverlapAsync(
@@ -60,7 +60,7 @@ public class CreateExperienceAvailabilityCommandHandler
 
         if (hasOverlap)
         {
-            throw new InvalidOperationException("This availability slot overlaps with an existing active slot.");
+            throw new ConflictException("This availability slot overlaps with an existing active slot.");
         }
 
         var availability = new ExperienceAvailability

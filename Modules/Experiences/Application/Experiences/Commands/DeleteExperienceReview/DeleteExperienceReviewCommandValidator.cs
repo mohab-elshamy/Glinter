@@ -6,7 +6,7 @@ public class DeleteExperienceReviewCommandValidator
     {
         if (command.ReviewId == Guid.Empty)
         {
-            throw new ArgumentException("ReviewId is required.");
+            throw new ValidationException("ReviewId is required.");
         }
     }
 }

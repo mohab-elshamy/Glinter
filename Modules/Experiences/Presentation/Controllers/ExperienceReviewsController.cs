@@ -33,28 +33,23 @@ public class ExperienceReviewsController : ControllerBase
     [HttpGet("api/experiences/{experienceId:guid}/reviews")]
     public async Task<ActionResult<List<ExperienceReviewResponseDto>>> GetByExperienceId(
         Guid experienceId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20)
     {
-        try
-        {
-            var result = await _getReviewsHandler.HandleAsync(
-                new GetExperienceReviewsQuery
-                {
-                    ExperienceId = experienceId
-                },
-                cancellationToken);
-
-            if (result == null)
+        var result = await _getReviewsHandler.HandleAsync(
+            new GetExperienceReviewsQuery
             {
-                return NotFound(new { message = "Experience was not found." });
-            }
+                ExperienceId = experienceId,
+                Page = page,
+                PageSize = pageSize
+            },
+            cancellationToken);
 
-            return Ok(result);
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        if (result is null)
+            throw new NotFoundException("Experience was not found.");
+
+        return Ok(result);
     }
 
     [Authorize(Roles = RoleNames.Traveler)]
@@ -64,30 +59,17 @@ public class ExperienceReviewsController : ControllerBase
         [FromBody] CreateExperienceReviewRequestDto request,
         CancellationToken cancellationToken)
     {
-        try
-        {
-            var result = await _createReviewHandler.HandleAsync(
-                request.ToCommand(experienceId),
-                cancellationToken);
+        var result = await _createReviewHandler.HandleAsync(
+            request.ToCommand(experienceId),
+            cancellationToken);
 
-            if (result == null)
-            {
-                return NotFound(new { message = "Experience was not found." });
-            }
+        if (result is null)
+            throw new NotFoundException("Experience was not found.");
 
-            return CreatedAtAction(
-                nameof(GetByExperienceId),
-                new { experienceId = result.ExperienceId },
-                result);
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        return CreatedAtAction(
+            nameof(GetByExperienceId),
+            new { experienceId = result.ExperienceId },
+            result);
     }
 
     [Authorize(Roles = RoleNames.Traveler)]
@@ -97,27 +79,14 @@ public class ExperienceReviewsController : ControllerBase
         [FromBody] UpdateExperienceReviewRequestDto request,
         CancellationToken cancellationToken)
     {
-        try
-        {
-            var result = await _updateReviewHandler.HandleAsync(
-                request.ToCommand(reviewId),
-                cancellationToken);
+        var result = await _updateReviewHandler.HandleAsync(
+            request.ToCommand(reviewId),
+            cancellationToken);
 
-            if (result == null)
-            {
-                return NotFound(new { message = "Review was not found." });
-            }
+        if (result is null)
+            throw new NotFoundException("Review was not found.");
 
-            return Ok(result);
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
-        }
+        return Ok(result);
     }
 
     [Authorize(Roles = RoleNames.Traveler)]
@@ -126,29 +95,16 @@ public class ExperienceReviewsController : ControllerBase
         Guid reviewId,
         CancellationToken cancellationToken)
     {
-        try
-        {
-            var deleted = await _deleteReviewHandler.HandleAsync(
-                new DeleteExperienceReviewCommand
-                {
-                    ReviewId = reviewId
-                },
-                cancellationToken);
-
-            if (!deleted)
+        var deleted = await _deleteReviewHandler.HandleAsync(
+            new DeleteExperienceReviewCommand
             {
-                return NotFound(new { message = "Review was not found." });
-            }
+                ReviewId = reviewId
+            },
+            cancellationToken);
 
-            return NoContent();
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
-        }
+        if (!deleted)
+            throw new NotFoundException("Review was not found.");
+
+        return NoContent();
     }
 }

@@ -24,15 +24,15 @@ public class UnfollowUserCommandHandler
     {
         var errors = _validator.Validate(command);
         if (errors.Count > 0)
-            throw new InvalidOperationException(string.Join(" | ", errors));
+            throw new ValidationException(string.Join(" | ", errors));
 
         if (!_currentUserService.IsAuthenticated || _currentUserService.UserId is null)
-            throw new UnauthorizedAccessException("User is not authenticated.");
+            throw new AuthenticationException("User is not authenticated.");
 
         var followerUserId = _currentUserService.UserId.Value;
 
         if (followerUserId == command.FollowedUserId)
-            throw new InvalidOperationException("You cannot unfollow yourself.");
+            throw new ValidationException("You cannot unfollow yourself.");
 
         var follow = await _profilesDbContext.UserFollows
             .FirstOrDefaultAsync(

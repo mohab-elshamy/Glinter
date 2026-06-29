@@ -43,6 +43,7 @@ public class NotificationRepository : INotificationRepository
             .AsNoTracking()
             .Where(x => x.UserId == userId)
             .OrderByDescending(x => x.CreatedAtUtc)
+            .ThenBy(x => x.Id)
             .Skip(skip)
             .Take(take)
             .ToListAsync(cancellationToken);

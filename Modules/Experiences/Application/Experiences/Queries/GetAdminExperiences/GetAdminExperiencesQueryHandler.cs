@@ -21,9 +21,15 @@ public class GetAdminExperiencesQueryHandler
         GetAdminExperiencesQuery query,
         CancellationToken cancellationToken = default)
     {
+        Glinter.Modules.Experiences.Application.Common.ExperiencePagination.Validate(
+            query.Page,
+            query.PageSize);
+
         var experiences = await _experienceRepository.GetForAdminAsync(
             query.ApprovalStatus,
             query.IsActive,
+            query.Page,
+            query.PageSize,
             cancellationToken);
 
         var regions = await _regionReferenceService.GetNeighbourhoodsAsync(

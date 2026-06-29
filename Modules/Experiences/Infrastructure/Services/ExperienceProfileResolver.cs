@@ -30,7 +30,7 @@ public class ExperienceProfileResolver : IExperienceProfileResolver
 
         if (profile == null)
         {
-            throw new InvalidOperationException("Experience provider profile was not found. Create an experience provider profile first.");
+            throw new NotFoundException("Experience provider profile was not found. Create an experience provider profile first.");
         }
 
         return profile.Id;
@@ -47,7 +47,7 @@ public class ExperienceProfileResolver : IExperienceProfileResolver
 
         if (profile == null)
         {
-            throw new InvalidOperationException("Traveler profile was not found. Create a traveler profile first.");
+            throw new NotFoundException("Traveler profile was not found. Create a traveler profile first.");
         }
 
         return profile.Id;
@@ -59,7 +59,7 @@ public class ExperienceProfileResolver : IExperienceProfileResolver
 
         if (user?.Identity?.IsAuthenticated != true)
         {
-            throw new UnauthorizedAccessException("Authenticated user is required.");
+            throw new AuthenticationException("Authenticated user is required.");
         }
 
         var userIdValue =
@@ -70,7 +70,7 @@ public class ExperienceProfileResolver : IExperienceProfileResolver
 
         if (!Guid.TryParse(userIdValue, out var userId))
         {
-            throw new UnauthorizedAccessException("User id claim was not found in token.");
+            throw new AuthenticationException("User id claim was not found in token.");
         }
 
         return userId;

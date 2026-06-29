@@ -80,6 +80,18 @@ namespace Glinter.Shared.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("Adm3Gid");
 
+                    b.HasIndex("IsActive", "CreatedAtUtc")
+                        .HasAnnotation("Npgsql:CreatedConcurrently", true);
+
+                    b.HasIndex("OwnerProfileId", "CreatedAtUtc")
+                        .HasAnnotation("Npgsql:CreatedConcurrently", true);
+
+                    b.HasIndex("Adm3Gid", "IsActive", "CreatedAtUtc")
+                        .HasAnnotation("Npgsql:CreatedConcurrently", true);
+
+                    b.HasIndex("IsActive", "Currency", "PricePerNight")
+                        .HasAnnotation("Npgsql:CreatedConcurrently", true);
+
                     b.HasIndex("OwnerProfileId", "Name", "Address")
                         .IsUnique();
 
@@ -121,8 +133,19 @@ namespace Glinter.Shared.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CreatedAtUtc", "Status")
+                        .HasAnnotation("Npgsql:CreatedConcurrently", true);
+
+                    b.HasIndex("StayId", "Status")
+                        .HasAnnotation("Npgsql:CreatedConcurrently", true);
+
+                    b.HasIndex("StayId", "CheckInDate", "CheckOutDate")
+                        .HasFilter("\"Status\" <> 'Cancelled'")
+                        .HasAnnotation("Npgsql:CreatedConcurrently", true);
+
                     b.HasIndex("StayId", "TravelerProfileId", "CheckInDate", "CheckOutDate")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"Status\" <> 'Cancelled'");
 
                     b.ToTable("stay_bookings", (string)null);
                 });

@@ -8,6 +8,8 @@ public interface IExperienceReviewRepository
 
     Task<List<ExperienceReview>> GetByExperienceIdAsync(
         Guid experienceId,
+        int page,
+        int pageSize,
         CancellationToken cancellationToken = default);
 
     Task<ExperienceReview?> GetByIdAsync(

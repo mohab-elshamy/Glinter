@@ -6,7 +6,7 @@ public class CompleteExperienceBookingCommandValidator
     {
         if (command.BookingId == Guid.Empty)
         {
-            throw new ArgumentException("BookingId is required.");
+            throw new ValidationException("BookingId is required.");
         }
     }
 }
