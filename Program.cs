@@ -8,8 +8,6 @@ using Glinter.Modules.Profiles.Infrastructure.DependencyInjection;
 using Glinter.Modules.Profiles.Infrastructure.Persistence;
 using Glinter.Modules.Regions.Infrastructure.DependencyInjection;
 using Glinter.Modules.SafetyIndex.Infrastructure.DependencyInjection;
-using Glinter.Modules.Stays.Infrastructure.DependencyInjection;
-using Glinter.Modules.Stays.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
@@ -23,10 +21,6 @@ builder.Services.AddIdentityAccessModule(builder.Configuration);
 builder.Services.AddProfilesModule(builder.Configuration);
 
 // Module 4: Stays
-builder.Services.AddDbContext<StaysDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
-
-builder.Services.AddStaysModule();
 
 // Module 5: Experiences
 builder.Services.AddExperiencesModule(builder.Configuration);
