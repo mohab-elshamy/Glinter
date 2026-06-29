@@ -1,6 +1,4 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using Npgsql;
 
 namespace Glinter.Shared.Infrastructure.Errors;
 
@@ -85,62 +83,23 @@ public sealed class ApiExceptionHandlingMiddleware
 
     private ProblemDetails CreateProblemDetails(HttpContext context, Exception exception)
     {
-        var (status, title, detail, errorCode) = exception switch
-        {
-            ValidationException ex => (400, "Validation failed.", ex.Message, ex.ErrorCode),
-            AuthenticationException ex => (401, "Unauthorized.", ex.Message, ex.ErrorCode),
-            ForbiddenException ex => (403, "Forbidden.", ex.Message, ex.ErrorCode),
-            NotFoundException ex => (404, "Resource not found.", ex.Message, ex.ErrorCode),
-            ConflictException ex => (409, "Conflict.", ex.Message, ex.ErrorCode),
-            BadHttpRequestException ex => (400, "Bad request.", ex.Message, "bad_request"),
-            DbUpdateConcurrencyException => (409, "Concurrency conflict.",
-                "The resource was changed by another request. Reload it and try again.",
-                "concurrency_conflict"),
-            DbUpdateException ex => MapDatabaseUpdateException(ex),
-            _ => (500, "An unexpected error occurred.",
-                _environment.IsDevelopment()
-                    ? exception.ToString()
-                    : "An unexpected error occurred while processing the request.",
-                "internal_server_error")
-        };
+        var mapping = ApiExceptionMapper.Map(
+            exception,
+            _environment.IsDevelopment());
 
         var problemDetails = new ProblemDetails
         {
-            Status = status,
-            Title = title,
-            Detail = detail,
+            Status = mapping.Status,
+            Title = mapping.Title,
+            Detail = mapping.Detail,
             Instance = context.Request.Path
         };
-        problemDetails.Extensions["errorCode"] = errorCode;
+        problemDetails.Extensions["errorCode"] = mapping.ErrorCode;
         problemDetails.Extensions["traceId"] = context.TraceIdentifier;
 
         if (exception is ValidationException { Errors: not null } validationException)
             problemDetails.Extensions["errors"] = validationException.Errors;
 
         return problemDetails;
-    }
-
-    private static (int Status, string Title, string Detail, string ErrorCode)
-        MapDatabaseUpdateException(DbUpdateException exception)
-    {
-        if (exception.InnerException is not PostgresException postgresException)
-            return (500, "Database update failed.",
-                "An unexpected database error occurred while processing the request.",
-                "database_update_failed");
-
-        return postgresException.SqlState switch
-        {
-            PostgresErrorCodes.UniqueViolation => (409, "Duplicate resource.",
-                "A resource with the same unique value already exists.", "duplicate_resource"),
-            PostgresErrorCodes.ForeignKeyViolation => (400, "Invalid reference.",
-                "One or more referenced resources do not exist.", "invalid_reference"),
-            PostgresErrorCodes.StringDataRightTruncation => (400, "Invalid request value.",
-                "One or more values exceed the allowed length.", "value_too_long"),
-            PostgresErrorCodes.CheckViolation => (400, "Invalid request value.",
-                "One or more values violate a database constraint.", "constraint_violation"),
-            _ => (500, "Database update failed.",
-                "An unexpected database error occurred while processing the request.",
-                "database_update_failed")
-        };
     }
 }

@@ -112,6 +112,9 @@ public sealed class DashboardsMetricsAndCleanupTests : ApiTestBase
         var oldReadNotificationId = Guid.NewGuid();
         var oldUnreadNotificationId = Guid.NewGuid();
         var recentNotificationId = Guid.NewGuid();
+        var oldCompletedAuditId = Guid.NewGuid();
+        var oldPendingAuditId = Guid.NewGuid();
+        var recentCompletedAuditId = Guid.NewGuid();
 
         await Factory.ExecuteAsync(
             $"""
@@ -135,6 +138,19 @@ public sealed class DashboardsMetricsAndCleanupTests : ApiTestBase
                   'old unread', 'cleanup', NOW() - INTERVAL '400 days', NULL),
                  ('{recentNotificationId}', '{user.UserId}', 'System',
                   'recent', 'keep', NOW(), NULL);
+
+             INSERT INTO admin_audit_events
+                 ("Id", "ActorUserId", "Action", "HttpMethod", "Path", "StatusCode",
+                  "Succeeded", "CorrelationId", "CreatedAtUtc", "CompletedAtUtc")
+             VALUES
+                 ('{oldCompletedAuditId}', '{user.UserId}', 'Test.Old', 'PATCH',
+                  '/test/old', 200, TRUE, 'old-complete',
+                  NOW() - INTERVAL '900 days', NOW() - INTERVAL '900 days'),
+                 ('{oldPendingAuditId}', '{user.UserId}', 'Test.Pending', 'PATCH',
+                  '/test/pending', 102, FALSE, 'old-pending',
+                  NOW() - INTERVAL '900 days', NULL),
+                 ('{recentCompletedAuditId}', '{user.UserId}', 'Test.Recent', 'PATCH',
+                  '/test/recent', 200, TRUE, 'recent-complete', NOW(), NOW());
              """);
 
         using var scope = Factory.Services.CreateScope();
@@ -169,6 +185,7 @@ public sealed class DashboardsMetricsAndCleanupTests : ApiTestBase
             Assert.Equal(1, firstResult.RevokedTokens);
             Assert.True(firstResult.ReadNotifications >= 1);
             Assert.True(firstResult.UnreadNotifications >= 1);
+            Assert.Equal(1, firstResult.AdminAuditEvents);
 
             var expiredAfterFirstBatch = await Factory.ScalarAsync<long>(
                 $"""
@@ -189,9 +206,21 @@ public sealed class DashboardsMetricsAndCleanupTests : ApiTestBase
                 $"""SELECT count(*) FROM revoked_tokens WHERE "Id" = '{recentRevokedTokenId}'""");
             var recentNotificationCount = await Factory.ScalarAsync<long>(
                 $"""SELECT count(*) FROM notifications WHERE "Id" = '{recentNotificationId}'""");
+            var oldCompletedAuditCount = await Factory.ScalarAsync<long>(
+                $"""
+                 SELECT count(*) FROM admin_audit_events
+                 WHERE "Id" = '{oldCompletedAuditId}'
+                 """);
+            var preservedAuditCount = await Factory.ScalarAsync<long>(
+                $"""
+                 SELECT count(*) FROM admin_audit_events
+                 WHERE "Id" IN ('{oldPendingAuditId}', '{recentCompletedAuditId}')
+                 """);
             Assert.Equal(0, expiredCount);
             Assert.Equal(1, recentTokenCount);
             Assert.Equal(1, recentNotificationCount);
+            Assert.Equal(0, oldCompletedAuditCount);
+            Assert.Equal(2, preservedAuditCount);
         }
         finally
         {

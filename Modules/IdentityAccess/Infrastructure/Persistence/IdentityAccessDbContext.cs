@@ -114,6 +114,8 @@ public class IdentityAccessDbContext
             entity.HasIndex(x => x.CreatedAtUtc);
             entity.HasIndex(x => new { x.ActorUserId, x.CreatedAtUtc });
             entity.HasIndex(x => new { x.Action, x.CreatedAtUtc });
+            entity.HasIndex(x => new { x.CreatedAtUtc, x.CompletedAtUtc })
+                .HasFilter("\"CompletedAtUtc\" IS NOT NULL");
         });
     }
 }

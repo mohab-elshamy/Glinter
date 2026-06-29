@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Glinter.Modules.IdentityAccess.Domain.Constants;
 using Glinter.Shared.Application.Auditing;
 using Microsoft.AspNetCore.Mvc.Controllers;
+using Glinter.Shared.Infrastructure.Errors;
 
 namespace Glinter.Shared.Infrastructure.Auditing;
 
@@ -76,7 +77,9 @@ public sealed class AdminAuditMiddleware
             {
                 var statusCode = endpointException is null
                     ? context.Response.StatusCode
-                    : StatusCodes.Status500InternalServerError;
+                    : ApiExceptionMapper.Map(
+                        endpointException,
+                        includeExceptionDetails: false).Status;
 
                 await CompleteIntentAsync(
                     auditEvent.Id,

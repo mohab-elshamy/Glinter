@@ -48,13 +48,14 @@ public sealed class DataCleanupWorker : BackgroundService
 
             _metrics.CleanupCompleted(result.TotalDeleted);
             _logger.LogInformation(
-                "Cleanup completed; deleted {TotalDeleted} rows ({RevokedTokens} revoked tokens, {RefreshTokens} refresh tokens, {MfaChallenges} MFA challenges, {ReadNotifications} read notifications, {UnreadNotifications} unread notifications).",
+                "Cleanup completed; deleted {TotalDeleted} rows ({RevokedTokens} revoked tokens, {RefreshTokens} refresh tokens, {MfaChallenges} MFA challenges, {ReadNotifications} read notifications, {UnreadNotifications} unread notifications, {AdminAuditEvents} admin audit events).",
                 result.TotalDeleted,
                 result.RevokedTokens,
                 result.RefreshTokens,
                 result.MfaChallenges,
                 result.ReadNotifications,
-                result.UnreadNotifications);
+                result.UnreadNotifications,
+                result.AdminAuditEvents);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

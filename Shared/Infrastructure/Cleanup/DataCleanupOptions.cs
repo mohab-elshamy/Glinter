@@ -12,4 +12,5 @@ public sealed class DataCleanupOptions
     public int MfaChallengeRetentionDays { get; set; } = 1;
     public int ReadNotificationRetentionDays { get; set; } = 90;
     public int UnreadNotificationRetentionDays { get; set; } = 365;
+    public int AdminAuditRetentionDays { get; set; } = 730;
 }

@@ -73,6 +73,20 @@ public sealed class RegionsAndProfilesTests : ApiTestBase
         var malformed = await Client.SendAsync(upload);
         await AssertProblemAsync(malformed, 400, "validation_error");
 
+        var failedImportAudit = await SendAsync(
+            HttpMethod.Get,
+            "/api/admin/audit-events?action=AdminRegionsImport.ImportAdm0&pageSize=20",
+            adminToken);
+        failedImportAudit.EnsureSuccessStatusCode();
+        using var failedImportAuditJson = await ReadJsonAsync(failedImportAudit);
+        Assert.Contains(
+            failedImportAuditJson.RootElement.GetProperty("items").EnumerateArray(),
+            item =>
+                item.GetProperty("path").GetString() ==
+                "/api/admin/regions/import/adm0" &&
+                item.GetProperty("statusCode").GetInt32() == 400 &&
+                !item.GetProperty("succeeded").GetBoolean());
+
         var audit = await SendAsync(
             HttpMethod.Get,
             "/api/admin/audit-events?action=Regions.CreateCountry&pageSize=20",

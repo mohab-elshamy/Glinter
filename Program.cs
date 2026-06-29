@@ -148,12 +148,13 @@ if (cleanupOptions.IntervalMinutes <= 0 ||
     cleanupOptions.RevokedTokenRetentionDays < 0 ||
     cleanupOptions.RefreshTokenRetentionDays < 0 ||
     cleanupOptions.MfaChallengeRetentionDays < 0 ||
+    cleanupOptions.AdminAuditRetentionDays < 1 ||
     cleanupOptions.ReadNotificationRetentionDays < 1 ||
     cleanupOptions.UnreadNotificationRetentionDays <
     cleanupOptions.ReadNotificationRetentionDays)
 {
     throw new InvalidOperationException(
-        "Cleanup configuration is invalid; interval and batch limits must be positive, batch size cannot exceed 10000, and unread notification retention must be at least the read retention.");
+        "Cleanup configuration is invalid; interval, batch limits, and audit retention must be positive, batch size cannot exceed 10000, and unread notification retention must be at least the read retention.");
 }
 builder.Services.Configure<DataCleanupOptions>(
     builder.Configuration.GetSection(DataCleanupOptions.SectionName));

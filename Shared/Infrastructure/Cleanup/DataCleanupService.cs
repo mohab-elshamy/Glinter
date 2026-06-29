@@ -86,6 +86,18 @@ public sealed class DataCleanupService
                      now.AddDays(-_options.MfaChallengeRetentionDays))),
                 cancellationToken)
             : 0;
+        var adminAuditEvents = await TableExistsAsync(
+            _identity,
+            "admin_audit_events",
+            cancellationToken)
+            ? await DeleteInBatchesAsync(
+                _identity,
+                () => _identity.AdminAuditEvents.Where(
+                    x => x.CompletedAtUtc != null &&
+                         x.CreatedAtUtc <
+                         now.AddDays(-_options.AdminAuditRetentionDays)),
+                cancellationToken)
+            : 0;
 
         var notificationsExist = await TableExistsAsync(
             _communication,
@@ -115,7 +127,8 @@ public sealed class DataCleanupService
             refreshTokens,
             mfaChallenges,
             readNotifications,
-            unreadNotifications);
+            unreadNotifications,
+            adminAuditEvents);
     }
 
     private async Task<int> DeleteInBatchesAsync<TEntity>(
@@ -185,9 +198,10 @@ public sealed record DataCleanupResult(
     int RefreshTokens,
     int MfaChallenges,
     int ReadNotifications,
-    int UnreadNotifications)
+    int UnreadNotifications,
+    int AdminAuditEvents)
 {
-    public static DataCleanupResult Skipped { get; } = new(0, 0, 0, 0, 0)
+    public static DataCleanupResult Skipped { get; } = new(0, 0, 0, 0, 0, 0)
     {
         SkippedDueToLock = true
     };
@@ -199,5 +213,6 @@ public sealed record DataCleanupResult(
         RefreshTokens +
         MfaChallenges +
         ReadNotifications +
-        UnreadNotifications;
+        UnreadNotifications +
+        AdminAuditEvents;
 }

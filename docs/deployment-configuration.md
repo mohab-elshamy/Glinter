@@ -37,6 +37,7 @@ shape. Prefer environment variables in deployed environments:
 | MFA challenge retention | `Cleanup__MfaChallengeRetentionDays` | Days after expiry/consumption |
 | Read notification retention | `Cleanup__ReadNotificationRetentionDays` | Minimum 1 day |
 | Unread notification retention | `Cleanup__UnreadNotificationRetentionDays` | Must be at least read retention |
+| Admin audit retention | `Cleanup__AdminAuditRetentionDays` | Completed audit records only; minimum 1 day |
 
 ## Deployment checklist
 
@@ -68,6 +69,9 @@ completion logs.
 The cleanup worker runs immediately at startup and then on its configured
 interval. Deletes are idempotent, so multiple API replicas are safe, although a
 single dedicated worker replica is preferred to avoid duplicate database work.
+Completed administrative audit events are retained for
+`Cleanup__AdminAuditRetentionDays`; unresolved audit intents are never removed
+automatically.
 Cleanup run/failure/deleted-row counters are exposed through `/metrics`.
 
 For multiple API instances, configure a supported SignalR scale-out backplane
