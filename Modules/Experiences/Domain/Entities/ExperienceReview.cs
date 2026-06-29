@@ -2,19 +2,14 @@ namespace Glinter.Modules.Experiences.Domain.Entities;
 
 public class ExperienceReview
 {
-    public Guid Id { get; set; }
+    public int Id { get; set; }
+    public int ExperienceId { get; set; }
+    public string? ExternalReviewId { get; set; }
+    public string? ReviewerName { get; set; }
+    public int? Rating { get; set; }
+    public string? ReviewText { get; set; }
+    public DateTime? PublishedAtDate { get; set; }
+    public string SourceList { get; set; } = "featured_reviews";
 
-    public Guid ExperienceId { get; set; }
-
-    public Guid TravelerProfileId { get; set; }
-
-    public int Rating { get; set; }
-
-    public string? Comment { get; set; }
-
-    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
-
-    public DateTime? UpdatedAtUtc { get; set; }
-
-    public Experience? Experience { get; set; }
+    public Experience Experience { get; set; } = null!;
 }

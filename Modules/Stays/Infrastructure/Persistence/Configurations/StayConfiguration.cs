@@ -1,4 +1,4 @@
-﻿using Glinter.Modules.Stays.Domain.Entities;
+using Glinter.Modules.Stays.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -12,40 +12,72 @@ public class StayConfiguration : IEntityTypeConfiguration<Stay>
 
         builder.HasKey(x => x.Id);
 
-        builder.HasIndex(x => x.Adm3Gid);
-        builder.HasIndex(x => new { x.IsActive, x.CreatedAtUtc })
-            .IsCreatedConcurrently();
-        builder.HasIndex(x => new { x.Adm3Gid, x.IsActive, x.CreatedAtUtc })
-            .IsCreatedConcurrently();
-        builder.HasIndex(x => new { x.IsActive, x.Currency, x.PricePerNight })
-            .IsCreatedConcurrently();
-        builder.HasIndex(x => new { x.OwnerProfileId, x.CreatedAtUtc })
-            .IsCreatedConcurrently();
+        builder.Property(x => x.SourceType)
+            .HasConversion<string>()
+            .HasMaxLength(30);
 
         builder.Property(x => x.Name)
             .IsRequired()
-            .HasMaxLength(200);
+            .HasMaxLength(250);
 
-        builder.Property(x => x.Description)
-            .IsRequired()
-            .HasMaxLength(2000);
-
-        builder.Property(x => x.Address)
-            .IsRequired()
-            .HasMaxLength(500);
-
-        builder.Property(x => x.PricePerNight)
+        builder.Property(x => x.Price)
             .HasPrecision(18, 2);
 
-        builder.Property(x => x.Currency)
-            .IsRequired()
-            .HasMaxLength(10);
+        builder.Property(x => x.Description)
+            .HasMaxLength(5000);
 
-        builder.HasIndex(x => new
-        {
-            x.OwnerProfileId,
-            x.Name,
-            x.Address
-        }).IsUnique();
+        builder.Property(x => x.GoogleMapsLink)
+            .HasMaxLength(2000);
+
+        builder.Property(x => x.Website)
+            .HasMaxLength(2000);
+
+        builder.Property(x => x.PhoneInternational)
+            .HasMaxLength(50);
+
+        builder.Property(x => x.LocationSummaryDescription)
+            .HasMaxLength(2000);
+
+        builder.Property(x => x.Cid)
+            .HasMaxLength(100);
+
+        builder.Property(x => x.Rating)
+            .HasPrecision(3, 2);
+
+        builder.HasIndex(x => x.Cid).IsUnique();
+        builder.HasIndex(x => x.SourceType);
+        builder.HasIndex(x => x.Adm0Gid);
+        builder.HasIndex(x => x.Adm1Gid);
+        builder.HasIndex(x => x.Adm2Gid);
+        builder.HasIndex(x => x.Adm3Gid);
+        builder.HasIndex(x => x.Price);
+        builder.HasIndex(x => x.Rating);
+        builder.HasIndex(x => new { x.Latitude, x.Longitude });
+        builder.HasIndex(x => x.HotelOwnerProfileId);
+
+        builder.HasMany(x => x.Images)
+            .WithOne(x => x.Stay)
+            .HasForeignKey(x => x.StayId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(x => x.Amenities)
+            .WithOne(x => x.Stay)
+            .HasForeignKey(x => x.StayId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(x => x.ReviewsPerRatings)
+            .WithOne(x => x.Stay)
+            .HasForeignKey(x => x.StayId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(x => x.BookingPlatforms)
+            .WithOne(x => x.Stay)
+            .HasForeignKey(x => x.StayId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(x => x.StayReviews)
+            .WithOne(x => x.Stay)
+            .HasForeignKey(x => x.StayId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

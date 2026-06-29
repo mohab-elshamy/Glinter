@@ -67,10 +67,10 @@ jobs:
         run: dotnet tool restore
 
       - name: Restore
-        run: dotnet restore Glinter.slnx
+        run: dotnet restore tests/Glinter.IntegrationTests/Glinter.IntegrationTests.csproj
 
       - name: Build
-        run: dotnet build Glinter.slnx --configuration Release --no-restore
+        run: dotnet build tests/Glinter.IntegrationTests/Glinter.IntegrationTests.csproj --configuration Release --no-restore
 
       - name: Run integration tests
         run: >-

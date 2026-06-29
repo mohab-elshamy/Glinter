@@ -17,6 +17,7 @@ namespace Glinter.Modules.Experiences.Infrastructure.Persistence.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
+                .HasDefaultSchema("experiences")
                 .HasAnnotation("ProductVersion", "10.0.6")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
@@ -24,386 +25,312 @@ namespace Glinter.Modules.Experiences.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("Glinter.Modules.Experiences.Domain.Entities.Experience", b =>
                 {
-                    b.Property<Guid>("Id")
+                    b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("Adm3Gid")
                         .HasColumnType("integer");
 
-                    b.Property<string>("ApprovalStatus")
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Address")
+                        .HasMaxLength(750)
+                        .HasColumnType("character varying(750)");
+
+                    b.Property<int?>("Adm0Gid")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("Adm1Gid")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("Adm2Gid")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("Adm3Gid")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Category")
                         .IsRequired()
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)");
 
-                    b.Property<Guid>("CategoryId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Currency")
-                        .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasMaxLength(3000)
-                        .HasColumnType("character varying(3000)");
-
-                    b.Property<int>("DurationMinutes")
-                        .HasColumnType("integer");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
-
-                    b.Property<double>("Latitude")
-                        .HasColumnType("double precision");
-
-                    b.Property<string>("LocationName")
-                        .IsRequired()
-                        .HasMaxLength(300)
-                        .HasColumnType("character varying(300)");
-
-                    b.Property<double>("Longitude")
-                        .HasColumnType("double precision");
-
-                    b.Property<int>("MaxGuests")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime?>("ModeratedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ModerationNotes")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<decimal>("PricePerPerson")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)");
-
-                    b.Property<Guid>("ProviderProfileId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<DateTime?>("UpdatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Adm3Gid");
-
-                    b.HasIndex("CategoryId");
-
-                    b.HasIndex("IsActive");
-
-                    b.HasIndex("ProviderProfileId");
-
-                    b.HasIndex("ProviderProfileId", "CreatedAtUtc")
-                        .HasAnnotation("Npgsql:CreatedConcurrently", true);
-
-                    b.HasIndex("Adm3Gid", "IsActive", "ApprovalStatus")
-                        .HasAnnotation("Npgsql:CreatedConcurrently", true);
-
-                    b.HasIndex("CategoryId", "IsActive", "ApprovalStatus")
-                        .HasAnnotation("Npgsql:CreatedConcurrently", true);
-
-                    b.HasIndex("IsActive", "ApprovalStatus", "CreatedAtUtc")
-                        .HasAnnotation("Npgsql:CreatedConcurrently", true);
-
-                    b.HasIndex("ProviderProfileId", "Adm3Gid", "Title")
-                        .IsUnique();
-
-                    b.ToTable("experiences", (string)null);
-                });
-
-            modelBuilder.Entity("Glinter.Modules.Experiences.Domain.Entities.ExperienceAvailability", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("BookedCount")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("Capacity")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime>("EndTimeUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("ExperienceId")
-                        .HasColumnType("uuid");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTime>("StartTimeUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ExperienceId");
-
-                    b.HasIndex("IsActive");
-
-                    b.HasIndex("StartTimeUtc");
-
-                    b.HasIndex("ExperienceId", "IsActive", "StartTimeUtc", "EndTimeUtc")
-                        .HasAnnotation("Npgsql:CreatedConcurrently", true);
-
-                    b.ToTable("experience_availability", (string)null);
-                });
-
-            modelBuilder.Entity("Glinter.Modules.Experiences.Domain.Entities.ExperienceBooking", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("AvailabilityId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("CancelledAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime?>("CompletedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("ExperienceId")
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("GuestsCount")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)");
-
-                    b.Property<decimal>("TotalPrice")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)");
-
-                    b.Property<Guid>("TravelerProfileId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AvailabilityId");
-
-                    b.HasIndex("ExperienceId");
-
-                    b.HasIndex("Status");
-
-                    b.HasIndex("TravelerProfileId");
-
-                    b.HasIndex("AvailabilityId", "TravelerProfileId")
-                        .IsUnique()
-                        .HasFilter("\"Status\" <> 'Cancelled'");
-
-                    b.HasIndex("CreatedAtUtc", "Status")
-                        .HasAnnotation("Npgsql:CreatedConcurrently", true);
-
-                    b.HasIndex("ExperienceId", "Status")
-                        .HasAnnotation("Npgsql:CreatedConcurrently", true);
-
-                    b.ToTable("experience_bookings", (string)null);
-                });
-
-            modelBuilder.Entity("Glinter.Modules.Experiences.Domain.Entities.ExperienceCategory", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
+                    b.Property<string>("Cid")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
-                    b.HasKey("Id");
-
-                    b.HasIndex("Name")
-                        .IsUnique();
-
-                    b.ToTable("experience_categories", (string)null);
-                });
-
-            modelBuilder.Entity("Glinter.Modules.Experiences.Domain.Entities.ExperienceModerationEvent", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Action")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<Guid>("ActorUserId")
-                        .HasColumnType("uuid");
-
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid>("ExperienceId")
+                    b.Property<Guid?>("CreatedByUserId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("NewStatus")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)");
+                    b.Property<string>("Description")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
 
-                    b.Property<string>("Notes")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<string>("PreviousStatus")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ActorUserId", "CreatedAtUtc");
-
-                    b.HasIndex("ExperienceId", "CreatedAtUtc");
-
-                    b.ToTable("experience_moderation_events", (string)null);
-                });
-
-            modelBuilder.Entity("Glinter.Modules.Experiences.Domain.Entities.ExperienceReview", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Comment")
+                    b.Property<string>("GoogleMapsLink")
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
 
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                    b.Property<double?>("Latitude")
+                        .HasColumnType("double precision");
 
-                    b.Property<Guid>("ExperienceId")
+                    b.Property<double?>("Longitude")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(250)
+                        .HasColumnType("character varying(250)");
+
+                    b.Property<string>("PhoneInternational")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("PriceRange")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid?>("ProviderProfileId")
                         .HasColumnType("uuid");
 
-                    b.Property<int>("Rating")
+                    b.Property<decimal?>("Rating")
+                        .HasPrecision(3, 2)
+                        .HasColumnType("numeric(3,2)");
+
+                    b.Property<int?>("Reviews")
                         .HasColumnType("integer");
 
-                    b.Property<Guid>("TravelerProfileId")
-                        .HasColumnType("uuid");
+                    b.Property<string>("SourceType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
 
                     b.Property<DateTime?>("UpdatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("Website")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("ExperienceId", "TravelerProfileId")
+                    b.HasIndex("Adm0Gid");
+
+                    b.HasIndex("Adm1Gid");
+
+                    b.HasIndex("Adm2Gid");
+
+                    b.HasIndex("Adm3Gid");
+
+                    b.HasIndex("Category");
+
+                    b.HasIndex("Cid")
                         .IsUnique();
 
-                    b.ToTable("experience_reviews", (string)null);
+                    b.HasIndex("ProviderProfileId");
+
+                    b.HasIndex("Rating");
+
+                    b.HasIndex("SourceType");
+
+                    b.HasIndex("Latitude", "Longitude");
+
+                    b.ToTable("experiences", "experiences");
                 });
 
-            modelBuilder.Entity("Glinter.Modules.Experiences.Domain.Entities.ExperienceTag", b =>
+            modelBuilder.Entity("Glinter.Modules.Experiences.Domain.Entities.ExperienceAmenity", b =>
                 {
-                    b.Property<Guid>("Id")
+                    b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                        .HasColumnType("integer");
 
-                    b.Property<Guid>("ExperienceId")
-                        .HasColumnType("uuid");
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("ExperienceId")
+                        .HasColumnType("integer");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+                        .HasMaxLength(250)
+                        .HasColumnType("character varying(250)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ExperienceId");
 
                     b.HasIndex("ExperienceId", "Name")
                         .IsUnique();
 
-                    b.ToTable("experience_tags", (string)null);
+                    b.ToTable("experience_amenities", "experiences");
                 });
 
-            modelBuilder.Entity("Glinter.Modules.Experiences.Domain.Entities.ExperienceVibe", b =>
+            modelBuilder.Entity("Glinter.Modules.Experiences.Domain.Entities.ExperienceFeaturedImage", b =>
                 {
-                    b.Property<Guid>("ExperienceId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("VibeId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("ExperienceId", "VibeId");
-
-                    b.HasIndex("VibeId");
-
-                    b.ToTable("experience_vibes", (string)null);
-                });
-
-            modelBuilder.Entity("Glinter.Modules.Experiences.Domain.Entities.Vibe", b =>
-                {
-                    b.Property<Guid>("Id")
+                    b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                        .HasColumnType("integer");
 
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
+                    b.Property<int>("ExperienceId")
+                        .HasColumnType("integer");
 
-                    b.Property<string>("Name")
+                    b.Property<string>("Link")
                         .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Name")
+                    b.HasIndex("ExperienceId");
+
+                    b.HasIndex("ExperienceId", "Link")
                         .IsUnique();
 
-                    b.ToTable("vibes", (string)null);
+                    b.ToTable("experience_featured_images", "experiences");
                 });
 
-            modelBuilder.Entity("Glinter.Modules.Experiences.Domain.Entities.Experience", b =>
+            modelBuilder.Entity("Glinter.Modules.Experiences.Domain.Entities.ExperienceHour", b =>
                 {
-                    b.HasOne("Glinter.Modules.Experiences.Domain.Entities.ExperienceCategory", "Category")
-                        .WithMany("Experiences")
-                        .HasForeignKey("CategoryId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
 
-                    b.Navigation("Category");
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<TimeOnly>("ClosesAt")
+                        .HasColumnType("time without time zone");
+
+                    b.Property<string>("DayOfWeek")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<int>("ExperienceId")
+                        .HasColumnType("integer");
+
+                    b.Property<TimeOnly>("OpensAt")
+                        .HasColumnType("time without time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExperienceId");
+
+                    b.HasIndex("ExperienceId", "DayOfWeek", "OpensAt", "ClosesAt")
+                        .IsUnique();
+
+                    b.ToTable("experience_hours", "experiences");
                 });
 
-            modelBuilder.Entity("Glinter.Modules.Experiences.Domain.Entities.ExperienceAvailability", b =>
+            modelBuilder.Entity("Glinter.Modules.Experiences.Domain.Entities.ExperiencePopularTime", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("DayOfWeek")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<int>("ExperienceId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("HourOfDay")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("PopularityPercentage")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExperienceId");
+
+                    b.HasIndex("ExperienceId", "DayOfWeek", "HourOfDay")
+                        .IsUnique();
+
+                    b.ToTable("experience_popular_times", "experiences");
+                });
+
+            modelBuilder.Entity("Glinter.Modules.Experiences.Domain.Entities.ExperienceReview", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("ExperienceId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ExternalReviewId")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime?>("PublishedAtDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("Rating")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ReviewText")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ReviewerName")
+                        .HasMaxLength(250)
+                        .HasColumnType("character varying(250)");
+
+                    b.Property<string>("SourceList")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExperienceId");
+
+                    b.HasIndex("PublishedAtDate");
+
+                    b.HasIndex("Rating");
+
+                    b.HasIndex("ExperienceId", "ExternalReviewId")
+                        .IsUnique();
+
+                    b.ToTable("experience_reviews", "experiences");
+                });
+
+            modelBuilder.Entity("Glinter.Modules.Experiences.Domain.Entities.ExperienceReviewsPerRating", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("ExperienceId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Rating")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ReviewsCount")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExperienceId");
+
+                    b.HasIndex("ExperienceId", "Rating")
+                        .IsUnique();
+
+                    b.ToTable("experience_reviews_per_rating", "experiences");
+                });
+
+            modelBuilder.Entity("Glinter.Modules.Experiences.Domain.Entities.ExperienceAmenity", b =>
                 {
                     b.HasOne("Glinter.Modules.Experiences.Domain.Entities.Experience", "Experience")
-                        .WithMany("AvailabilitySlots")
+                        .WithMany("Amenities")
                         .HasForeignKey("ExperienceId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -411,31 +338,34 @@ namespace Glinter.Modules.Experiences.Infrastructure.Persistence.Migrations
                     b.Navigation("Experience");
                 });
 
-            modelBuilder.Entity("Glinter.Modules.Experiences.Domain.Entities.ExperienceBooking", b =>
+            modelBuilder.Entity("Glinter.Modules.Experiences.Domain.Entities.ExperienceFeaturedImage", b =>
                 {
-                    b.HasOne("Glinter.Modules.Experiences.Domain.Entities.ExperienceAvailability", "Availability")
-                        .WithMany("Bookings")
-                        .HasForeignKey("AvailabilityId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
                     b.HasOne("Glinter.Modules.Experiences.Domain.Entities.Experience", "Experience")
-                        .WithMany("Bookings")
+                        .WithMany("FeaturedImages")
                         .HasForeignKey("ExperienceId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("Availability");
 
                     b.Navigation("Experience");
                 });
 
-            modelBuilder.Entity("Glinter.Modules.Experiences.Domain.Entities.ExperienceModerationEvent", b =>
+            modelBuilder.Entity("Glinter.Modules.Experiences.Domain.Entities.ExperienceHour", b =>
                 {
                     b.HasOne("Glinter.Modules.Experiences.Domain.Entities.Experience", "Experience")
-                        .WithMany("ModerationHistory")
+                        .WithMany("Hours")
                         .HasForeignKey("ExperienceId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Experience");
+                });
+
+            modelBuilder.Entity("Glinter.Modules.Experiences.Domain.Entities.ExperiencePopularTime", b =>
+                {
+                    b.HasOne("Glinter.Modules.Experiences.Domain.Entities.Experience", "Experience")
+                        .WithMany("PopularTimes")
+                        .HasForeignKey("ExperienceId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("Experience");
@@ -444,7 +374,7 @@ namespace Glinter.Modules.Experiences.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("Glinter.Modules.Experiences.Domain.Entities.ExperienceReview", b =>
                 {
                     b.HasOne("Glinter.Modules.Experiences.Domain.Entities.Experience", "Experience")
-                        .WithMany("Reviews")
+                        .WithMany("ExperienceReviews")
                         .HasForeignKey("ExperienceId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -452,64 +382,30 @@ namespace Glinter.Modules.Experiences.Infrastructure.Persistence.Migrations
                     b.Navigation("Experience");
                 });
 
-            modelBuilder.Entity("Glinter.Modules.Experiences.Domain.Entities.ExperienceTag", b =>
+            modelBuilder.Entity("Glinter.Modules.Experiences.Domain.Entities.ExperienceReviewsPerRating", b =>
                 {
                     b.HasOne("Glinter.Modules.Experiences.Domain.Entities.Experience", "Experience")
-                        .WithMany("Tags")
+                        .WithMany("ReviewsPerRatings")
                         .HasForeignKey("ExperienceId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("Experience");
-                });
-
-            modelBuilder.Entity("Glinter.Modules.Experiences.Domain.Entities.ExperienceVibe", b =>
-                {
-                    b.HasOne("Glinter.Modules.Experiences.Domain.Entities.Experience", "Experience")
-                        .WithMany("ExperienceVibes")
-                        .HasForeignKey("ExperienceId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Glinter.Modules.Experiences.Domain.Entities.Vibe", "Vibe")
-                        .WithMany("ExperienceVibes")
-                        .HasForeignKey("VibeId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Experience");
-
-                    b.Navigation("Vibe");
                 });
 
             modelBuilder.Entity("Glinter.Modules.Experiences.Domain.Entities.Experience", b =>
                 {
-                    b.Navigation("AvailabilitySlots");
+                    b.Navigation("Amenities");
 
-                    b.Navigation("Bookings");
+                    b.Navigation("ExperienceReviews");
 
-                    b.Navigation("ExperienceVibes");
+                    b.Navigation("FeaturedImages");
 
-                    b.Navigation("ModerationHistory");
+                    b.Navigation("Hours");
 
-                    b.Navigation("Reviews");
+                    b.Navigation("PopularTimes");
 
-                    b.Navigation("Tags");
-                });
-
-            modelBuilder.Entity("Glinter.Modules.Experiences.Domain.Entities.ExperienceAvailability", b =>
-                {
-                    b.Navigation("Bookings");
-                });
-
-            modelBuilder.Entity("Glinter.Modules.Experiences.Domain.Entities.ExperienceCategory", b =>
-                {
-                    b.Navigation("Experiences");
-                });
-
-            modelBuilder.Entity("Glinter.Modules.Experiences.Domain.Entities.Vibe", b =>
-                {
-                    b.Navigation("ExperienceVibes");
+                    b.Navigation("ReviewsPerRatings");
                 });
 #pragma warning restore 612, 618
         }

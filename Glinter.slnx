@@ -1,6 +1,0 @@
-<Solution>
-  <Folder Name="/tests/">
-    <Project Path="tests/Glinter.IntegrationTests/Glinter.IntegrationTests.csproj" />
-  </Folder>
-  <Project Path="Glinter.csproj" />
-</Solution>

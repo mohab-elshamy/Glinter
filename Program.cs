@@ -2,16 +2,15 @@ using System.Security.Claims;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using Glinter.Modules.Communication.Infrastructure.DependencyInjection;
-using Glinter.Modules.Experiences.Infrastructure.DependencyInjection;
-using Glinter.Modules.Experiences.Infrastructure.Persistence;
 using Glinter.Modules.IdentityAccess.Domain.Entities;
 using Glinter.Modules.IdentityAccess.Infrastructure.DependencyInjection;
 using Glinter.Modules.IdentityAccess.Infrastructure.Identity;
+using Glinter.Modules.Experiences.Infrastructure.DependencyInjection;
 using Glinter.Modules.Profiles.Infrastructure.DependencyInjection;
 using Glinter.Modules.Profiles.Infrastructure.Persistence;
 using Glinter.Modules.Regions.Infrastructure.DependencyInjection;
+using Glinter.Modules.SafetyIndex.Infrastructure.DependencyInjection;
 using Glinter.Modules.Stays.Infrastructure.DependencyInjection;
-using Glinter.Modules.Stays.Infrastructure.Persistence;
 using Glinter.Shared.Infrastructure.Errors;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Identity;
@@ -25,8 +24,6 @@ using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Glinter.Shared.Infrastructure.Logging;
 using Microsoft.Extensions.Logging;
-using Glinter.Shared.Infrastructure.Dashboards;
-using Glinter.Shared.Infrastructure.Analytics;
 using Glinter.Shared.Infrastructure.Auditing;
 using Glinter.Shared.Application.Auditing;
 using Glinter.Shared.Infrastructure.Metrics;
@@ -104,16 +101,16 @@ builder.Services.AddIdentityAccessModule(builder.Configuration, builder.Environm
 builder.Services.AddProfilesModule(builder.Configuration);
 
 // Module 4: Stays
-builder.Services.AddDbContext<StaysDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
-
-builder.Services.AddStaysModule();
+builder.Services.AddStaysModule(builder.Configuration);
 
 // Module 5: Experiences
 builder.Services.AddExperiencesModule(builder.Configuration);
 
 // Module 6: Regions (Administrative Boundaries)
 builder.Services.AddRegionsModule(builder.Configuration);
+
+// Module 7: Safety Index
+builder.Services.AddSafetyIndexModule(builder.Configuration);
 
 // Module 9: Communication
 builder.Services.AddCommunicationModule(builder.Configuration);
@@ -122,6 +119,7 @@ builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
         options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
     });
 
 builder.Services.AddSignalR(options =>
@@ -133,8 +131,6 @@ builder.Services.AddSignalR(options =>
 builder.Services.AddHealthChecks()
     .AddCheck("self", () => HealthCheckResult.Healthy(), tags: ["live"])
     .AddCheck<PostgresReadinessHealthCheck>("postgres", tags: ["ready"]);
-builder.Services.AddScoped<DashboardService>();
-builder.Services.AddScoped<AdminAnalyticsService>();
 builder.Services.AddScoped<AdminAuditService>();
 builder.Services.AddScoped<AdminAuditDetailsContext>();
 builder.Services.AddSingleton<ApplicationMetrics>();
@@ -401,12 +397,6 @@ using (var scope = app.Services.CreateScope())
 {
     var profilesDbContext = scope.ServiceProvider.GetRequiredService<ProfilesDbContext>();
     await ProfilesSeeder.SeedAsync(profilesDbContext);
-}
-
-using (var scope = app.Services.CreateScope())
-{
-    var experiencesDbContext = scope.ServiceProvider.GetRequiredService<ExperiencesDbContext>();
-    await ExperiencesSeeder.SeedAsync(experiencesDbContext);
 }
 
 app.Run();

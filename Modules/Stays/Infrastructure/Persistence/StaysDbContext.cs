@@ -1,4 +1,4 @@
-﻿using Glinter.Modules.Stays.Domain.Entities;
+using Glinter.Modules.Stays.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace Glinter.Modules.Stays.Infrastructure.Persistence;
@@ -10,13 +10,17 @@ public class StaysDbContext : DbContext
     }
 
     public DbSet<Stay> Stays => Set<Stay>();
-    public DbSet<StayBooking> StayBookings => Set<StayBooking>();
+    public DbSet<StayImage> StayImages => Set<StayImage>();
+    public DbSet<StayAmenity> StayAmenities => Set<StayAmenity>();
+    public DbSet<StayReviewsPerRating> StayReviewsPerRatings => Set<StayReviewsPerRating>();
+    public DbSet<StayBookingPlatform> StayBookingPlatforms => Set<StayBookingPlatform>();
     public DbSet<StayReview> StayReviews => Set<StayReview>();
-    public DbSet<StayTag> StayTags => Set<StayTag>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        modelBuilder.HasDefaultSchema("stays");
 
         modelBuilder.ApplyConfigurationsFromAssembly(
             typeof(StaysDbContext).Assembly,

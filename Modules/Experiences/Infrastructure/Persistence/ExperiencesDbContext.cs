@@ -1,30 +1,27 @@
-using Glinter.Modules.Experiences.Application.Abstractions;
 using Glinter.Modules.Experiences.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace Glinter.Modules.Experiences.Infrastructure.Persistence;
 
-public class ExperiencesDbContext : DbContext, IExperiencesDbContext
+public class ExperiencesDbContext : DbContext
 {
-    public ExperiencesDbContext(DbContextOptions<ExperiencesDbContext> options)
-        : base(options)
+    public ExperiencesDbContext(DbContextOptions<ExperiencesDbContext> options) : base(options)
     {
     }
 
     public DbSet<Experience> Experiences => Set<Experience>();
-    public DbSet<ExperienceCategory> ExperienceCategories => Set<ExperienceCategory>();
-    public DbSet<Vibe> Vibes => Set<Vibe>();
-    public DbSet<ExperienceAvailability> ExperienceAvailability => Set<ExperienceAvailability>();
-    public DbSet<ExperienceBooking> ExperienceBookings => Set<ExperienceBooking>();
+    public DbSet<ExperienceFeaturedImage> ExperienceFeaturedImages => Set<ExperienceFeaturedImage>();
+    public DbSet<ExperienceHour> ExperienceHours => Set<ExperienceHour>();
+    public DbSet<ExperiencePopularTime> ExperiencePopularTimes => Set<ExperiencePopularTime>();
+    public DbSet<ExperienceReviewsPerRating> ExperienceReviewsPerRatings => Set<ExperienceReviewsPerRating>();
+    public DbSet<ExperienceAmenity> ExperienceAmenities => Set<ExperienceAmenity>();
     public DbSet<ExperienceReview> ExperienceReviews => Set<ExperienceReview>();
-    public DbSet<ExperienceVibe> ExperienceVibes => Set<ExperienceVibe>();
-    public DbSet<ExperienceTag> ExperienceTags => Set<ExperienceTag>();
-    public DbSet<ExperienceModerationEvent> ExperienceModerationEvents =>
-        Set<ExperienceModerationEvent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        modelBuilder.HasDefaultSchema("experiences");
 
         modelBuilder.ApplyConfigurationsFromAssembly(
             typeof(ExperiencesDbContext).Assembly,

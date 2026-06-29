@@ -12,86 +12,88 @@ public class ExperienceConfiguration : IEntityTypeConfiguration<Experience>
 
         builder.HasKey(x => x.Id);
 
-        builder.HasIndex(x => x.ProviderProfileId);
-        builder.HasIndex(x => x.CategoryId);
-        builder.HasIndex(x => x.Adm3Gid);
-        builder.HasIndex(x => x.IsActive);
-        builder.HasIndex(x => new
-        {
-            x.IsActive,
-            x.ApprovalStatus,
-            x.CreatedAtUtc
-        }).IsCreatedConcurrently();
-        builder.HasIndex(x => new
-        {
-            x.Adm3Gid,
-            x.IsActive,
-            x.ApprovalStatus
-        }).IsCreatedConcurrently();
-        builder.HasIndex(x => new
-        {
-            x.CategoryId,
-            x.IsActive,
-            x.ApprovalStatus
-        }).IsCreatedConcurrently();
-        builder.HasIndex(x => new { x.ProviderProfileId, x.CreatedAtUtc })
-            .IsCreatedConcurrently();
-        builder.HasIndex(x => new
-        {
-            x.ProviderProfileId,
-            x.Adm3Gid,
-            x.Title
-        }).IsUnique();
+        builder.Property(x => x.Category)
+            .HasConversion<string>()
+            .HasMaxLength(30);
 
-        builder.Property(x => x.Title)
-            .HasMaxLength(200)
-            .IsRequired();
+        builder.Property(x => x.SourceType)
+            .HasConversion<string>()
+            .HasMaxLength(30);
+
+        builder.Property(x => x.Name)
+            .IsRequired()
+            .HasMaxLength(250);
 
         builder.Property(x => x.Description)
-            .HasMaxLength(3000)
-            .IsRequired();
+            .HasMaxLength(4000);
 
-        builder.Property(x => x.LocationName)
-            .HasMaxLength(300)
-            .IsRequired();
+        builder.Property(x => x.Address)
+            .HasMaxLength(750);
 
-        builder.Property(x => x.PricePerPerson)
-            .HasPrecision(18, 2)
-            .IsRequired();
+        builder.Property(x => x.Cid)
+            .HasMaxLength(100);
 
-        builder.Property(x => x.Currency)
-            .HasMaxLength(10)
-            .IsRequired();
+        builder.Property(x => x.Adm0Gid);
+        builder.Property(x => x.Adm1Gid);
+        builder.Property(x => x.Adm2Gid);
+        builder.Property(x => x.Adm3Gid);
 
-        builder.Property(x => x.DurationMinutes)
-            .IsRequired();
+        builder.Property(x => x.GoogleMapsLink)
+            .HasMaxLength(2000);
 
-        builder.Property(x => x.MaxGuests)
-            .IsRequired();
+        builder.Property(x => x.PhoneInternational)
+            .HasMaxLength(50);
 
-        builder.Property(x => x.Latitude)
-            .IsRequired();
+        builder.Property(x => x.PriceRange)
+            .HasMaxLength(100);
 
-        builder.Property(x => x.Longitude)
-            .IsRequired();
+        builder.Property(x => x.Website)
+            .HasMaxLength(2000);
 
-        builder.Property(x => x.IsActive)
-            .IsRequired();
+        builder.Property(x => x.Rating)
+            .HasPrecision(3, 2);
 
-        builder.Property(x => x.ApprovalStatus)
-            .HasConversion<string>()
-            .HasMaxLength(30)
-            .IsRequired();
+        builder.HasIndex(x => x.Cid)
+            .IsUnique();
 
-        builder.Property(x => x.ModerationNotes)
-            .HasMaxLength(1000);
+        builder.HasIndex(x => x.Category);
+        builder.HasIndex(x => x.SourceType);
+        builder.HasIndex(x => x.Adm0Gid);
+        builder.HasIndex(x => x.Adm1Gid);
+        builder.HasIndex(x => x.Adm2Gid);
+        builder.HasIndex(x => x.Adm3Gid);
+        builder.HasIndex(x => new { x.Latitude, x.Longitude });
+        builder.HasIndex(x => x.Rating);
+        builder.HasIndex(x => x.ProviderProfileId);
 
-        builder.Property(x => x.CreatedAtUtc)
-            .IsRequired();
+        builder.HasMany(x => x.FeaturedImages)
+            .WithOne(x => x.Experience)
+            .HasForeignKey(x => x.ExperienceId)
+            .OnDelete(DeleteBehavior.Cascade);
 
-        builder.HasOne(x => x.Category)
-            .WithMany(x => x.Experiences)
-            .HasForeignKey(x => x.CategoryId)
-            .OnDelete(DeleteBehavior.Restrict);
+        builder.HasMany(x => x.Hours)
+            .WithOne(x => x.Experience)
+            .HasForeignKey(x => x.ExperienceId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(x => x.PopularTimes)
+            .WithOne(x => x.Experience)
+            .HasForeignKey(x => x.ExperienceId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(x => x.ReviewsPerRatings)
+            .WithOne(x => x.Experience)
+            .HasForeignKey(x => x.ExperienceId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(x => x.Amenities)
+            .WithOne(x => x.Experience)
+            .HasForeignKey(x => x.ExperienceId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(x => x.ExperienceReviews)
+            .WithOne(x => x.Experience)
+            .HasForeignKey(x => x.ExperienceId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

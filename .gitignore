@@ -113,4 +113,7 @@ node_modules/
 *.bak
 
 appsettings.json
-appsettings.Development.json
+appsettings.Production.example.json
+
+Data/
+adm2_gids.txt

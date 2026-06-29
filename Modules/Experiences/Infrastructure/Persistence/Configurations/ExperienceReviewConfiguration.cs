@@ -12,21 +12,20 @@ public class ExperienceReviewConfiguration : IEntityTypeConfiguration<Experience
 
         builder.HasKey(x => x.Id);
 
-        builder.HasIndex(x => new { x.ExperienceId, x.TravelerProfileId })
+        builder.Property(x => x.ExternalReviewId)
+            .HasMaxLength(200);
+
+        builder.Property(x => x.ReviewerName)
+            .HasMaxLength(250);
+
+        builder.Property(x => x.SourceList)
+            .IsRequired()
+            .HasMaxLength(50);
+
+        builder.HasIndex(x => x.ExperienceId);
+        builder.HasIndex(x => new { x.ExperienceId, x.ExternalReviewId })
             .IsUnique();
-
-        builder.Property(x => x.Rating)
-            .IsRequired();
-
-        builder.Property(x => x.Comment)
-            .HasMaxLength(2000);
-
-        builder.Property(x => x.CreatedAtUtc)
-            .IsRequired();
-
-        builder.HasOne(x => x.Experience)
-            .WithMany(x => x.Reviews)
-            .HasForeignKey(x => x.ExperienceId)
-            .OnDelete(DeleteBehavior.Cascade);
+        builder.HasIndex(x => x.PublishedAtDate);
+        builder.HasIndex(x => x.Rating);
     }
 }

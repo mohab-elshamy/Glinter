@@ -1,7 +1,5 @@
-using System.Reflection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
-using Microsoft.Extensions.Configuration;
 
 namespace Glinter.Modules.Experiences.Infrastructure.Persistence;
 
@@ -9,11 +7,13 @@ public class DesignTimeExperiencesDbContextFactory : IDesignTimeDbContextFactory
 {
     public ExperiencesDbContext CreateDbContext(string[] args)
     {
+        var basePath = Directory.GetCurrentDirectory();
+
         var configuration = new ConfigurationBuilder()
-            .SetBasePath(Directory.GetCurrentDirectory())
+            .SetBasePath(basePath)
             .AddJsonFile("appsettings.json", optional: true)
             .AddJsonFile("appsettings.Development.json", optional: true)
-            .AddUserSecrets(Assembly.GetExecutingAssembly(), optional: true)
+            .AddUserSecrets<Program>(optional: true)
             .AddEnvironmentVariables()
             .Build();
 

@@ -1,6 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
-using Microsoft.Extensions.Configuration;
 
 namespace Glinter.Modules.Stays.Infrastructure.Persistence;
 
@@ -26,7 +25,6 @@ public class DesignTimeStaysDbContextFactory : IDesignTimeDbContextFactory<Stays
         }
 
         var optionsBuilder = new DbContextOptionsBuilder<StaysDbContext>();
-
         optionsBuilder.UseNpgsql(connectionString);
 
         return new StaysDbContext(optionsBuilder.Options);
