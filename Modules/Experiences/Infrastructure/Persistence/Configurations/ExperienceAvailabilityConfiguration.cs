@@ -21,7 +21,7 @@ public class ExperienceAvailabilityConfiguration : IEntityTypeConfiguration<Expe
             x.IsActive,
             x.StartTimeUtc,
             x.EndTimeUtc
-        });
+        }).IsCreatedConcurrently();
 
         builder.Property(x => x.StartTimeUtc)
             .IsRequired();

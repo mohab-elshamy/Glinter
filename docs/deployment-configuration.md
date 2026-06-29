@@ -46,18 +46,22 @@ shape. Prefer environment variables in deployed environments:
 3. Set only the real frontend HTTPS origins in CORS.
 4. Confirm the request-size limit matches the maximum accepted GeoJSON upload.
 5. Tune global and Communication rate limits for the expected traffic.
-6. Run migrations using the deployment identity before routing traffic.
-7. Start the application and verify authentication, `/api/regions/countries`,
+6. Run `docs/postgres-prerequisites.sql` once per database using a role permitted
+   to install `pg_trgm`.
+7. Run migrations using the deployment identity before routing traffic. Search
+   and reporting indexes are created concurrently and migrations will stop with
+   a clear prerequisite error when `pg_trgm` is absent.
+8. Start the application and verify authentication, `/api/regions/countries`,
    and a protected endpoint.
-8. Configure the load balancer to allow WebSocket upgrades for `/hubs/chat`.
-9. Probe `/health/live` for process restarts and `/health/ready` before routing
+9. Configure the load balancer to allow WebSocket upgrades for `/hubs/chat`.
+10. Probe `/health/live` for process restarts and `/health/ready` before routing
    traffic. Readiness returns `503` when PostgreSQL is unavailable or any
    DbContext has pending migrations.
-10. Configure the platform to ingest JSON console logs and index
+11. Configure the platform to ingest JSON console logs and index
     `CorrelationId`, `TraceId`, `RequestPath`, `StatusCode`, and `UserId`.
-11. Configure the monitoring system to scrape authenticated `GET /metrics`
+12. Configure the monitoring system to scrape authenticated `GET /metrics`
     using an Admin service account.
-12. Review cleanup retention against legal/support requirements before enabling
+13. Review cleanup retention against legal/support requirements before enabling
     it in Production.
 
 Clients may send `X-Correlation-ID` using up to 64 ASCII letters, digits,

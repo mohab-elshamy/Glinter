@@ -29,8 +29,11 @@ public class StayBookingConfiguration : IEntityTypeConfiguration<StayBooking>
             .IsUnique()
             .HasFilter("\"Status\" <> 'Cancelled'");
         builder.HasIndex(x => new { x.StayId, x.CheckInDate, x.CheckOutDate })
-            .HasFilter("\"Status\" <> 'Cancelled'");
-        builder.HasIndex(x => new { x.StayId, x.Status });
-        builder.HasIndex(x => new { x.CreatedAtUtc, x.Status });
+            .HasFilter("\"Status\" <> 'Cancelled'")
+            .IsCreatedConcurrently();
+        builder.HasIndex(x => new { x.StayId, x.Status })
+            .IsCreatedConcurrently();
+        builder.HasIndex(x => new { x.CreatedAtUtc, x.Status })
+            .IsCreatedConcurrently();
     }
 }

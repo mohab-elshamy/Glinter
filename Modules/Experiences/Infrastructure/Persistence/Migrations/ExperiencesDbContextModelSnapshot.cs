@@ -104,13 +104,17 @@ namespace Glinter.Modules.Experiences.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ProviderProfileId");
 
-                    b.HasIndex("ProviderProfileId", "CreatedAtUtc");
+                    b.HasIndex("ProviderProfileId", "CreatedAtUtc")
+                        .HasAnnotation("Npgsql:CreatedConcurrently", true);
 
-                    b.HasIndex("Adm3Gid", "IsActive", "ApprovalStatus");
+                    b.HasIndex("Adm3Gid", "IsActive", "ApprovalStatus")
+                        .HasAnnotation("Npgsql:CreatedConcurrently", true);
 
-                    b.HasIndex("CategoryId", "IsActive", "ApprovalStatus");
+                    b.HasIndex("CategoryId", "IsActive", "ApprovalStatus")
+                        .HasAnnotation("Npgsql:CreatedConcurrently", true);
 
-                    b.HasIndex("IsActive", "ApprovalStatus", "CreatedAtUtc");
+                    b.HasIndex("IsActive", "ApprovalStatus", "CreatedAtUtc")
+                        .HasAnnotation("Npgsql:CreatedConcurrently", true);
 
                     b.HasIndex("ProviderProfileId", "Adm3Gid", "Title")
                         .IsUnique();
@@ -153,7 +157,8 @@ namespace Glinter.Modules.Experiences.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("StartTimeUtc");
 
-                    b.HasIndex("ExperienceId", "IsActive", "StartTimeUtc", "EndTimeUtc");
+                    b.HasIndex("ExperienceId", "IsActive", "StartTimeUtc", "EndTimeUtc")
+                        .HasAnnotation("Npgsql:CreatedConcurrently", true);
 
                     b.ToTable("experience_availability", (string)null);
                 });
@@ -208,9 +213,11 @@ namespace Glinter.Modules.Experiences.Infrastructure.Persistence.Migrations
                         .IsUnique()
                         .HasFilter("\"Status\" <> 'Cancelled'");
 
-                    b.HasIndex("CreatedAtUtc", "Status");
+                    b.HasIndex("CreatedAtUtc", "Status")
+                        .HasAnnotation("Npgsql:CreatedConcurrently", true);
 
-                    b.HasIndex("ExperienceId", "Status");
+                    b.HasIndex("ExperienceId", "Status")
+                        .HasAnnotation("Npgsql:CreatedConcurrently", true);
 
                     b.ToTable("experience_bookings", (string)null);
                 });

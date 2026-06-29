@@ -13,10 +13,14 @@ public class StayConfiguration : IEntityTypeConfiguration<Stay>
         builder.HasKey(x => x.Id);
 
         builder.HasIndex(x => x.Adm3Gid);
-        builder.HasIndex(x => new { x.IsActive, x.CreatedAtUtc });
-        builder.HasIndex(x => new { x.Adm3Gid, x.IsActive, x.CreatedAtUtc });
-        builder.HasIndex(x => new { x.IsActive, x.Currency, x.PricePerNight });
-        builder.HasIndex(x => new { x.OwnerProfileId, x.CreatedAtUtc });
+        builder.HasIndex(x => new { x.IsActive, x.CreatedAtUtc })
+            .IsCreatedConcurrently();
+        builder.HasIndex(x => new { x.Adm3Gid, x.IsActive, x.CreatedAtUtc })
+            .IsCreatedConcurrently();
+        builder.HasIndex(x => new { x.IsActive, x.Currency, x.PricePerNight })
+            .IsCreatedConcurrently();
+        builder.HasIndex(x => new { x.OwnerProfileId, x.CreatedAtUtc })
+            .IsCreatedConcurrently();
 
         builder.Property(x => x.Name)
             .IsRequired()

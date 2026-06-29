@@ -81,6 +81,14 @@ public sealed class GlinterApiFactory : WebApplicationFactory<Program>, IAsyncLi
             await command.ExecuteNonQueryAsync();
         }
 
+        await using (var connection = new NpgsqlConnection(ConnectionString))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "CREATE EXTENSION IF NOT EXISTS pg_trgm";
+            await command.ExecuteNonQueryAsync();
+        }
+
         await ApplyMigrationsAsync();
     }
 

@@ -16,8 +16,10 @@ public class ExperienceBookingConfiguration : IEntityTypeConfiguration<Experienc
         builder.HasIndex(x => x.AvailabilityId);
         builder.HasIndex(x => x.TravelerProfileId);
         builder.HasIndex(x => x.Status);
-        builder.HasIndex(x => new { x.ExperienceId, x.Status });
-        builder.HasIndex(x => new { x.CreatedAtUtc, x.Status });
+        builder.HasIndex(x => new { x.ExperienceId, x.Status })
+            .IsCreatedConcurrently();
+        builder.HasIndex(x => new { x.CreatedAtUtc, x.Status })
+            .IsCreatedConcurrently();
         builder.HasIndex(x => new
         {
             x.AvailabilityId,
