@@ -4,6 +4,7 @@ using Glinter.Modules.Profiles.Application.Common.Services;
 using Glinter.Modules.Profiles.Application.Profiles.Dtos;
 using Glinter.Modules.Profiles.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
+using Glinter.Modules.IdentityAccess.Application.Abstractions;
 
 namespace Glinter.Modules.Profiles.Application.Profiles.Queries.GetLocalBuddies;
 
@@ -11,13 +12,16 @@ public class GetLocalBuddiesQueryHandler
 {
     private readonly IProfilesDbContext _profilesDbContext;
     private readonly ProfileFollowStatsService _profileFollowStatsService;
+    private readonly ICurrentUserService _currentUserService;
 
     public GetLocalBuddiesQueryHandler(
         IProfilesDbContext profilesDbContext,
-        ProfileFollowStatsService profileFollowStatsService)
+        ProfileFollowStatsService profileFollowStatsService,
+        ICurrentUserService currentUserService)
     {
         _profilesDbContext = profilesDbContext;
         _profileFollowStatsService = profileFollowStatsService;
+        _currentUserService = currentUserService;
     }
 
     public async Task<PagedResponse<LocalBuddyListItemResponse>> HandleAsync(
@@ -70,6 +74,13 @@ public class GetLocalBuddiesQueryHandler
         var statsByUserId = await _profileFollowStatsService.GetCountsForUsersAsync(
             localBuddies.Select(x => x.UserId),
             cancellationToken);
+        var followedUserIds = _currentUserService.UserId is { } currentUserId
+            ? await _profilesDbContext.UserFollows
+                .Where(x => x.FollowerUserId == currentUserId &&
+                            localBuddies.Select(b => b.UserId).Contains(x.FollowedUserId))
+                .Select(x => x.FollowedUserId)
+                .ToHashSetAsync(cancellationToken)
+            : [];
 
         var items = localBuddies
             .Select(profile =>
@@ -81,7 +92,8 @@ public class GetLocalBuddiesQueryHandler
                 return ProfilesMappings.ToLocalBuddyListItemResponse(
                     profile,
                     stats.FollowersCount,
-                    stats.FollowingCount);
+                    stats.FollowingCount,
+                    followedUserIds.Contains(profile.UserId));
             })
             .ToList();
 

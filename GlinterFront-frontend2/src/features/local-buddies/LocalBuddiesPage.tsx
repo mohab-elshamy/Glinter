@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Search, Filter, Star, MapPin, MessageSquare, Heart, Languages, Trash2, HeartOff, Clock, Calendar, X } from "lucide-react";
+import { Search, Filter, Star, MapPin, MessageSquare, Heart, Languages, Trash2, Clock, Calendar, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import Navbar from "@/components/Navbar";
@@ -18,7 +18,8 @@ import type { LoadState } from "@/shared/types/async-state";
 import type { RegionHierarchyGids } from "@/shared/types/regions";
 import RegionCascadeSelect from "@/components/RegionCascadeSelect";
 
-const filters = ["All", "Favorites", "Free", "Verified", "Top Rated", "Available Now"];
+const buddyFilters = ["All", "Following", "Free", "Verified", "Top Rated", "Available Now"];
+const experienceFilters = ["All", "Favorites", "Free", "Top Rated"];
 
 interface DisplayExperience {
   id: number;
@@ -47,13 +48,14 @@ interface DisplayBuddy {
   verified: boolean;
   photo: string;
   bio: string;
+  followersCount: number;
+  isFollowing: boolean;
 }
 
 const LocalBuddies = () => {
   const navigate = useNavigate();
   const [activeFilter, setActiveFilter] = useState("All");
   const [activeTab, setActiveTab] = useState<"buddies" | "experiences">("buddies");
-  const [likedBuddies, setLikedBuddies] = useState<number[]>([]);
   const [likedExperiences, setLikedExperiences] = useState<number[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedExperience, setSelectedExperience] = useState<DisplayExperience | null>(null);
@@ -70,10 +72,8 @@ const LocalBuddies = () => {
   const [loadState, setLoadState] = useState<LoadState>({ status: "loading" });
   const [region, setRegion] = useState<RegionHierarchyGids>({});
 
-  // Load liked items from localStorage
+  // Experience favorites do not have a backend contract yet.
   useEffect(() => {
-    const savedBuddies = localStorage.getItem("likedBuddies");
-    if (savedBuddies) setLikedBuddies(JSON.parse(savedBuddies));
     const savedExperiences = localStorage.getItem("likedExperiences");
     if (savedExperiences) setLikedExperiences(JSON.parse(savedExperiences));
   }, []);
@@ -104,27 +104,48 @@ const LocalBuddies = () => {
   }, [region.adm0Gid, region.adm1Gid, region.adm2Gid, region.adm3Gid]);
 
   useEffect(() => {
-    localStorage.setItem("likedBuddies", JSON.stringify(likedBuddies));
     localStorage.setItem("likedExperiences", JSON.stringify(likedExperiences));
-  }, [likedBuddies, likedExperiences]);
+  }, [likedExperiences]);
 
-  // Like handler
-  const handleLike = (id: number, name: string, type: "buddy" | "experience") => {
-    if (type === "buddy") {
-      const isLiked = likedBuddies.includes(id);
-      setLikedBuddies(prev => isLiked ? prev.filter(i => i !== id) : [...prev, id]);
-      toast.success(isLiked ? `Removed ${name} from favorites` : `Added ${name} to favorites ❤️`);
-    } else {
-      const isLiked = likedExperiences.includes(id);
-      setLikedExperiences(prev => isLiked ? prev.filter(i => i !== id) : [...prev, id]);
-      toast.success(isLiked ? `Removed ${name} from favorites` : `Added ${name} to favorites ❤️`);
+  const handleBuddyFollow = async (userId: string, name: string) => {
+    if (!authStorage.isAuthenticated()) {
+      toast.error("Sign in to follow local buddies.");
+      navigate("/auth");
+      return;
+    }
+    const buddy = apiBuddies.find((item) => item.userId === userId);
+    if (!buddy) return;
+    try {
+      const status = buddy.isFollowing
+        ? await profilesApi.unfollowUser(userId)
+        : await profilesApi.followUser(userId);
+      setApiBuddies((current) => current.map((item) =>
+        item.userId === userId
+          ? { ...item, isFollowing: status.isFollowing, followersCount: status.followersCount }
+          : item));
+      toast.success(status.isFollowing ? `Following ${name}.` : `Unfollowed ${name}.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not update follow status.");
     }
   };
 
-  const handleRemoveAllFavorites = () => {
+  const handleExperienceLike = (id: number, name: string) => {
+    const isLiked = likedExperiences.includes(id);
+    setLikedExperiences(prev => isLiked ? prev.filter(i => i !== id) : [...prev, id]);
+    toast.success(isLiked ? `Removed ${name} from favorites` : `Added ${name} to favorites ❤️`);
+  };
+
+  const handleRemoveAllFavorites = async () => {
     if (activeTab === "buddies") {
-      setLikedBuddies([]);
-      toast.success("All buddies removed from favorites");
+      const followed = apiBuddies.filter((buddy) => buddy.isFollowing);
+      try {
+        await Promise.all(followed.map((buddy) => profilesApi.unfollowUser(buddy.userId)));
+        setApiBuddies((current) => current.map((buddy) =>
+          buddy.isFollowing ? { ...buddy, isFollowing: false, followersCount: Math.max(0, buddy.followersCount - 1) } : buddy));
+        toast.success("All visible buddies unfollowed.");
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Could not unfollow every buddy.");
+      }
     } else {
       setLikedExperiences([]);
       toast.success("All experiences removed from favorites");
@@ -242,6 +263,8 @@ const LocalBuddies = () => {
     verified: buddy.verificationStatus === "Approved",
     photo: buddy.profileImageUrl || `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(buddy.displayName)}`,
     bio: buddy.bio || "",
+    followersCount: buddy.followersCount,
+    isFollowing: buddy.isFollowing,
   }));
 
   const getFilteredBuddies = () => {
@@ -254,7 +277,7 @@ const LocalBuddies = () => {
       );
     }
     switch (activeFilter) {
-      case "Favorites": filtered = filtered.filter(buddy => likedBuddies.includes(buddy.id)); break;
+      case "Following": filtered = filtered.filter(buddy => buddy.isFollowing); break;
       case "Free": filtered = filtered.filter(buddy => buddy.price === "Free"); break;
       case "Verified": filtered = filtered.filter(buddy => buddy.verified); break;
       case "Top Rated": filtered = filtered.filter(buddy => buddy.rating >= 4.8); break;
@@ -298,7 +321,10 @@ const LocalBuddies = () => {
 
   const filteredBuddies = getFilteredBuddies();
   const filteredExperiences = getFilteredExperiences();
-  const favoriteCount = activeTab === "buddies" ? likedBuddies.length : likedExperiences.length;
+  const favoriteCount = activeTab === "buddies"
+    ? allBuddies.filter((buddy) => buddy.isFollowing).length
+    : likedExperiences.length;
+  const filters = activeTab === "buddies" ? buddyFilters : experienceFilters;
 
   return (
     <div className="min-h-screen bg-background">
@@ -316,9 +342,13 @@ const LocalBuddies = () => {
               className="flex items-center gap-2 bg-card border border-border rounded-lg px-3 py-2"
             >
               <Heart className="w-4 h-4 fill-red-500 text-red-500" />
-              <span className="text-sm font-medium">{favoriteCount} Favorite{favoriteCount !== 1 ? 's' : ''}</span>
+              <span className="text-sm font-medium">
+                {favoriteCount} {activeTab === "buddies"
+                  ? "Following"
+                  : `Favorite${favoriteCount !== 1 ? "s" : ""}`}
+              </span>
               <button
-                onClick={handleRemoveAllFavorites}
+                onClick={() => void handleRemoveAllFavorites()}
                 className="text-xs text-red-500 hover:text-red-400 transition-colors ml-1"
               >
                 Clear all
@@ -363,9 +393,9 @@ const LocalBuddies = () => {
                   : "bg-secondary text-muted-foreground hover:text-foreground"
               }`}
             >
-              {f === "Favorites" && <Heart className="w-3 h-3" />}
+              {(f === "Favorites" || f === "Following") && <Heart className="w-3 h-3" />}
               {f}
-              {f === "Favorites" && favoriteCount > 0 && (
+              {(f === "Favorites" || f === "Following") && favoriteCount > 0 && (
                 <span className="ml-1 px-1.5 py-0.5 bg-primary-foreground/20 rounded-full text-[10px]">
                   {favoriteCount}
                 </span>
@@ -387,7 +417,7 @@ const LocalBuddies = () => {
         {/* Tabs */}
         <div className="flex rounded-lg bg-secondary p-1 mb-8 max-w-xs">
           <button
-            onClick={() => setActiveTab("buddies")}
+            onClick={() => { setActiveTab("buddies"); setActiveFilter("All"); }}
             className={`flex-1 py-2 text-xs font-medium rounded-md transition-all flex items-center justify-center gap-1.5 ${
               activeTab === "buddies" ? "bg-primary text-primary-foreground" : "text-muted-foreground"
             }`}
@@ -395,7 +425,7 @@ const LocalBuddies = () => {
             👥 Local Buddies
           </button>
           <button
-            onClick={() => setActiveTab("experiences")}
+            onClick={() => { setActiveTab("experiences"); setActiveFilter("All"); }}
             className={`flex-1 py-2 text-xs font-medium rounded-md transition-all flex items-center justify-center gap-1.5 ${
               activeTab === "experiences" ? "bg-primary text-primary-foreground" : "text-muted-foreground"
             }`}
@@ -473,17 +503,19 @@ const LocalBuddies = () => {
                     </div>
                     <motion.button
                       whileTap={{ scale: 0.8 }}
-                      onClick={(e) => handleLike(b.id, b.name, "buddy")}
+                      aria-label={b.isFollowing ? `Unfollow ${b.name}` : `Follow ${b.name}`}
+                      aria-pressed={b.isFollowing}
+                      onClick={() => void handleBuddyFollow(b.userId, b.name)}
                       className="focus:outline-none group relative"
                     >
                       <Heart 
                         className={`w-5 h-5 transition-all duration-300 ${
-                          likedBuddies.includes(b.id) 
+                          b.isFollowing
                             ? "fill-red-500 text-red-500" 
                             : "text-muted-foreground group-hover:text-red-500"
                         }`}
                       />
-                      {likedBuddies.includes(b.id) && (
+                      {b.isFollowing && (
                         <motion.div
                           initial={{ scale: 0 }}
                           animate={{ scale: 1 }}
@@ -502,6 +534,7 @@ const LocalBuddies = () => {
                     ) : (
                       <span className="text-accent font-medium">{b.price}</span>
                     )}
+                    <span className="text-muted-foreground">{b.followersCount} followers</span>
                   </div>
 
                   <p className="text-xs text-muted-foreground flex items-center gap-1 mb-2">
@@ -529,7 +562,7 @@ const LocalBuddies = () => {
                     </button>
                   </div>
 
-                  {likedBuddies.includes(b.id) && (
+                  {b.isFollowing && (
                     <motion.div 
                       initial={{ opacity: 0, x: -10 }}
                       animate={{ opacity: 1, x: 0 }}
@@ -537,7 +570,7 @@ const LocalBuddies = () => {
                     >
                       <div className="bg-red-500/20 text-red-500 text-[10px] px-1.5 py-0.5 rounded-full flex items-center gap-1">
                         <Heart className="w-2 h-2 fill-red-500" />
-                        Liked
+                        Following
                       </div>
                     </motion.div>
                   )}
@@ -572,7 +605,7 @@ const LocalBuddies = () => {
                         whileTap={{ scale: 0.8 }}
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleLike(exp.id, exp.name, "experience");
+                          handleExperienceLike(exp.id, exp.name);
                         }}
                         className="p-1.5 bg-black/50 rounded-full backdrop-blur-sm"
                       >
@@ -655,34 +688,6 @@ const LocalBuddies = () => {
           </div>
         )}
 
-        {/* No results messages (unchanged) */}
-        {activeTab === "buddies" && filteredBuddies.length === 0 && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="text-center py-12"
-          >
-            <HeartOff className="w-12 h-12 text-muted-foreground mx-auto mb-3 opacity-50" />
-            <p className="text-muted-foreground">No buddies found</p>
-            <button onClick={() => { setSearchQuery(""); setActiveFilter("All"); }} className="mt-2 text-accent text-sm hover:underline">
-              Clear filters
-            </button>
-          </motion.div>
-        )}
-
-        {activeTab === "experiences" && filteredExperiences.length === 0 && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="text-center py-12"
-          >
-            <Calendar className="w-12 h-12 text-muted-foreground mx-auto mb-3 opacity-50" />
-            <p className="text-muted-foreground">No experiences found</p>
-            <button onClick={() => { setSearchQuery(""); setActiveFilter("All"); }} className="mt-2 text-accent text-sm hover:underline">
-              Clear filters
-            </button>
-          </motion.div>
-        )}
       </div>
 
       {/* Details Modal for Experiences */}

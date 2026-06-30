@@ -56,4 +56,12 @@ describe("admin API", () => {
       "/admin/audit-events?action=AdminUsers.AssignRole&page=1",
     );
   });
+
+  it("loads buddy verification history", async () => {
+    vi.mocked(request).mockResolvedValueOnce([]);
+    await adminApi.getBuddyVerificationHistory("buddy-id", 2, 25);
+    expect(request).toHaveBeenCalledWith(
+      "/admin/local-buddies/buddy-id/verification-history?page=2&pageSize=25",
+    );
+  });
 });

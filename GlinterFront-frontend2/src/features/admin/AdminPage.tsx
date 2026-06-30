@@ -22,6 +22,7 @@ import type {
   AdminUserListItem,
   ExperienceModerationStatus,
   ExperienceResponseDto,
+  BuddyVerificationEvent,
 } from "@/shared/types/api";
 import { toast } from "sonner";
 import type { LoadState } from "@/shared/types/async-state";
@@ -52,6 +53,8 @@ const AdminPage = () => {
   const [analytics, setAnalytics] = useState<AdminAnalytics>();
   const [auditEvents, setAuditEvents] = useState<AdminAuditEvent[]>([]);
   const [auditTotal, setAuditTotal] = useState(0);
+  const [buddyHistory, setBuddyHistory] = useState<Record<string, BuddyVerificationEvent[]>>({});
+  const [historyLoadingUserId, setHistoryLoadingUserId] = useState("");
   const [search, setSearch] = useState("");
   const [loadState, setLoadState] = useState<LoadState>({ status: "loading" });
   const [refreshing, setRefreshing] = useState(false);
@@ -144,9 +147,33 @@ const AdminPage = () => {
         current.map((item) =>
           item.userId === buddy.userId ? { ...item, verificationStatus } : item),
       );
+      if (buddyHistory[buddy.userId]) {
+        const history = await adminApi.getBuddyVerificationHistory(buddy.userId);
+        setBuddyHistory((current) => ({ ...current, [buddy.userId]: history }));
+      }
       toast.success(`Buddy ${verificationStatus.toLowerCase()}.`);
     } catch (error) {
       toast.error(errorMessage(error));
+    }
+  };
+
+  const toggleBuddyHistory = async (userId: string) => {
+    if (buddyHistory[userId]) {
+      setBuddyHistory((current) => {
+        const next = { ...current };
+        delete next[userId];
+        return next;
+      });
+      return;
+    }
+    setHistoryLoadingUserId(userId);
+    try {
+      const history = await adminApi.getBuddyVerificationHistory(userId);
+      setBuddyHistory((current) => ({ ...current, [userId]: history }));
+    } catch (error) {
+      toast.error(errorMessage(error));
+    } finally {
+      setHistoryLoadingUserId("");
     }
   };
 
@@ -306,6 +333,27 @@ const AdminPage = () => {
                         <td className="space-x-3">
                           <button onClick={() => void verifyBuddy(buddy, "Approved")} className="text-xs text-green-400">Approve</button>
                           <button onClick={() => void verifyBuddy(buddy, "Rejected")} className="text-xs text-red-400">Reject</button>
+                          <button onClick={() => void toggleBuddyHistory(buddy.userId)} className="text-xs text-accent">
+                            {historyLoadingUserId === buddy.userId
+                              ? "Loading…"
+                              : buddyHistory[buddy.userId]
+                                ? "Hide history"
+                                : "History"}
+                          </button>
+                          {buddyHistory[buddy.userId] && (
+                            <div className="mt-2 min-w-72 space-y-2 rounded-lg bg-secondary/40 p-3">
+                              {buddyHistory[buddy.userId].length === 0 && (
+                                <p className="text-xs text-muted-foreground">No verification decisions recorded.</p>
+                              )}
+                              {buddyHistory[buddy.userId].map((event) => (
+                                <div key={event.id} className="border-b border-border/50 pb-2 text-xs last:border-0 last:pb-0">
+                                  <p><strong>{event.previousStatus}</strong> → <strong>{event.newStatus}</strong></p>
+                                  <p className="text-muted-foreground">{new Date(event.createdAtUtc).toLocaleString()}</p>
+                                  {event.notes && <p className="mt-1 text-muted-foreground">{event.notes}</p>}
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </td>
                       </tr>
                     ))}

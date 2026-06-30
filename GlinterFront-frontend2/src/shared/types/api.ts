@@ -39,6 +39,63 @@ export interface LocalBuddyListItemResponse {
   interests: InterestResponse[];
   followersCount: number;
   followingCount: number;
+  isFollowing: boolean;
+}
+
+export interface FollowStatusResponse {
+  followedUserId: string;
+  isFollowing: boolean;
+  followersCount: number;
+}
+
+export interface BuddyAvailabilityDto {
+  id: string;
+  localBuddyUserId: string;
+  startTimeUtc: string;
+  endTimeUtc: string;
+  price: number;
+  isActive: boolean;
+  isBooked: boolean;
+}
+
+export interface BuddyAvailabilityRequest {
+  startTimeUtc: string;
+  endTimeUtc: string;
+  price: number;
+}
+
+export type BuddyBookingStatus =
+  | "Pending"
+  | "Accepted"
+  | "Rejected"
+  | "Completed"
+  | "Cancelled";
+
+export interface BuddyBookingDto {
+  id: string;
+  availabilityId: string;
+  localBuddyUserId: string;
+  buddyName: string;
+  travelerUserId: string;
+  travelerName: string;
+  startTimeUtc: string;
+  endTimeUtc: string;
+  totalPrice: number;
+  notes?: string;
+  status: BuddyBookingStatus;
+  createdAtUtc: string;
+  updatedAtUtc?: string;
+}
+
+export interface BuddyReviewDto {
+  id: string;
+  bookingId: string;
+  localBuddyUserId: string;
+  travelerUserId: string;
+  reviewerName: string;
+  rating: number;
+  reviewText: string;
+  createdAtUtc: string;
 }
 
 export interface LocalBuddyProfileResponse {
@@ -58,6 +115,7 @@ export interface LocalBuddyProfileResponse {
   updatedAtUtc?: string;
   followersCount: number;
   followingCount: number;
+  isFollowing: boolean;
 }
 
 export interface TravelerProfileRequest {
@@ -429,6 +487,16 @@ export interface AdminLocalBuddy {
   verificationStatus: "Pending" | "Approved" | "Rejected";
   createdAtUtc: string;
   updatedAtUtc?: string;
+}
+
+export interface BuddyVerificationEvent {
+  id: string;
+  localBuddyUserId: string;
+  actorUserId: string;
+  previousStatus: "Pending" | "Approved" | "Rejected";
+  newStatus: "Pending" | "Approved" | "Rejected";
+  notes?: string;
+  createdAtUtc: string;
 }
 
 export interface AdminDashboard {

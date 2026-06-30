@@ -275,4 +275,118 @@ public sealed class RegionsAndProfilesTests : ApiTestBase
             new { profileImageUrl = "https://example.test/profile.jpg" });
         Assert.Equal(HttpStatusCode.OK, validImage.StatusCode);
     }
+
+    [Fact]
+    public async Task Buddy_availability_request_completion_and_review_flow_is_enforced()
+    {
+        var buddy = await CreateUserAsync("LocalBuddy", "buddy-flow");
+        var traveler = await CreateUserAsync("Traveler", "buddy-traveler");
+        await UpsertTravelerAsync(traveler);
+
+        var buddyProfile = await SendAsync(
+            HttpMethod.Put,
+            "/api/profiles/local-buddy",
+            buddy.Token,
+            new
+            {
+                displayName = "Integration Guide",
+                city = "Cairo",
+                languages = "Arabic, English",
+                interestIds = Array.Empty<Guid>()
+            });
+        buddyProfile.EnsureSuccessStatusCode();
+
+        var adminToken = await GetAdminTokenAsync();
+        var approved = await SendAsync(
+            HttpMethod.Patch,
+            $"/api/admin/local-buddies/{buddy.UserId}/verification",
+            adminToken,
+            new { verificationStatus = "Approved" });
+        approved.EnsureSuccessStatusCode();
+
+        var start = DateTime.UtcNow.AddDays(7);
+        var end = start.AddHours(4);
+        var availability = await SendAsync(
+            HttpMethod.Post,
+            $"/api/local-buddies/{buddy.UserId}/availability",
+            buddy.Token,
+            new { startTimeUtc = start, endTimeUtc = end, price = 75 });
+        Assert.Equal(HttpStatusCode.Created, availability.StatusCode);
+        using var availabilityJson = await ReadJsonAsync(availability);
+        var availabilityId = availabilityJson.RootElement.GetProperty("id").GetGuid();
+
+        var booking = await SendAsync(
+            HttpMethod.Post,
+            $"/api/local-buddies/{buddy.UserId}/bookings",
+            traveler.Token,
+            new { availabilityId, notes = "Museum and downtown walk" });
+        Assert.Equal(HttpStatusCode.Created, booking.StatusCode);
+        using var bookingJson = await ReadJsonAsync(booking);
+        var bookingId = bookingJson.RootElement.GetProperty("id").GetGuid();
+        Assert.Equal("Pending", bookingJson.RootElement.GetProperty("status").GetString());
+        Assert.Equal(75, bookingJson.RootElement.GetProperty("totalPrice").GetDecimal());
+
+        var duplicate = await SendAsync(
+            HttpMethod.Post,
+            $"/api/local-buddies/{buddy.UserId}/bookings",
+            traveler.Token,
+            new { availabilityId });
+        await AssertProblemAsync(duplicate, 400, "validation_error");
+
+        var accepted = await SendAsync(
+            HttpMethod.Patch,
+            $"/api/buddy-bookings/{bookingId}/status",
+            buddy.Token,
+            new { status = "Accepted" });
+        accepted.EnsureSuccessStatusCode();
+
+        var completed = await SendAsync(
+            HttpMethod.Patch,
+            $"/api/buddy-bookings/{bookingId}/status",
+            buddy.Token,
+            new { status = "Completed" });
+        completed.EnsureSuccessStatusCode();
+
+        var review = await SendAsync(
+            HttpMethod.Post,
+            $"/api/local-buddies/{buddy.UserId}/reviews",
+            traveler.Token,
+            new { bookingId, rating = 5, reviewText = "Knowledgeable and friendly guide." });
+        Assert.Equal(HttpStatusCode.Created, review.StatusCode);
+
+        var duplicateReview = await SendAsync(
+            HttpMethod.Post,
+            $"/api/local-buddies/{buddy.UserId}/reviews",
+            traveler.Token,
+            new { bookingId, rating = 4, reviewText = "Duplicate review." });
+        await AssertProblemAsync(duplicateReview, 400, "validation_error");
+
+        var publicProfile = await Client.GetAsync($"/api/local-buddies/{buddy.UserId}");
+        publicProfile.EnsureSuccessStatusCode();
+        using var profileJson = await ReadJsonAsync(publicProfile);
+        Assert.Equal(1, profileJson.RootElement.GetProperty("reviewsCount").GetInt32());
+        Assert.Equal(5, profileJson.RootElement.GetProperty("rating").GetDecimal());
+
+        var follow = await SendAsync(
+            HttpMethod.Post,
+            $"/api/profiles/users/{buddy.UserId}/follow",
+            traveler.Token);
+        follow.EnsureSuccessStatusCode();
+        using var followJson = await ReadJsonAsync(follow);
+        Assert.True(followJson.RootElement.GetProperty("isFollowing").GetBoolean());
+        Assert.Equal(1, followJson.RootElement.GetProperty("followersCount").GetInt32());
+
+        var list = await SendAsync(
+            HttpMethod.Get,
+            "/api/local-buddies?page=1&pageSize=50",
+            traveler.Token);
+        list.EnsureSuccessStatusCode();
+        using var listJson = await ReadJsonAsync(list);
+        var listedBuddy = listJson.RootElement
+            .GetProperty("items")
+            .EnumerateArray()
+            .Single(item => item.GetProperty("userId").GetGuid() == buddy.UserId);
+        Assert.True(listedBuddy.GetProperty("isFollowing").GetBoolean());
+        Assert.Equal(1, listedBuddy.GetProperty("followersCount").GetInt32());
+    }
 }

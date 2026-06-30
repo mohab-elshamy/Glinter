@@ -109,14 +109,16 @@ public class ProfilesController : ControllerBase
         Guid userId,
         CancellationToken cancellationToken)
     {
-        var message = await _followUserCommandHandler.HandleAsync(
+        await _followUserCommandHandler.HandleAsync(
             new FollowUserCommand
             {
                 FollowedUserId = userId
             },
             cancellationToken);
 
-        return Ok(new { message });
+        return Ok(await _getFollowStatusQueryHandler.HandleAsync(
+            new GetFollowStatusQuery { FollowedUserId = userId },
+            cancellationToken));
     }
 
     [HttpDelete("users/{userId:guid}/follow")]
@@ -124,14 +126,16 @@ public class ProfilesController : ControllerBase
         Guid userId,
         CancellationToken cancellationToken)
     {
-        var message = await _unfollowUserCommandHandler.HandleAsync(
+        await _unfollowUserCommandHandler.HandleAsync(
             new UnfollowUserCommand
             {
                 FollowedUserId = userId
             },
             cancellationToken);
 
-        return Ok(new { message });
+        return Ok(await _getFollowStatusQueryHandler.HandleAsync(
+            new GetFollowStatusQuery { FollowedUserId = userId },
+            cancellationToken));
     }
 
     [HttpGet("users/{userId:guid}/follow-status")]

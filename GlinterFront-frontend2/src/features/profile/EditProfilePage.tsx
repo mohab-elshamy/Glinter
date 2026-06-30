@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
-import { User, Bookmark, Building2, Sparkles, Edit } from "lucide-react";
+import { User, Bookmark, Building2, Sparkles, CalendarDays } from "lucide-react";
 import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -9,12 +9,14 @@ import MyBookingsTab from "./MyBookingsTab";
 import MyHotelsTab from "./MyHotelsTab";
 import MyExperiencesTab from "./MyExperiencesTab";
 import { authStorage } from "@/shared/lib/auth";
+import MyBuddyScheduleTab from "./MyBuddyScheduleTab";
 
 const allTabs = [
   { key: "edit", label: "Edit Profile", icon: User },
   { key: "bookings", label: "My Bookings", icon: Bookmark },
   { key: "hotels", label: "My Hotels", icon: Building2 },
   { key: "experiences", label: "My Experiences", icon: Sparkles },
+  { key: "buddy-schedule", label: "Schedule & Requests", icon: CalendarDays },
 ] as const;
 
 type TabKey = (typeof allTabs)[number]["key"];
@@ -36,8 +38,8 @@ const EditProfilePage = () => {
       ? ["edit", "hotels"]
       : roleKind === "experience-provider"
         ? ["edit", "experiences"]
-        : roleKind === "local-buddy"
-          ? ["edit"]
+      : roleKind === "local-buddy"
+          ? ["edit", "buddy-schedule"]
           : ["edit", "bookings"];
     return allTabs.filter((tab) => allowedTabKeys.includes(tab.key));
   }, [roleKind]);
@@ -96,6 +98,7 @@ const EditProfilePage = () => {
           {activeTab === "bookings" && <MyBookingsTab />}
           {activeTab === "hotels" && <MyHotelsTab />}
           {activeTab === "experiences" && <MyExperiencesTab />}
+          {activeTab === "buddy-schedule" && <MyBuddyScheduleTab />}
         </motion.div>
       </div>
       <Footer />

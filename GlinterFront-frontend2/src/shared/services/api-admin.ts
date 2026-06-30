@@ -13,6 +13,7 @@ import type {
   AdminDashboard,
   AdminAnalytics,
   AdminAuditPage,
+  BuddyVerificationEvent,
 } from "@/shared/types/api";
 
 export const adminApi = {
@@ -49,6 +50,11 @@ export const adminApi = {
   getLocalBuddies: (verificationStatus?: string) =>
     request<AdminLocalBuddy[]>(
       `/admin/local-buddies${verificationStatus ? `?verificationStatus=${encodeURIComponent(verificationStatus)}` : ""}`,
+    ),
+
+  getBuddyVerificationHistory: (userId: string, page = 1, pageSize = 50) =>
+    request<BuddyVerificationEvent[]>(
+      `/admin/local-buddies/${userId}/verification-history?page=${page}&pageSize=${pageSize}`,
     ),
 
   getDashboard: () =>
