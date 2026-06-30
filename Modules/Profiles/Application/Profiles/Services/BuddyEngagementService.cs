@@ -1,5 +1,7 @@
 using Glinter.Modules.IdentityAccess.Application.Abstractions;
 using Glinter.Modules.IdentityAccess.Domain.Constants;
+using Glinter.Modules.Communication.Application.Notifications.Commands;
+using Glinter.Modules.Communication.Domain.Enums;
 using Glinter.Modules.Profiles.Application.Abstractions;
 using Glinter.Modules.Profiles.Application.Profiles.Dtos;
 using Glinter.Modules.Profiles.Domain.Entities;
@@ -11,7 +13,8 @@ namespace Glinter.Modules.Profiles.Application.Profiles.Services;
 
 public sealed class BuddyEngagementService(
     IProfilesDbContext dbContext,
-    ICurrentUserService currentUser)
+    ICurrentUserService currentUser,
+    CreateNotificationHandler createNotificationHandler)
 {
     private static readonly BuddyBookingStatus[] BlockingStatuses =
         [BuddyBookingStatus.Pending, BuddyBookingStatus.Accepted];
@@ -194,6 +197,19 @@ public sealed class BuddyEngagementService(
                 "This buddy availability has already been requested.");
         }
         booking.Availability = availability;
+        await createNotificationHandler.HandleAsync(
+            new CreateNotificationCommand
+            {
+                UserId = buddyUserId,
+                Type = NotificationType.Booking,
+                Title = "New buddy booking request",
+                Body = $"{traveler.DisplayName} requested one of your available times.",
+                LinkUrl = "/profile/me?tab=buddy-schedule",
+                SourceModule = "Profiles",
+                SourceEntityType = "BuddyBooking",
+                SourceEntityId = booking.Id
+            },
+            cancellationToken);
         return MapBooking(booking, buddy.DisplayName, traveler.DisplayName);
     }
 
@@ -255,6 +271,19 @@ public sealed class BuddyEngagementService(
         booking.Status = status;
         booking.UpdatedAtUtc = DateTime.UtcNow;
         await dbContext.SaveChangesAsync(cancellationToken);
+        await createNotificationHandler.HandleAsync(
+            new CreateNotificationCommand
+            {
+                UserId = booking.TravelerUserId,
+                Type = NotificationType.Booking,
+                Title = $"Buddy request {status.ToString().ToLowerInvariant()}",
+                Body = $"Your local buddy request is now {status.ToString().ToLowerInvariant()}.",
+                LinkUrl = "/profile/me?tab=bookings",
+                SourceModule = "Profiles",
+                SourceEntityType = "BuddyBooking",
+                SourceEntityId = booking.Id
+            },
+            cancellationToken);
         return await MapBookingAsync(booking, cancellationToken);
     }
 
@@ -275,6 +304,19 @@ public sealed class BuddyEngagementService(
         booking.Status = BuddyBookingStatus.Cancelled;
         booking.UpdatedAtUtc = DateTime.UtcNow;
         await dbContext.SaveChangesAsync(cancellationToken);
+        await createNotificationHandler.HandleAsync(
+            new CreateNotificationCommand
+            {
+                UserId = booking.LocalBuddyUserId,
+                Type = NotificationType.Booking,
+                Title = "Buddy request cancelled",
+                Body = "A traveler cancelled their local buddy request.",
+                LinkUrl = "/profile/me?tab=buddy-schedule",
+                SourceModule = "Profiles",
+                SourceEntityType = "BuddyBooking",
+                SourceEntityId = booking.Id
+            },
+            cancellationToken);
         return await MapBookingAsync(booking, cancellationToken);
     }
 

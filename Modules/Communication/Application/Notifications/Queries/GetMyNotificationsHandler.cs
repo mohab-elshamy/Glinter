@@ -43,6 +43,9 @@ public class GetMyNotificationsHandler
         var unreadCount = await _notificationRepository.GetUnreadCountAsync(
             currentUserId,
             cancellationToken);
+        var totalCount = await _notificationRepository.GetCountAsync(
+            currentUserId,
+            cancellationToken);
 
         return new NotificationsPageResponseDto
         {
@@ -51,7 +54,8 @@ public class GetMyNotificationsHandler
                 .ToList(),
             UnreadCount = unreadCount,
             Page = page,
-            PageSize = pageSize
+            PageSize = pageSize,
+            TotalCount = totalCount
         };
     }
 

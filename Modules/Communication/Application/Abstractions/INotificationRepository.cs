@@ -23,6 +23,10 @@ public interface INotificationRepository
         Guid userId,
         CancellationToken cancellationToken = default);
 
+    Task<int> GetCountAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default);
+
     Task UpdateAsync(
         Notification notification,
         CancellationToken cancellationToken = default);

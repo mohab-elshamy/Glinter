@@ -5,6 +5,8 @@ using Glinter.Modules.Experiences.Application.Dtos;
 using Glinter.Modules.Experiences.Domain.Entities;
 using Glinter.Modules.Experiences.Domain.Enums;
 using Glinter.Modules.Experiences.Infrastructure.Persistence;
+using Glinter.Modules.Communication.Application.Notifications.Commands;
+using Glinter.Modules.Communication.Domain.Enums;
 using Glinter.Modules.IdentityAccess.Application.Abstractions;
 using Glinter.Modules.IdentityAccess.Domain.Constants;
 using Glinter.Modules.Profiles.Application.Abstractions;
@@ -19,17 +21,20 @@ public class ExperienceService
     private readonly ICurrentUserService _currentUserService;
     private readonly IProfilesReadService _profilesReadService;
     private readonly IRegionsPointLookupRepository _regionsPointLookupRepository;
+    private readonly CreateNotificationHandler _createNotificationHandler;
 
     public ExperienceService(
         ExperiencesDbContext dbContext,
         ICurrentUserService currentUserService,
         IProfilesReadService profilesReadService,
-        IRegionsPointLookupRepository regionsPointLookupRepository)
+        IRegionsPointLookupRepository regionsPointLookupRepository,
+        CreateNotificationHandler createNotificationHandler)
     {
         _dbContext = dbContext;
         _currentUserService = currentUserService;
         _profilesReadService = profilesReadService;
         _regionsPointLookupRepository = regionsPointLookupRepository;
+        _createNotificationHandler = createNotificationHandler;
     }
 
     public async Task<ExperienceResponse> CreateProviderExperienceAsync(
@@ -148,6 +153,22 @@ public class ExperienceService
         experience.IsActive = request.ModerationStatus != ExperienceModerationStatus.Rejected;
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+        if (experience.CreatedByUserId is Guid providerUserId)
+        {
+            var statusText = request.ModerationStatus.ToString().ToLowerInvariant();
+            await _createNotificationHandler.HandleAsync(
+                new CreateNotificationCommand
+                {
+                    UserId = providerUserId,
+                    Type = NotificationType.Moderation,
+                    Title = $"Experience {statusText}",
+                    Body = $"{experience.Name} was {statusText}. Open your provider dashboard for details.",
+                    LinkUrl = "/profile/me?tab=experiences",
+                    SourceModule = "Experiences",
+                    SourceEntityType = "Experience"
+                },
+                cancellationToken);
+        }
         return ToResponse(experience, DateTime.Now);
     }
 
@@ -400,6 +421,23 @@ public class ExperienceService
         };
         _dbContext.ExperienceBookings.Add(booking);
         await _dbContext.SaveChangesAsync(cancellationToken);
+        if (slot.Experience.CreatedByUserId is Guid providerUserId &&
+            providerUserId != userId)
+        {
+            await _createNotificationHandler.HandleAsync(
+                new CreateNotificationCommand
+                {
+                    UserId = providerUserId,
+                    Type = NotificationType.Booking,
+                    Title = "New experience booking",
+                    Body = $"{booking.TravelerName} requested {slot.Experience.Name}.",
+                    LinkUrl = "/profile/me?tab=experiences",
+                    SourceModule = "Experiences",
+                    SourceEntityType = "ExperienceBooking",
+                    SourceEntityId = booking.Id
+                },
+                cancellationToken);
+        }
         return ToBookingResponse(booking);
     }
 
@@ -462,6 +500,27 @@ public class ExperienceService
         booking.Status = ExperienceBookingStatus.Cancelled;
         booking.UpdatedAtUtc = DateTime.UtcNow;
         await _dbContext.SaveChangesAsync(cancellationToken);
+        var cancellationRecipient = booking.CreatedByUserId == userId
+            ? booking.Experience.CreatedByUserId
+            : booking.CreatedByUserId;
+        if (cancellationRecipient is Guid recipientUserId && recipientUserId != userId)
+        {
+            await _createNotificationHandler.HandleAsync(
+                new CreateNotificationCommand
+                {
+                    UserId = recipientUserId,
+                    Type = NotificationType.Booking,
+                    Title = "Experience booking cancelled",
+                    Body = $"The booking for {booking.Experience.Name} was cancelled.",
+                    LinkUrl = booking.CreatedByUserId == userId
+                        ? "/profile/me?tab=experiences"
+                        : "/profile/me?tab=bookings",
+                    SourceModule = "Experiences",
+                    SourceEntityType = "ExperienceBooking",
+                    SourceEntityId = booking.Id
+                },
+                cancellationToken);
+        }
         return ToBookingResponse(booking);
     }
 
@@ -491,6 +550,19 @@ public class ExperienceService
         booking.Status = status;
         booking.UpdatedAtUtc = DateTime.UtcNow;
         await _dbContext.SaveChangesAsync(cancellationToken);
+        await _createNotificationHandler.HandleAsync(
+            new CreateNotificationCommand
+            {
+                UserId = booking.CreatedByUserId,
+                Type = NotificationType.Booking,
+                Title = $"Experience booking {status.ToString().ToLowerInvariant()}",
+                Body = $"Your booking for {booking.Experience.Name} is now {status.ToString().ToLowerInvariant()}.",
+                LinkUrl = "/profile/me?tab=bookings",
+                SourceModule = "Experiences",
+                SourceEntityType = "ExperienceBooking",
+                SourceEntityId = booking.Id
+            },
+            cancellationToken);
         return ToBookingResponse(booking);
     }
 

@@ -57,6 +57,14 @@ public class NotificationRepository : INotificationRepository
             .CountAsync(x => x.UserId == userId && x.ReadAtUtc == null, cancellationToken);
     }
 
+    public async Task<int> GetCountAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default)
+    {
+        return await _dbContext.Notifications
+            .CountAsync(x => x.UserId == userId, cancellationToken);
+    }
+
     public async Task UpdateAsync(
         Notification notification,
         CancellationToken cancellationToken = default)

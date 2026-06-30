@@ -370,6 +370,16 @@ public sealed class StaysAndExperiencesTests : ApiTestBase
         using var bookingJson = await ReadJsonAsync(booking);
         var bookingId = bookingJson.RootElement.GetProperty("id").GetGuid();
         Assert.Equal(2700, bookingJson.RootElement.GetProperty("totalPrice").GetDecimal());
+        var ownerNotifications = await SendAsync(
+            HttpMethod.Get,
+            "/api/notifications?page=1&pageSize=20",
+            owner.Token);
+        ownerNotifications.EnsureSuccessStatusCode();
+        using var ownerNotificationsJson = await ReadJsonAsync(ownerNotifications);
+        Assert.Contains(
+            ownerNotificationsJson.RootElement.GetProperty("items").EnumerateArray(),
+            item => item.GetProperty("type").GetString() == "Booking" &&
+                    item.GetProperty("sourceEntityId").GetGuid() == bookingId);
 
         var ownerBookings = await SendAsync(
             HttpMethod.Get,
@@ -517,6 +527,16 @@ public sealed class StaysAndExperiencesTests : ApiTestBase
         using var bookingJson = await ReadJsonAsync(booking);
         var bookingId = bookingJson.RootElement.GetProperty("id").GetGuid();
         Assert.Equal(80, bookingJson.RootElement.GetProperty("totalPrice").GetDecimal());
+        var providerNotifications = await SendAsync(
+            HttpMethod.Get,
+            "/api/notifications?page=1&pageSize=20",
+            provider.Token);
+        providerNotifications.EnsureSuccessStatusCode();
+        using var providerNotificationsJson = await ReadJsonAsync(providerNotifications);
+        Assert.Contains(
+            providerNotificationsJson.RootElement.GetProperty("items").EnumerateArray(),
+            item => item.GetProperty("type").GetString() == "Booking" &&
+                    item.GetProperty("sourceEntityId").GetGuid() == bookingId);
 
         var managedAvailability = await SendAsync(
             HttpMethod.Get,

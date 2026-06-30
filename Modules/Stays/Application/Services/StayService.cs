@@ -4,6 +4,8 @@ using System.Text;
 using System.Text.Json;
 using Glinter.Modules.IdentityAccess.Application.Abstractions;
 using Glinter.Modules.IdentityAccess.Domain.Constants;
+using Glinter.Modules.Communication.Application.Notifications.Commands;
+using Glinter.Modules.Communication.Domain.Enums;
 using Glinter.Modules.Profiles.Application.Abstractions;
 using Glinter.Modules.Regions.Application.Abstractions;
 using Glinter.Modules.Stays.Application.Dtos;
@@ -20,17 +22,20 @@ public class StayService
     private readonly ICurrentUserService _currentUserService;
     private readonly IProfilesReadService _profilesReadService;
     private readonly IRegionsPointLookupRepository _regionsPointLookupRepository;
+    private readonly CreateNotificationHandler _createNotificationHandler;
 
     public StayService(
         StaysDbContext dbContext,
         ICurrentUserService currentUserService,
         IProfilesReadService profilesReadService,
-        IRegionsPointLookupRepository regionsPointLookupRepository)
+        IRegionsPointLookupRepository regionsPointLookupRepository,
+        CreateNotificationHandler createNotificationHandler)
     {
         _dbContext = dbContext;
         _currentUserService = currentUserService;
         _profilesReadService = profilesReadService;
         _regionsPointLookupRepository = regionsPointLookupRepository;
+        _createNotificationHandler = createNotificationHandler;
     }
 
     public async Task<StayResponse> CreateOwnerStayAsync(
@@ -219,6 +224,22 @@ public class StayService
 
         _dbContext.StayBookings.Add(booking);
         await _dbContext.SaveChangesAsync(cancellationToken);
+        if (stay.CreatedByUserId is Guid ownerUserId && ownerUserId != userId)
+        {
+            await _createNotificationHandler.HandleAsync(
+                new CreateNotificationCommand
+                {
+                    UserId = ownerUserId,
+                    Type = NotificationType.Booking,
+                    Title = "New stay booking",
+                    Body = $"{booking.GuestName} requested {stay.Name}.",
+                    LinkUrl = "/profile/me?tab=hotels",
+                    SourceModule = "Stays",
+                    SourceEntityType = "StayBooking",
+                    SourceEntityId = booking.Id
+                },
+                cancellationToken);
+        }
         return ToBookingResponse(booking);
     }
 
@@ -288,6 +309,27 @@ public class StayService
         booking.Status = StayBookingStatus.Cancelled;
         booking.UpdatedAtUtc = DateTime.UtcNow;
         await _dbContext.SaveChangesAsync(cancellationToken);
+        var cancellationRecipient = booking.CreatedByUserId == userId
+            ? booking.Stay.CreatedByUserId
+            : booking.CreatedByUserId;
+        if (cancellationRecipient is Guid recipientUserId && recipientUserId != userId)
+        {
+            await _createNotificationHandler.HandleAsync(
+                new CreateNotificationCommand
+                {
+                    UserId = recipientUserId,
+                    Type = NotificationType.Booking,
+                    Title = "Stay booking cancelled",
+                    Body = $"The booking for {booking.Stay.Name} was cancelled.",
+                    LinkUrl = booking.CreatedByUserId == userId
+                        ? "/profile/me?tab=hotels"
+                        : "/profile/me?tab=bookings",
+                    SourceModule = "Stays",
+                    SourceEntityType = "StayBooking",
+                    SourceEntityId = booking.Id
+                },
+                cancellationToken);
+        }
         return ToBookingResponse(booking);
     }
 
@@ -320,6 +362,19 @@ public class StayService
         booking.Status = status;
         booking.UpdatedAtUtc = DateTime.UtcNow;
         await _dbContext.SaveChangesAsync(cancellationToken);
+        await _createNotificationHandler.HandleAsync(
+            new CreateNotificationCommand
+            {
+                UserId = booking.CreatedByUserId,
+                Type = NotificationType.Booking,
+                Title = $"Stay booking {status.ToString().ToLowerInvariant()}",
+                Body = $"Your booking for {booking.Stay.Name} is now {status.ToString().ToLowerInvariant()}.",
+                LinkUrl = "/profile/me?tab=bookings",
+                SourceModule = "Stays",
+                SourceEntityType = "StayBooking",
+                SourceEntityId = booking.Id
+            },
+            cancellationToken);
         return ToBookingResponse(booking);
     }
 

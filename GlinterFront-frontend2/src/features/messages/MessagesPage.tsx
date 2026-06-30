@@ -21,6 +21,7 @@ import type {
   NotificationPreferencesDto,
 } from "@/shared/types/api";
 import type { LoadState } from "@/shared/types/async-state";
+import { getSafeNotificationLink } from "@/shared/lib/notification-links";
 
 interface SelectedBuddyState {
   userId?: string;
@@ -42,14 +43,23 @@ const MessagesPage = () => {
   const [messageInput, setMessageInput] = useState("");
   const [notifications, setNotifications] = useState<NotificationDto[]>([]);
   const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
+  const [notificationPage, setNotificationPage] = useState(1);
+  const notificationPageRef = useRef(1);
+  const [notificationTotalCount, setNotificationTotalCount] = useState(0);
+  const notificationPageSize = 20;
   const [preferences, setPreferences] = useState<NotificationPreferencesDto>();
   const [showPreferences, setShowPreferences] = useState(false);
   const [loadState, setLoadState] = useState<LoadState>({ status: "loading" });
   const realtimeRef = useRef<ChatRealtimeClient>();
+  const processedNotificationLinkRef = useRef("");
 
   useEffect(() => {
     selectedThreadIdRef.current = selectedThreadId;
   }, [selectedThreadId]);
+
+  useEffect(() => {
+    notificationPageRef.current = notificationPage;
+  }, [notificationPage]);
 
   const mergeMessage = useCallback((message: ChatMessageDto) => {
     setMessagesByThread((current) => {
@@ -91,16 +101,30 @@ const MessagesPage = () => {
     }
   }, [currentUserId, mergeMessage]);
 
+  const onRealtimeNotification = useCallback((notification: NotificationDto) => {
+    setNotificationUnreadCount((count) => count + 1);
+    setNotificationTotalCount((count) => count + 1);
+    if (notificationPageRef.current === 1) {
+      setNotifications((current) =>
+        current.some((item) => item.id === notification.id)
+          ? current
+          : [notification, ...current].slice(0, notificationPageSize),
+      );
+    }
+  }, []);
+
   const loadCommunication = useCallback(async () => {
     try {
       const [loadedThreads, notificationPage, loadedPreferences] = await Promise.all([
         chatApi.getThreads(),
-        notificationsApi.getNotifications(),
+        notificationsApi.getNotifications(1, notificationPageSize),
         notificationsApi.getPreferences(),
       ]);
       setThreads(loadedThreads);
       setNotifications(notificationPage.items);
       setNotificationUnreadCount(notificationPage.unreadCount);
+      setNotificationTotalCount(notificationPage.totalCount);
+      setNotificationPage(notificationPage.page);
       setPreferences(loadedPreferences);
       setLoadState({ status: "ready" });
       return loadedThreads;
@@ -116,6 +140,7 @@ const MessagesPage = () => {
     const realtime = new ChatRealtimeClient({
       messageReceived: onRealtimeMessage,
       threadRead: () => undefined,
+      notificationReceived: onRealtimeNotification,
       reconnected: () => toast.info("Chat reconnected."),
     });
     realtimeRef.current = realtime;
@@ -133,7 +158,7 @@ const MessagesPage = () => {
       realtimeRef.current = undefined;
       void realtime.stop();
     };
-  }, [loadCommunication, onRealtimeMessage]);
+  }, [loadCommunication, onRealtimeMessage, onRealtimeNotification]);
 
   useEffect(() => {
     const buddy = (location.state as { selectedBuddy?: SelectedBuddyState } | null)?.selectedBuddy;
@@ -169,6 +194,43 @@ const MessagesPage = () => {
       );
       await realtimeRef.current?.joinThread(threadId);
       await chatApi.markThreadAsRead(threadId);
+    } catch (error) {
+      toast.error(errorMessage(error));
+    }
+  };
+
+  useEffect(() => {
+    if (loadState.status !== "ready") return;
+    if (!location.search) {
+      processedNotificationLinkRef.current = "";
+      return;
+    }
+    const candidate = `/messages${location.search}`;
+    if (processedNotificationLinkRef.current === candidate) return;
+    const safeLink = getSafeNotificationLink(candidate);
+    const threadId = new URLSearchParams(location.search).get("thread");
+    processedNotificationLinkRef.current = candidate;
+    if (!safeLink || !threadId) {
+      toast.error("This notification link is invalid.");
+      navigate("/messages", { replace: true });
+      return;
+    }
+    if (!threads.some((thread) => thread.id === threadId)) {
+      toast.error("That conversation is unavailable.");
+      navigate("/messages", { replace: true });
+      return;
+    }
+    setActiveTab("messages");
+    void openThread(threadId);
+  }, [loadState.status, location.search, navigate, threads]);
+
+  const loadNotificationPage = async (page: number) => {
+    try {
+      const result = await notificationsApi.getNotifications(page, notificationPageSize);
+      setNotifications(result.items);
+      setNotificationUnreadCount(result.unreadCount);
+      setNotificationTotalCount(result.totalCount);
+      setNotificationPage(result.page);
     } catch (error) {
       toast.error(errorMessage(error));
     }
@@ -210,7 +272,11 @@ const MessagesPage = () => {
         return;
       }
     }
-    if (notification.linkUrl) navigate(notification.linkUrl);
+    if (notification.linkUrl) {
+      const safeLink = getSafeNotificationLink(notification.linkUrl);
+      if (safeLink) navigate(safeLink);
+      else toast.error("This notification link is invalid.");
+    }
   };
 
   const markAllNotificationsRead = async () => {
@@ -264,9 +330,14 @@ const MessagesPage = () => {
 
   useEffect(() => {
     window.dispatchEvent(new CustomEvent("communication-unread-change", {
-      detail: notificationUnreadCount + chatUnreadCount,
+      detail: notificationUnreadCount,
     }));
-  }, [chatUnreadCount, notificationUnreadCount]);
+  }, [notificationUnreadCount]);
+
+  const notificationTotalPages = Math.max(
+    1,
+    Math.ceil(notificationTotalCount / notificationPageSize),
+  );
 
   return (
     <div className="min-h-screen bg-background">
@@ -320,7 +391,12 @@ const MessagesPage = () => {
         ) : activeTab === "notifications" ? (
           <section className="card-glass p-5">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="font-semibold">Notifications</h2>
+              <div>
+                <h2 className="font-semibold">Notifications</h2>
+                <p className="text-[11px] text-muted-foreground">
+                  {notificationTotalCount} total · page {notificationPage} of {notificationTotalPages}
+                </p>
+              </div>
               {notificationUnreadCount > 0 && <button onClick={() => void markAllNotificationsRead()} className="text-xs text-accent"><CheckCheck className="mr-1 inline h-3 w-3" /> Mark all read</button>}
             </div>
             <div className="space-y-2">
@@ -334,6 +410,29 @@ const MessagesPage = () => {
                 </button>
               ))}
             </div>
+            {notificationTotalPages > 1 && (
+              <nav aria-label="Notification pages" className="mt-5 flex items-center justify-center gap-3">
+                <button
+                  type="button"
+                  disabled={notificationPage <= 1}
+                  onClick={() => void loadNotificationPage(notificationPage - 1)}
+                  className="rounded-lg border border-border px-3 py-2 text-xs disabled:opacity-40"
+                >
+                  Previous
+                </button>
+                <span className="text-xs text-muted-foreground">
+                  Page {notificationPage} of {notificationTotalPages}
+                </span>
+                <button
+                  type="button"
+                  disabled={notificationPage >= notificationTotalPages}
+                  onClick={() => void loadNotificationPage(notificationPage + 1)}
+                  className="rounded-lg border border-border px-3 py-2 text-xs disabled:opacity-40"
+                >
+                  Next
+                </button>
+              </nav>
+            )}
           </section>
         ) : selectedThread ? (
           <section className="card-glass flex h-[70vh] flex-col overflow-hidden">

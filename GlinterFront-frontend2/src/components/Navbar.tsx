@@ -5,7 +5,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { authStorage } from "@/shared/lib/auth";
 import { authApi } from "@/shared/services/api-auth";
 import { getRoleHome } from "@/shared/lib/auth-routing";
-import { chatApi, notificationsApi } from "@/shared/services/api-communication";
+import { notificationsApi } from "@/shared/services/api-communication";
+import { ChatRealtimeClient } from "@/shared/services/chat-realtime";
 
 const navItems = [
   { path: "/explore", label: "Explore", icon: Compass },
@@ -23,7 +24,7 @@ const Navbar = ({ solid }: { solid?: boolean }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(() => authStorage.isAuthenticated());
   const [isAdmin, setIsAdmin] = useState(() => authStorage.isAdmin());
-  const [communicationUnread, setCommunicationUnread] = useState(0);
+  const [notificationUnread, setNotificationUnread] = useState(0);
   const accountHome = getRoleHome(authStorage.getUser()?.roles ?? []);
 
   useEffect(() => {
@@ -41,25 +42,33 @@ const Navbar = ({ solid }: { solid?: boolean }) => {
 
   useEffect(() => {
     if (!isLoggedIn) {
-      setCommunicationUnread(0);
+      setNotificationUnread(0);
       return;
     }
-    Promise.all([notificationsApi.getNotifications(1, 1), chatApi.getThreads()])
-      .then(([notificationPage, threads]) => {
-        setCommunicationUnread(
-          notificationPage.unreadCount +
-          threads.reduce((total, thread) => total + thread.unreadCount, 0),
-        );
+    notificationsApi.getNotifications(1, 1)
+      .then((notificationPage) => {
+        setNotificationUnread(notificationPage.unreadCount);
       })
       .catch((error: unknown) => {
-        console.error("Could not load communication unread count.", error);
+        console.error("Could not load notification unread count.", error);
       });
 
     const updateUnread = (event: Event) => {
-      setCommunicationUnread((event as CustomEvent<number>).detail);
+      setNotificationUnread((event as CustomEvent<number>).detail);
     };
     window.addEventListener("communication-unread-change", updateUnread);
-    return () => window.removeEventListener("communication-unread-change", updateUnread);
+    const realtime = new ChatRealtimeClient({
+      notificationReceived: () => {
+        setNotificationUnread((count) => count + 1);
+      },
+    });
+    void realtime.start().catch((error: unknown) => {
+      console.error("Realtime notifications unavailable.", error);
+    });
+    return () => {
+      window.removeEventListener("communication-unread-change", updateUnread);
+      void realtime.stop();
+    };
   }, [isLoggedIn]);
 
   useEffect(() => {
@@ -102,9 +111,9 @@ const Navbar = ({ solid }: { solid?: boolean }) => {
                 >
                   <item.icon className="w-4 h-4" />
                   {item.label}
-                  {item.path === "/messages" && communicationUnread > 0 && (
+                  {item.path === "/messages" && notificationUnread > 0 && (
                     <span className="rounded-full bg-accent px-1.5 py-0.5 text-[10px] text-accent-foreground">
-                      {communicationUnread}
+                      {notificationUnread}
                     </span>
                   )}
                 </Link>
@@ -176,9 +185,9 @@ const Navbar = ({ solid }: { solid?: boolean }) => {
                   >
                     <item.icon className="w-5 h-5" />
                     {item.label}
-                    {item.path === "/messages" && communicationUnread > 0 && (
+                    {item.path === "/messages" && notificationUnread > 0 && (
                       <span className="ml-auto rounded-full bg-accent px-2 py-0.5 text-[10px] text-accent-foreground">
-                        {communicationUnread}
+                        {notificationUnread}
                       </span>
                     )}
                   </Link>

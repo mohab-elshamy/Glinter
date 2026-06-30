@@ -44,6 +44,16 @@ public sealed class AdministrationTests : ApiTestBase
             adminToken,
             new { verificationStatus = "Approved" });
         approveBuddy.EnsureSuccessStatusCode();
+        var buddyNotifications = await SendAsync(
+            HttpMethod.Get,
+            "/api/notifications?page=1&pageSize=20",
+            buddy.Token);
+        buddyNotifications.EnsureSuccessStatusCode();
+        using var buddyNotificationsJson = await ReadJsonAsync(buddyNotifications);
+        Assert.Contains(
+            buddyNotificationsJson.RootElement.GetProperty("items").EnumerateArray(),
+            item => item.GetProperty("type").GetString() == "Moderation" &&
+                    item.GetProperty("sourceEntityType").GetString() == "LocalBuddyVerification");
 
         await UpsertProviderAsync(provider);
         var createExperience = await SendAsync(
@@ -87,6 +97,16 @@ public sealed class AdministrationTests : ApiTestBase
             new { moderationStatus = "Approved" });
         approveExperience.EnsureSuccessStatusCode();
         (await Client.GetAsync($"/api/experiences/{experienceId}")).EnsureSuccessStatusCode();
+        var providerNotifications = await SendAsync(
+            HttpMethod.Get,
+            "/api/notifications?page=1&pageSize=20",
+            provider.Token);
+        providerNotifications.EnsureSuccessStatusCode();
+        using var providerNotificationsJson = await ReadJsonAsync(providerNotifications);
+        Assert.Contains(
+            providerNotificationsJson.RootElement.GetProperty("items").EnumerateArray(),
+            item => item.GetProperty("type").GetString() == "Moderation" &&
+                    item.GetProperty("sourceEntityType").GetString() == "Experience");
 
         var audit = await SendAsync(
             HttpMethod.Get,

@@ -325,6 +325,16 @@ public sealed class RegionsAndProfilesTests : ApiTestBase
         var bookingId = bookingJson.RootElement.GetProperty("id").GetGuid();
         Assert.Equal("Pending", bookingJson.RootElement.GetProperty("status").GetString());
         Assert.Equal(75, bookingJson.RootElement.GetProperty("totalPrice").GetDecimal());
+        var buddyNotifications = await SendAsync(
+            HttpMethod.Get,
+            "/api/notifications?page=1&pageSize=20",
+            buddy.Token);
+        buddyNotifications.EnsureSuccessStatusCode();
+        using var buddyNotificationsJson = await ReadJsonAsync(buddyNotifications);
+        Assert.Contains(
+            buddyNotificationsJson.RootElement.GetProperty("items").EnumerateArray(),
+            item => item.GetProperty("type").GetString() == "Booking" &&
+                    item.GetProperty("sourceEntityId").GetGuid() == bookingId);
 
         var duplicate = await SendAsync(
             HttpMethod.Post,

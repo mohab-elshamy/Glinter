@@ -9,11 +9,13 @@ import { authStorage } from "@/shared/lib/auth";
 import type {
   ChatMessageEventDto,
   ChatThreadReadEventDto,
+  NotificationDto,
 } from "@/shared/types/api";
 
 export interface ChatRealtimeHandlers {
-  messageReceived: (message: ChatMessageEventDto) => void;
-  threadRead: (event: ChatThreadReadEventDto) => void;
+  messageReceived?: (message: ChatMessageEventDto) => void;
+  threadRead?: (event: ChatThreadReadEventDto) => void;
+  notificationReceived?: (notification: NotificationDto) => void;
   reconnected?: () => void;
 }
 
@@ -30,8 +32,15 @@ export class ChatRealtimeClient {
       .configureLogging(LogLevel.Warning)
       .build();
 
-    this.connection.on("MessageReceived", handlers.messageReceived);
-    this.connection.on("ThreadRead", handlers.threadRead);
+    if (handlers.messageReceived) {
+      this.connection.on("MessageReceived", handlers.messageReceived);
+    }
+    if (handlers.threadRead) {
+      this.connection.on("ThreadRead", handlers.threadRead);
+    }
+    if (handlers.notificationReceived) {
+      this.connection.on("NotificationCreated", handlers.notificationReceived);
+    }
     this.connection.onreconnected(async () => {
       const threadIds = [...this.joinedThreadIds];
       this.joinedThreadIds.clear();

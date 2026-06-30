@@ -683,6 +683,7 @@ export interface NotificationsPageDto {
   unreadCount: number;
   page: number;
   pageSize: number;
+  totalCount: number;
 }
 
 export interface NotificationPreferencesDto {
