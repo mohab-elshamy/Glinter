@@ -13,28 +13,38 @@ public class SafetyIndexHostedService(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var startupDelay = TimeSpan.FromSeconds(Math.Max(0, options.HostedServiceStartupDelaySeconds));
-        if (startupDelay > TimeSpan.Zero)
+        try
         {
-            await Task.Delay(startupDelay, stoppingToken);
-        }
+            var startupDelay = TimeSpan.FromSeconds(
+                Math.Max(0, options.HostedServiceStartupDelaySeconds));
+            if (startupDelay > TimeSpan.Zero)
+            {
+                await Task.Delay(startupDelay, stoppingToken);
+            }
 
-        await RunInitialHistoricalCollectionAsync(stoppingToken);
+            await RunInitialHistoricalCollectionAsync(stoppingToken);
 
-        if (!options.EnableWeeklyService)
-        {
-            logger.LogInformation("Weekly safety index service is disabled by configuration");
-            return;
-        }
+            if (!options.EnableWeeklyService)
+            {
+                logger.LogInformation(
+                    "Weekly safety index service is disabled by configuration");
+                return;
+            }
 
-        await RunWeeklyRefreshAsync(stoppingToken);
-
-        var interval = TimeSpan.FromHours(Math.Max(1, options.WeeklyRefreshIntervalHours));
-        using var timer = new PeriodicTimer(interval);
-
-        while (await timer.WaitForNextTickAsync(stoppingToken))
-        {
             await RunWeeklyRefreshAsync(stoppingToken);
+
+            var interval = TimeSpan.FromHours(
+                Math.Max(1, options.WeeklyRefreshIntervalHours));
+            using var timer = new PeriodicTimer(interval);
+
+            while (await timer.WaitForNextTickAsync(stoppingToken))
+            {
+                await RunWeeklyRefreshAsync(stoppingToken);
+            }
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            logger.LogDebug("Safety index hosted service stopped");
         }
     }
 

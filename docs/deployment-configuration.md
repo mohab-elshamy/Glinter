@@ -45,6 +45,26 @@ shape. Prefer environment variables in deployed environments:
 2. Use different JWT signing keys and admin passwords in every environment.
 3. Set only the real frontend HTTPS origins in CORS.
 4. Confirm the request-size limit matches the maximum accepted GeoJSON upload.
+
+## Safety Index
+
+Never store the Groq API key in `appsettings*.json`. For local development, use
+.NET User Secrets:
+
+```powershell
+dotnet user-secrets set "SafetyIndex:GroqApiKey" "<fresh-groq-key>" --project Glinter.csproj
+```
+
+For deployed environments, provide `SafetyIndex__GroqApiKey` through the
+platform secret store. Import the bundled Egypt boundaries in ADM0 → ADM3 order
+from the admin Regions screen before enabling collection. The backend endpoint
+`POST /api/admin/regions/import/all-local` performs that ordered import.
+
+`SafetyIndex:EnableWeeklyService` controls current-score refreshes.
+`SafetyIndex:RunInitialHistoricalCollectionOnStartup` controls the one-time
+historical collection. Keep both disabled until the region import and Groq
+secret are ready, then enable them deliberately to avoid unexpected API quota
+usage.
 5. Tune global and Communication rate limits for the expected traffic.
 6. Run `docs/postgres-prerequisites.sql` once per database using a role permitted
    to install `pg_trgm`.

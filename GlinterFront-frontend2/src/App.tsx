@@ -112,16 +112,7 @@ const App = () => (
           <Route path="/local-buddies" element={<LocalBuddies />} />
           <Route path="/messages" element={<RequireAuth><Messages /></RequireAuth>} />
           <Route path="/about" element={<About />} />
-          <Route
-            path="/where-to-go"
-            element={(
-              <RequireAuth>
-                <RequireRole roles={["Traveler"]}>
-                  <RequireProfile><WhereToGo /></RequireProfile>
-                </RequireRole>
-              </RequireAuth>
-            )}
-          />
+          <Route path="/where-to-go" element={<WhereToGo />} />
           <Route path="/where-to-stay" element={<WhereToStay />} />
           <Route
             path="/dashboard"
