@@ -5,27 +5,61 @@ import { motion } from "framer-motion";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { toast } from "sonner";
+import { profilesApi } from "@/shared/services/api-profiles";
+
+interface ProfileBuddy {
+  id: number;
+  userId: string;
+  name: string;
+  location: string;
+  rating: number;
+  reviews: number;
+  price: string;
+  languages: string;
+  interests: string[];
+  verified: boolean;
+  photo: string;
+  bio: string;
+}
 
 const ProfilePage = () => {
   const { id } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const [buddy, setBuddy] = useState<any>(null);
+  const [buddy, setBuddy] = useState<ProfileBuddy | null>(null);
   const [isLiked, setIsLiked] = useState(false);
 
   useEffect(() => {
     const buddyFromState = location.state?.buddy;
     if (buddyFromState) {
-      setBuddy(buddyFromState);
+      setBuddy(buddyFromState as ProfileBuddy);
       const savedLikes = localStorage.getItem("likedBuddies");
       if (savedLikes) {
         const likes = JSON.parse(savedLikes);
         setIsLiked(likes.includes(buddyFromState.id));
       }
+    } else if (id) {
+      profilesApi.getLocalBuddy(id)
+        .then((profile) => setBuddy({
+          id: 0,
+          userId: profile.userId,
+          name: profile.displayName,
+          location: profile.city,
+          rating: profile.rating,
+          reviews: profile.reviewsCount,
+          price: "Free",
+          languages: profile.languages || "Not specified",
+          interests: profile.interests.map((interest) => interest.name),
+          verified: profile.verificationStatus === "Approved",
+          photo: profile.profileImageUrl || `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(profile.displayName)}`,
+          bio: profile.bio || "",
+        }))
+        .catch((error: unknown) => toast.error(error instanceof Error ? error.message : "Could not load buddy profile."));
     }
   }, [id, location.state]);
 
   const handleLike = () => {
+    if (!buddy) return;
     const savedLikes = localStorage.getItem("likedBuddies");
     let likes = savedLikes ? JSON.parse(savedLikes) : [];
 
@@ -42,17 +76,12 @@ const ProfilePage = () => {
   };
 
   const handleConnect = () => {
-    localStorage.setItem("selectedBuddy", JSON.stringify({
-      id: buddy.name,
-      name: buddy.name,
-      photo: buddy.photo,
-      status: "online",
-    }));
-
+    if (!buddy) return;
     toast.success(`Connecting with ${buddy.name}...`);
     navigate("/messages", {
       state: {
         selectedBuddy: {
+          userId: buddy.userId,
           name: buddy.name,
           photo: buddy.photo,
           status: "online",

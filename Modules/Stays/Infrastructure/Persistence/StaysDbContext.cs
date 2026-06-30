@@ -15,6 +15,7 @@ public class StaysDbContext : DbContext
     public DbSet<StayReviewsPerRating> StayReviewsPerRatings => Set<StayReviewsPerRating>();
     public DbSet<StayBookingPlatform> StayBookingPlatforms => Set<StayBookingPlatform>();
     public DbSet<StayReview> StayReviews => Set<StayReview>();
+    public DbSet<StayBooking> StayBookings => Set<StayBooking>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

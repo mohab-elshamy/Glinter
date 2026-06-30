@@ -4,6 +4,7 @@ import type {
   LocalBuddyListItemResponse,
   LocalBuddyProfileResponse,
   TravelerProfileRequest,
+  InterestResponse,
 } from "@/shared/types/api";
 
 export interface BusinessProfileResponse {
@@ -45,6 +46,9 @@ export const profilesApi = {
   getMyProfile: () =>
     request<MyProfileResponse>("/profiles/me"),
 
+  getInterests: () =>
+    request<InterestResponse[]>("/interests"),
+
   updateTravelerProfile: (data: TravelerProfileRequest) =>
     request<TravelerProfileResponse>("/profiles/traveler", {
       method: "PUT",
@@ -67,6 +71,12 @@ export const profilesApi = {
     request<BusinessProfileResponse>("/profiles/experience-provider", {
       method: "PUT",
       body: data,
+    }),
+
+  updateProfileImage: (profileImageUrl: string) =>
+    request<MyProfileResponse>("/profiles/image", {
+      method: "PATCH",
+      body: { profileImageUrl },
     }),
 
   getLocalBuddies: () =>

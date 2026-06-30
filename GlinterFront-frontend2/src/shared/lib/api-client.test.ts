@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { apiActivity } from "./api-activity";
-import { ApiError, request } from "./api-client";
+import { request } from "./api-client";
 import { authStorage } from "./auth";
 
 const problemResponse = (
@@ -45,7 +45,7 @@ describe("API client", () => {
     vi.mocked(fetch).mockRejectedValueOnce(new TypeError("Failed to fetch"));
 
     await expect(request("/health")).rejects.toEqual(
-      expect.objectContaining<ApiError>({
+      expect.objectContaining({
         status: 0,
         errorCode: "network_error",
       }),

@@ -34,6 +34,21 @@ public sealed class CommunicationTests : ApiTestBase
         using var firstThreadJson = await ReadJsonAsync(firstThread);
         var threadId = firstThreadJson.RootElement.GetProperty("id").GetGuid();
 
+        var threads = await SendAsync(
+            HttpMethod.Get,
+            "/api/chat/threads",
+            userA.Token);
+        threads.EnsureSuccessStatusCode();
+        using var threadsJson = await ReadJsonAsync(threads);
+        var listedThread = Assert.Single(
+            threadsJson.RootElement.EnumerateArray(),
+            item => item.GetProperty("id").GetGuid() == threadId);
+        Assert.Equal(
+            $"Integration Traveler",
+            listedThread.GetProperty("participantDisplayNames")
+                .GetProperty(userB.UserId.ToString())
+                .GetString());
+
         var duplicateThread = await SendAsync(
             HttpMethod.Post,
             "/api/chat/threads/direct",

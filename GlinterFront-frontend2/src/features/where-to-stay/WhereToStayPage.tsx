@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Search, Star, MapPin, Wifi, Car, Sparkles, Shield, DollarSign, Armchair, TrendingUp, X, UtensilsCrossed, SlidersHorizontal } from "lucide-react";
+import { Star, MapPin, Wifi, Car, Sparkles, UtensilsCrossed, SlidersHorizontal } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -8,10 +8,12 @@ import SearchBar from "./components/SearchBar";
 import HeatmapPanel from "./components/HeatmapPanel";
 import FiltersPanel from "./components/FiltersPanel";
 import { useWhereToStay } from "./hooks";
-import { allHotels } from "./data";
 import { computePrice } from "./pricing";
 import hotelImg from "@/assets/hotel-1.jpg";
 import { toast } from "sonner";
+import { authStorage } from "@/shared/lib/auth";
+import type { Hotel } from "./types";
+import { staysApi } from "@/shared/services/api-stays";
 
 const WhereToStayPage = () => {
   const {
@@ -19,16 +21,12 @@ const WhereToStayPage = () => {
     checkin, setCheckin,
     checkout, setCheckout,
     guests, setGuests,
-    hasSearched,
-    selectedNeighborhood, setSelectedNeighborhood,
     maxPrice, setMaxPrice,
-    minSafety, setMinSafety,
-    minComfort, setMinComfort,
     minRating, setMinRating,
-    backgroundLayer, setBackgroundLayer,
-    isComparing, toggleComparisonMode,
-    comparisonNeighborhoods, toggleNeighborhoodForComparison, removeFromComparison,
     selectedHotel, setSelectedHotel,
+    selectHotel,
+    staysState,
+    isLoadingStays,
     handleSearch,
     filteredHotels,
     mapData,
@@ -38,42 +36,37 @@ const WhereToStayPage = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [showMarkers, setShowMarkers] = useState(true);
 
-  const handleBookHotel = (hotel: typeof filteredHotels[number]) => {
+  const handleBookHotel = async (hotel: typeof filteredHotels[number]) => {
+    if (!authStorage.isAuthenticated()) {
+      toast.error("Sign in as a traveler to book this stay.");
+      return;
+    }
+    if (!hotel.id) {
+      toast.error("This stay is not available for backend booking.");
+      return;
+    }
+    if (!checkin || !checkout) {
+      toast.error("Choose check-in and check-out dates first.");
+      return;
+    }
+
     const p = computePrice(hotel.price, checkin, checkout);
-    const totalAmount = p.nights > 0 ? p.total : hotel.price;
-    const bookingDate = checkin || new Date().toISOString().split("T")[0];
-    const hotelId = hotel.name.toLowerCase().replace(/\s+/g, "-");
+    if (p.nights < 1) {
+      toast.error("Check-out must be after check-in.");
+      return;
+    }
 
-    const consumerBooking = {
-      id: `booking-${Date.now()}`,
-      type: "hotel" as const,
-      name: hotel.name,
-      date: bookingDate,
-      status: "confirmed" as const,
-      amount: totalAmount,
-    };
-
-    const ownerBooking = {
-      id: `hotel-booking-${Date.now()}`,
-      hotelId,
-      hotelName: hotel.name,
-      guestName: localStorage.getItem("profile_displayName") || "Guest",
-      checkIn: checkin || bookingDate,
-      checkOut: checkout || bookingDate,
-      guestCount: guests,
-      totalPrice: totalAmount,
-      status: "pending" as const,
-    };
-
-    const existingConsumer = JSON.parse(localStorage.getItem("my_bookings") || "[]");
-    existingConsumer.push(consumerBooking);
-    localStorage.setItem("my_bookings", JSON.stringify(existingConsumer));
-
-    const existingOwner = JSON.parse(localStorage.getItem("my_hotel_bookings") || "[]");
-    existingOwner.push(ownerBooking);
-    localStorage.setItem("my_hotel_bookings", JSON.stringify(existingOwner));
-
-    toast.success(`"${hotel.name}" booked successfully! 🎉`);
+    try {
+      await staysApi.createBooking(hotel.id, {
+        checkInDate: checkin,
+        checkOutDate: checkout,
+        guestCount: guests,
+      });
+      toast.success(`"${hotel.name}" booking requested.`);
+      setSelectedHotel(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not create booking.");
+    }
   };
 
   return (
@@ -85,13 +78,7 @@ const WhereToStayPage = () => {
         <div className="absolute inset-0 z-0">
           <HeatmapPanel
             mapData={mapData}
-            backgroundLayer={backgroundLayer}
-            selectedNeighborhood={selectedNeighborhood}
-            isComparing={isComparing}
-            comparisonNeighborhoods={comparisonNeighborhoods}
-            filteredHotels={filteredHotels}
-            onSelectNeighborhood={setSelectedNeighborhood}
-            onToggleNeighborhoodForComparison={toggleNeighborhoodForComparison}
+            onSelectHotel={(hotel) => void selectHotel(hotel)}
             showMarkers={showMarkers}
             height="calc(100vh - 5rem)"
           />
@@ -144,14 +131,8 @@ const WhereToStayPage = () => {
               <FiltersPanel
                 maxPrice={maxPrice}
                 onMaxPriceChange={setMaxPrice}
-                minSafety={minSafety}
-                onMinSafetyChange={setMinSafety}
-                minComfort={minComfort}
-                onMinComfortChange={setMinComfort}
                 minRating={minRating}
                 onMinRatingChange={setMinRating}
-                backgroundLayer={backgroundLayer}
-                onBackgroundLayerChange={setBackgroundLayer}
               />
             </div>
             {showFilters && (
@@ -162,14 +143,8 @@ const WhereToStayPage = () => {
                 <FiltersPanel
                   maxPrice={maxPrice}
                   onMaxPriceChange={setMaxPrice}
-                  minSafety={minSafety}
-                  onMinSafetyChange={setMinSafety}
-                  minComfort={minComfort}
-                  onMinComfortChange={setMinComfort}
                   minRating={minRating}
                   onMinRatingChange={setMinRating}
-                  backgroundLayer={backgroundLayer}
-                  onBackgroundLayerChange={setBackgroundLayer}
                 />
               </div>
             )}
@@ -213,54 +188,28 @@ const WhereToStayPage = () => {
               </h3>
               <p className="text-gray-400 text-sm">Showing top matches based on your preferences</p>
             </div>
-            <span className="text-sm text-gray-500">{filteredHotels.length} hotels found</span>
+            <span className="text-sm text-gray-500">{isLoadingStays ? "Loading stays…" : `${filteredHotels.length} hotels found`}</span>
           </div>
 
-          {/* Comparison mode toggle & table */}
-          <div className="mb-8">
-            <button
-              onClick={toggleComparisonMode}
-              className={`px-6 py-2.5 rounded-xl border text-xs font-bold transition ${
-                isComparing
-                  ? "bg-brand-purple/20 border-brand-purple/50 text-brand-purple"
-                  : "bg-brand-purple text-white border-brand-purple hover:bg-brand-purple/90"
-              }`}
-            >
-              {isComparing ? "Exit Comparison Mode" : "Compare Neighborhoods"}
-            </button>
-            {isComparing && (
-              <p className="text-xs text-gray-500 mt-2">
-                Click neighborhoods on the map to add them to the comparison table below.
-              </p>
-            )}
-            {isComparing && comparisonNeighborhoods.length > 0 && (
-              <div className="mt-4">
-                <ComparisonTable
-                  neighborhoods={comparisonNeighborhoods}
-                  onRemove={removeFromComparison}
-                />
-              </div>
-            )}
-          </div>
+          {staysState.status === "error" && (
+            <div className="mb-8 rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-300">
+              {staysState.message}
+            </div>
+          )}
+
+          {staysState.status === "ready" && filteredHotels.length === 0 && (
+            <div className="card-glass mb-8 p-8 text-center text-sm text-gray-400">
+              No stays match the current search and filters.
+            </div>
+          )}
 
           {filteredHotels.length > 0 && (
             <HotelGrid
               hotels={filteredHotels}
               checkin={checkin}
               checkout={checkout}
-              onSelectHotel={setSelectedHotel}
+              onSelectHotel={(hotel) => void selectHotel(hotel)}
             />
-          )}
-
-          {filteredHotels.length === 0 && (
-            <motion.div
-              className="liquid-glass rounded-2xl p-10 text-center mb-10"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-            >
-              <Search className="w-10 h-10 text-gray-400 mx-auto mb-3" />
-              <p className="text-gray-400">No hotels match your filters. Try adjusting your search criteria.</p>
-            </motion.div>
           )}
 
         </div>
@@ -272,91 +221,13 @@ const WhereToStayPage = () => {
   );
 };
 
-const ComparisonTable = ({
-  neighborhoods,
-  onRemove,
-}: {
-  neighborhoods: { name: string; safety: number; price: number; comfort: number }[];
-  onRemove: (name: string) => void;
-}) => {
-  const allHotelsLocal = allHotels;
-  return (
-    <div className="liquid-glass rounded-2xl p-3 md:p-5">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-bold flex items-center gap-2">
-          <TrendingUp className="w-5 h-5 text-brand-purple" />
-          Neighborhood Comparison ({neighborhoods.length}/4)
-        </h2>
-        <span className="text-xs text-gray-400">Click neighborhoods on the map to add more</span>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-white/10">
-              <th className="text-left py-2 px-3 font-semibold text-gray-300">Neighborhood</th>
-              <th className="text-center py-2 px-3 font-semibold text-gray-300"><Shield className="w-4 h-4 mx-auto mb-1 text-green-400" />Safety</th>
-              <th className="text-center py-2 px-3 font-semibold text-gray-300"><DollarSign className="w-4 h-4 mx-auto mb-1 text-brand-gold" />Price/night</th>
-              <th className="text-center py-2 px-3 font-semibold text-gray-300"><Armchair className="w-4 h-4 mx-auto mb-1 text-brand-teal" />Comfort</th>
-              <th className="text-center py-2 px-3 font-semibold text-gray-300">Hotels</th>
-              <th className="text-center py-2 px-3 font-semibold text-gray-300">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {neighborhoods.map((n) => {
-              const hotelsInArea = allHotelsLocal.filter((h) => h.area === n.name);
-              const prices = hotelsInArea.map(h => h.price);
-              const minPrice = prices.length > 0 ? Math.min(...prices) : null;
-              const maxPrice = prices.length > 0 ? Math.max(...prices) : null;
-              return (
-                <tr key={n.name} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                  <td className="py-3 px-3 font-semibold">{n.name}</td>
-                  <td className="text-center py-3 px-3">
-                    <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
-                      n.safety >= 85 ? "bg-green-500/20 text-green-400" :
-                      n.safety >= 70 ? "bg-brand-gold/20 text-brand-gold" :
-                      "bg-red-500/20 text-red-400"
-                    }`}>{n.safety}%</span>
-                  </td>
-                  <td className="text-center py-3 px-3">
-                    <span className="text-xs font-medium text-brand-gold">
-                      {minPrice !== null ? (minPrice === maxPrice ? `$${minPrice}` : `$${minPrice} - $${maxPrice}`) : "—"}
-                    </span>
-                  </td>
-                  <td className="text-center py-3 px-3">
-                    <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
-                      n.comfort >= 85 ? "bg-green-500/20 text-green-400" :
-                      n.comfort >= 70 ? "bg-brand-gold/20 text-brand-gold" :
-                      "bg-red-500/20 text-red-400"
-                    }`}>{n.comfort}%</span>
-                  </td>
-                  <td className="text-center py-3 px-3 text-gray-400">{hotelsInArea.length}</td>
-                  <td className="text-center py-3 px-3">
-                    <button onClick={() => onRemove(n.name)} className="text-red-400 hover:text-red-300 transition-colors" title="Remove from comparison">
-                      <X className="w-4 h-4" />
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-      {neighborhoods.length < 4 && (
-        <p className="text-xs text-gray-500 mt-3 text-center">
-          Click up to {4 - neighborhoods.length} more neighborhood{4 - neighborhoods.length > 1 ? "s" : ""} on the map to compare
-        </p>
-      )}
-    </div>
-  );
-};
-
 const HotelGrid = ({
   hotels, checkin, checkout, onSelectHotel,
 }: {
-  hotels: { name: string; area: string; rating: number; reviews: number; price: number; comfort: number; safety: number; amenities: string[] }[];
+  hotels: Hotel[];
   checkin: string;
   checkout: string;
-  onSelectHotel: (h: { name: string; area: string; rating: number; reviews: number; price: number; comfort: number; safety: number; amenities: string[] }) => void;
+  onSelectHotel: (h: Hotel) => void;
 }) => {
   if (hotels.length === 0) return null;
 
@@ -377,7 +248,7 @@ const HotelGrid = ({
               className="liquid-glass rounded-2xl overflow-hidden group hover:-translate-y-1 transition duration-300 flex flex-col"
             >
               <div className="relative h-56 shrink-0">
-                <img src={hotelImg} alt={h.name} className="w-full h-full object-cover" />
+                <img src={h.image || hotelImg} alt={h.name} className="w-full h-full object-cover" />
                 <div className={`absolute top-3 left-3 ${matchPercent >= 85 ? 'bg-[#0EA5E9]' : 'bg-[#8A2BE2]'} text-white px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1 shadow-lg`}>
                   <Sparkles className="w-3.5 h-3.5" /> {matchPercent}% Match
                 </div>

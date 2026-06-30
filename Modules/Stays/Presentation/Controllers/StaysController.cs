@@ -37,6 +37,15 @@ public class StaysController : ControllerBase
         return Ok(result);
     }
 
+    [Authorize(
+        AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme,
+        Roles = RoleNames.HotelOwner + "," + RoleNames.Admin)]
+    [HttpGet("mine")]
+    public async Task<IActionResult> GetMine(CancellationToken cancellationToken)
+    {
+        return Ok(await _stayService.GetMyStaysAsync(cancellationToken));
+    }
+
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetById(int id, CancellationToken cancellationToken)
     {
@@ -100,6 +109,85 @@ public class StaysController : ControllerBase
         catch (InvalidOperationException ex)
         {
             return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [Authorize(
+        AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme,
+        Roles = RoleNames.HotelOwner + "," + RoleNames.Admin)]
+    [HttpPut("{id:int}")]
+    public async Task<IActionResult> Update(
+        int id,
+        [FromBody] UpdateStayRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _stayService.UpdateOwnerStayAsync(id, request, cancellationToken);
+            return result is null ? NotFound(new { message = "Stay not found." }) : Ok(result);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+        }
+    }
+
+    [Authorize(
+        AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme,
+        Roles = RoleNames.HotelOwner + "," + RoleNames.Admin)]
+    [HttpPatch("{id:int}/activate")]
+    public Task<IActionResult> Activate(int id, CancellationToken cancellationToken) =>
+        SetActive(id, true, cancellationToken);
+
+    [Authorize(
+        AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme,
+        Roles = RoleNames.HotelOwner + "," + RoleNames.Admin)]
+    [HttpPatch("{id:int}/deactivate")]
+    public Task<IActionResult> Deactivate(int id, CancellationToken cancellationToken) =>
+        SetActive(id, false, cancellationToken);
+
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = RoleNames.Traveler)]
+    [HttpPost("{id:int}/bookings")]
+    public async Task<IActionResult> CreateBooking(
+        int id,
+        [FromBody] CreateStayBookingRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _stayService.CreateBookingAsync(id, request, cancellationToken);
+            return result is null
+                ? NotFound(new { message = "Active stay not found." })
+                : StatusCode(StatusCodes.Status201Created, result);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [Authorize(
+        AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme,
+        Roles = RoleNames.HotelOwner + "," + RoleNames.Admin)]
+    [HttpGet("{id:int}/bookings")]
+    public async Task<IActionResult> GetBookings(int id, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _stayService.GetStayBookingsAsync(id, cancellationToken);
+            return result is null ? NotFound(new { message = "Stay not found." }) : Ok(result);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
         }
     }
 
@@ -177,5 +265,21 @@ public class StaysController : ControllerBase
         }
 
         return items;
+    }
+
+    private async Task<IActionResult> SetActive(
+        int id,
+        bool isActive,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _stayService.SetActiveAsync(id, isActive, cancellationToken);
+            return result is null ? NotFound(new { message = "Stay not found." }) : Ok(result);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+        }
     }
 }

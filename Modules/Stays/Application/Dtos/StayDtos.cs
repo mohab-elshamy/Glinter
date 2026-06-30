@@ -19,6 +19,10 @@ public class CreateStayRequest
     public List<StayBookingPlatformRequest> BookingPlatforms { get; set; } = [];
 }
 
+public class UpdateStayRequest : CreateStayRequest
+{
+}
+
 public class StayBookingPlatformRequest
 {
     public string Name { get; set; } = string.Empty;
@@ -46,6 +50,34 @@ public class StayListRequest
     public SortDirection SortDirection { get; set; } = SortDirection.Desc;
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 20;
+}
+
+public class CreateStayBookingRequest
+{
+    public DateOnly CheckInDate { get; set; }
+    public DateOnly CheckOutDate { get; set; }
+    public int GuestCount { get; set; }
+}
+
+public class UpdateStayBookingStatusRequest
+{
+    public StayBookingStatus Status { get; set; }
+}
+
+public class StayBookingResponse
+{
+    public Guid Id { get; set; }
+    public int StayId { get; set; }
+    public string StayName { get; set; } = string.Empty;
+    public Guid TravelerProfileId { get; set; }
+    public string GuestName { get; set; } = string.Empty;
+    public DateOnly CheckInDate { get; set; }
+    public DateOnly CheckOutDate { get; set; }
+    public int GuestCount { get; set; }
+    public decimal TotalPrice { get; set; }
+    public StayBookingStatus Status { get; set; }
+    public DateTime CreatedAtUtc { get; set; }
+    public DateTime? UpdatedAtUtc { get; set; }
 }
 
 public class StayRegionStatsRequest
@@ -92,6 +124,9 @@ public class StayResponse
     public int? Adm3Gid { get; set; }
     public double? Latitude { get; set; }
     public double? Longitude { get; set; }
+    public bool IsActive { get; set; }
+    public DateTime CreatedAtUtc { get; set; }
+    public DateTime? UpdatedAtUtc { get; set; }
     public List<StayImageResponse> Images { get; set; } = [];
     public List<string> Amenities { get; set; } = [];
     public List<StayReviewsPerRatingResponse> ReviewsPerRating { get; set; } = [];

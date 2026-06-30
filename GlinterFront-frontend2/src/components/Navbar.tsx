@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { authStorage } from "@/shared/lib/auth";
 import { authApi } from "@/shared/services/api-auth";
 import { getRoleHome } from "@/shared/lib/auth-routing";
+import { chatApi, notificationsApi } from "@/shared/services/api-communication";
 
 const navItems = [
   { path: "/explore", label: "Explore", icon: Compass },
@@ -22,6 +23,7 @@ const Navbar = ({ solid }: { solid?: boolean }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(() => authStorage.isAuthenticated());
   const [isAdmin, setIsAdmin] = useState(() => authStorage.isAdmin());
+  const [communicationUnread, setCommunicationUnread] = useState(0);
   const accountHome = getRoleHome(authStorage.getUser()?.roles ?? []);
 
   useEffect(() => {
@@ -38,6 +40,29 @@ const Navbar = ({ solid }: { solid?: boolean }) => {
   }, []);
 
   useEffect(() => {
+    if (!isLoggedIn) {
+      setCommunicationUnread(0);
+      return;
+    }
+    Promise.all([notificationsApi.getNotifications(1, 1), chatApi.getThreads()])
+      .then(([notificationPage, threads]) => {
+        setCommunicationUnread(
+          notificationPage.unreadCount +
+          threads.reduce((total, thread) => total + thread.unreadCount, 0),
+        );
+      })
+      .catch((error: unknown) => {
+        console.error("Could not load communication unread count.", error);
+      });
+
+    const updateUnread = (event: Event) => {
+      setCommunicationUnread((event as CustomEvent<number>).detail);
+    };
+    window.addEventListener("communication-unread-change", updateUnread);
+    return () => window.removeEventListener("communication-unread-change", updateUnread);
+  }, [isLoggedIn]);
+
+  useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 0);
     window.addEventListener("scroll", onScroll);
     return () => window.removeEventListener("scroll", onScroll);
@@ -46,8 +71,8 @@ const Navbar = ({ solid }: { solid?: boolean }) => {
   const handleLogout = async () => {
     try {
       await authApi.logout();
-    } catch {
-      // ignore logout errors — clear locally either way
+    } catch (error) {
+      console.error("Backend logout failed; clearing the local session.", error);
     }
     authStorage.clearAll();
     setIsLoggedIn(false);
@@ -77,6 +102,11 @@ const Navbar = ({ solid }: { solid?: boolean }) => {
                 >
                   <item.icon className="w-4 h-4" />
                   {item.label}
+                  {item.path === "/messages" && communicationUnread > 0 && (
+                    <span className="rounded-full bg-accent px-1.5 py-0.5 text-[10px] text-accent-foreground">
+                      {communicationUnread}
+                    </span>
+                  )}
                 </Link>
               );
             })}
@@ -146,6 +176,11 @@ const Navbar = ({ solid }: { solid?: boolean }) => {
                   >
                     <item.icon className="w-5 h-5" />
                     {item.label}
+                    {item.path === "/messages" && communicationUnread > 0 && (
+                      <span className="ml-auto rounded-full bg-accent px-2 py-0.5 text-[10px] text-accent-foreground">
+                        {communicationUnread}
+                      </span>
+                    )}
                   </Link>
                 );
               })}

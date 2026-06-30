@@ -6,201 +6,46 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { toast } from "sonner";
 import { experiencesApi } from "@/shared/services/api-experiences";
+import { profilesApi } from "@/shared/services/api-profiles";
 import { authStorage } from "@/shared/lib/auth";
-import type { VibeResponseDto, ExperienceCategoryResponseDto, ExperienceSummaryDto } from "@/shared/types/api";
+import type {
+  ExperienceAvailabilityDto,
+  ExperienceReviewDto,
+  ExperienceSummaryDto,
+  LocalBuddyListItemResponse,
+} from "@/shared/types/api";
+import type { LoadState } from "@/shared/types/async-state";
 
 const filters = ["All", "Favorites", "Free", "Verified", "Top Rated", "Available Now"];
 
-// --- BUDDIES DATA (unchanged) ---
-const buddies = [
-  { 
-    name: "Ahmed Hassan", 
-    location: "Luxor", 
-    rating: 4.9, 
-    reviews: 127, 
-    price: "Free", 
-    languages: "Arabic, English", 
-    interests: ["History", "Photography"], 
-    verified: true,
-    photo: "https://randomuser.me/api/portraits/men/1.jpg",
-    bio: "Passionate about Egyptian history and photography.",
-    id: 1
-  },
-  { 
-    name: "Sara Mohamed", 
-    location: "Cairo", 
-    rating: 4.8, 
-    reviews: 89, 
-    price: "$25/hr", 
-    languages: "Arabic, English, French", 
-    interests: ["Food", "Culture"], 
-    verified: true,
-    photo: "https://randomuser.me/api/portraits/women/2.jpg",
-    bio: "Food lover and culture enthusiast.",
-    id: 2
-  },
-  { 
-    name: "Omar Ali", 
-    location: "Aswan", 
-    rating: 4.7, 
-    reviews: 56, 
-    price: "$20/hr", 
-    languages: "Arabic, English", 
-    interests: ["Adventure", "Desert"], 
-    verified: true,
-    photo: "https://randomuser.me/api/portraits/men/3.jpg",
-    bio: "Adventure seeker and desert expert.",
-    id: 3
-  },
-  { 
-    name: "Fatma Ibrahim", 
-    location: "Alexandria", 
-    rating: 4.9, 
-    reviews: 203, 
-    price: "Free", 
-    languages: "Arabic, English, German", 
-    interests: ["Beach", "History"], 
-    verified: true,
-    photo: "https://randomuser.me/api/portraits/women/4.jpg",
-    bio: "Beach lover and history guide.",
-    id: 4
-  },
-  { 
-    name: "Karim Nasser", 
-    location: "Sharm El Sheikh", 
-    rating: 4.6, 
-    reviews: 45, 
-    price: "$30/hr", 
-    languages: "Arabic, English", 
-    interests: ["Diving", "Snorkeling"], 
-    verified: true,
-    photo: "https://randomuser.me/api/portraits/men/5.jpg",
-    bio: "Professional diver and marine life expert.",
-    id: 5
-  },
-  { 
-    name: "Nadia El-Sayed", 
-    location: "Dahab", 
-    rating: 4.8, 
-    reviews: 78, 
-    price: "$15/hr", 
-    languages: "Arabic, English, Spanish", 
-    interests: ["Yoga", "Wellness"], 
-    verified: true,
-    photo: "https://randomuser.me/api/portraits/women/6.jpg",
-    bio: "Yoga instructor and wellness coach.",
-    id: 6
-  },
-];
+interface DisplayExperience {
+  id: number;
+  name: string;
+  location: string;
+  rating: number;
+  reviews: number;
+  price: string;
+  duration: string;
+  image: string;
+  category: string;
+  description: string;
+  highlights: string[];
+}
 
-// --- EXPERIENCES DATA with fixed Pyramids photo ---
-const experiences = [
-  {
-    id: 101,
-    name: "Sunset Nile Cruise",
-    location: "Cairo",
-    rating: 4.9,
-    reviews: 234,
-    price: "$45",
-    duration: "3 hours",
-    image: "https://images.pexels.com/photos/258117/pexels-photo-258117.jpeg?w=400&h=300&fit=crop",
-    category: "Cruise",
-    description: "Enjoy a relaxing dinner cruise on the Nile with live entertainment. Includes traditional Egyptian food and a folklore show.",
-    highlights: ["Dinner included", "Live music", "Sunset views", "Folklore show"]
-  },
-  {
-    id: 102,
-    name: "Pyramids & Sphinx Tour",
-    location: "Giza",
-    rating: 5.0,
-    reviews: 512,
-    price: "$60",
-    duration: "4 hours",
-    // ✅ FIXED: working Pyramids of Giza photo
-    image: "https://images.pexels.com/photos/1450360/pexels-photo-1450360.jpeg?w=400&h=300&fit=crop",
-    category: "Historical",
-    description: "Guided tour of the Great Pyramids and the Sphinx with an Egyptologist. Explore the ancient wonders and learn about pharaohs.",
-    highlights: ["Expert guide", "Entry fees included", "Photo stops", "Water provided"]
-  },
-  {
-    id: 103,
-    name: "Desert Safari & Quad Biking",
-    location: "Hurghada",
-    rating: 4.7,
-    reviews: 189,
-    price: "$50",
-    duration: "5 hours",
-    image: "https://images.pexels.com/photos/1658967/pexels-photo-1658967.jpeg?w=400&h=300&fit=crop",
-    category: "Adventure",
-    description: "Thrilling desert safari with quad biking, camel ride, and Bedouin dinner under the stars.",
-    highlights: ["Quad biking", "Camel ride", "BBQ dinner", "Bedouin tea"]
-  },
-  {
-    id: 104,
-    name: "Luxor Hot Air Balloon",
-    location: "Luxor",
-    rating: 4.9,
-    reviews: 312,
-    price: "$90",
-    duration: "2 hours",
-    image: "https://images.pexels.com/photos/3274842/pexels-photo-3274842.jpeg?w=400&h=300&fit=crop",
-    category: "Adventure",
-    description: "Fly over the Valley of the Kings at sunrise for breathtaking views of ancient temples and desert landscapes.",
-    highlights: ["Sunrise flight", "Spectacular views", "Certificate included", "Pickup service"]
-  },
-  {
-    id: 105,
-    name: "Traditional Cooking Class",
-    location: "Cairo",
-    rating: 4.8,
-    reviews: 97,
-    price: "$35",
-    duration: "3 hours",
-    image: "https://images.pexels.com/photos/262978/pexels-photo-262978.jpeg?w=400&h=300&fit=crop",
-    category: "Cultural",
-    description: "Learn to cook authentic Egyptian dishes with a local chef. Master koshari, molokhia, and more.",
-    highlights: ["All ingredients", "Recipe booklet", "Lunch included", "Hands-on experience"]
-  },
-  {
-    id: 106,
-    name: "Red Sea Snorkeling Trip",
-    location: "Sharm El Sheikh",
-    rating: 4.8,
-    reviews: 203,
-    price: "$40",
-    duration: "6 hours",
-    image: "https://images.pexels.com/photos/1891974/pexels-photo-1891974.jpeg?w=400&h=300&fit=crop",
-    category: "Water Sports",
-    description: "Explore vibrant coral reefs and marine life in the Red Sea. Perfect for beginners and experts.",
-    highlights: ["Equipment provided", "Lunch on boat", "Professional guide", "Two snorkeling stops"]
-  },
-  {
-    id: 107,
-    name: "Alexandria History Walk",
-    location: "Alexandria",
-    rating: 4.6,
-    reviews: 78,
-    price: "$25",
-    duration: "2.5 hours",
-    image: "https://images.pexels.com/photos/2034851/pexels-photo-2034851.jpeg?w=400&h=300&fit=crop",
-    category: "Historical",
-    description: "Walk through the ancient streets of Alexandria with a historian. Visit the Library, Roman amphitheater, and more.",
-    highlights: ["Library of Alexandria", "Roman amphitheater", "Local snacks", "Small group"]
-  },
-  {
-    id: 108,
-    name: "White Desert Camping",
-    location: "Farafra",
-    rating: 4.9,
-    reviews: 45,
-    price: "$120",
-    duration: "2 days",
-    image: "https://images.pexels.com/photos/2422265/pexels-photo-2422265.jpeg?w=400&h=300&fit=crop",
-    category: "Adventure",
-    description: "Overnight camping in the otherworldly White Desert. Includes Bedouin dinner, stargazing, and sunrise photography.",
-    highlights: ["Stargazing", "Bedouin dinner", "Sunrise photography", "Camping gear"]
-  }
-];
+interface DisplayBuddy {
+  id: number;
+  userId: string;
+  name: string;
+  location: string;
+  rating: number;
+  reviews: number;
+  price: string;
+  languages: string;
+  interests: string[];
+  verified: boolean;
+  photo: string;
+  bio: string;
+}
 
 const LocalBuddies = () => {
   const navigate = useNavigate();
@@ -209,16 +54,18 @@ const LocalBuddies = () => {
   const [likedBuddies, setLikedBuddies] = useState<number[]>([]);
   const [likedExperiences, setLikedExperiences] = useState<number[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedExperience, setSelectedExperience] = useState<{
-    id: number; name: string; location: string; rating: number; reviews: number;
-    price: string; duration: string; image: string; category: string;
-    description: string; highlights: string[];
-  } | null>(null);
+  const [selectedExperience, setSelectedExperience] = useState<DisplayExperience | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [availability, setAvailability] = useState<ExperienceAvailabilityDto[]>([]);
+  const [selectedAvailabilityId, setSelectedAvailabilityId] = useState("");
+  const [guestsCount, setGuestsCount] = useState(1);
+  const [experienceReviews, setExperienceReviews] = useState<ExperienceReviewDto[]>([]);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewText, setReviewText] = useState("");
 
   const [apiExperiences, setApiExperiences] = useState<ExperienceSummaryDto[]>([]);
-  const [apiCategories, setApiCategories] = useState<ExperienceCategoryResponseDto[]>([]);
-  const [apiVibes, setApiVibes] = useState<VibeResponseDto[]>([]);
+  const [apiBuddies, setApiBuddies] = useState<LocalBuddyListItemResponse[]>([]);
+  const [loadState, setLoadState] = useState<LoadState>({ status: "loading" });
 
   // Load liked items from localStorage
   useEffect(() => {
@@ -228,18 +75,22 @@ const LocalBuddies = () => {
     if (savedExperiences) setLikedExperiences(JSON.parse(savedExperiences));
   }, []);
 
-  // Fetch experiences, categories, vibes from backend
+  // Fetch public experiences from the backend.
   useEffect(() => {
-    if (!authStorage.isAuthenticated()) return;
-    experiencesApi.getExperiences()
-      .then(setApiExperiences)
-      .catch(() => {});
-    experiencesApi.getCategories()
-      .then(setApiCategories)
-      .catch(() => {});
-    experiencesApi.getVibes()
-      .then(setApiVibes)
-      .catch(() => {});
+    Promise.all([
+      experiencesApi.getExperiences({ pageSize: 100 }),
+      profilesApi.getLocalBuddies(),
+    ])
+      .then(([experiencePage, loadedBuddies]) => {
+        setApiExperiences(experiencePage.items);
+        setApiBuddies(loadedBuddies);
+        setLoadState({ status: "ready" });
+      })
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : "Could not load buddies and experiences.";
+        setLoadState({ status: "error", message });
+        toast.error(message);
+      });
   }, []);
 
   useEffect(() => {
@@ -271,17 +122,12 @@ const LocalBuddies = () => {
   };
 
   // Buddy actions
-  const handleConnect = (buddy: typeof buddies[0]) => {
-    localStorage.setItem("selectedBuddy", JSON.stringify({
-      id: buddy.name,
-      name: buddy.name,
-      photo: buddy.photo,
-      status: "online"
-    }));
+  const handleConnect = (buddy: DisplayBuddy) => {
     toast.success(`Connecting with ${buddy.name}...`);
     navigate("/messages", { 
       state: { 
         selectedBuddy: {
+          userId: buddy.userId,
           name: buddy.name,
           photo: buddy.photo,
           status: "online",
@@ -291,48 +137,78 @@ const LocalBuddies = () => {
     });
   };
 
-  const handleViewProfile = (buddy: typeof buddies[0]) => {
-    navigate(`/profile/${buddy.id}`, { state: { buddy } });
+  const handleViewProfile = (buddy: DisplayBuddy) => {
+    navigate(`/profile/${buddy.userId}`, { state: { buddy } });
   };
 
   // Experience actions
-  const handleBookExperience = (exp: typeof experiences[0]) => {
-    const amount = parseInt(exp.price.replace(/[^0-9]/g, "")) || 45;
-
-    const consumerBooking = {
-      id: `booking-${Date.now()}`,
-      type: "experience" as const,
-      name: exp.name,
-      date: new Date().toISOString().split("T")[0],
-      status: "confirmed" as const,
-      amount,
-    };
-
-    const ownerBooking = {
-      id: `exp-booking-${Date.now()}`,
-      experienceId: `exp-${exp.id}`,
-      experienceName: exp.name,
-      travelerName: localStorage.getItem("profile_displayName") || "Guest",
-      guestsCount: 1,
-      totalPrice: amount,
-      status: "pending" as const,
-      bookedDate: new Date().toISOString().split("T")[0],
-    };
-
-    const existingConsumer = JSON.parse(localStorage.getItem("my_bookings") || "[]");
-    existingConsumer.push(consumerBooking);
-    localStorage.setItem("my_bookings", JSON.stringify(existingConsumer));
-
-    const existingOwner = JSON.parse(localStorage.getItem("my_exp_bookings") || "[]");
-    existingOwner.push(ownerBooking);
-    localStorage.setItem("my_exp_bookings", JSON.stringify(existingOwner));
-
-    toast.success(`"${exp.name}" booked successfully! 🎉`, { duration: 4000 });
+  const handleViewDetails = async (exp: DisplayExperience) => {
+    try {
+      const [detail, slots, reviews] = await Promise.all([
+        experiencesApi.getExperienceById(exp.id),
+        experiencesApi.getAvailability(exp.id),
+        experiencesApi.getReviews(exp.id),
+      ]);
+      setSelectedExperience({
+        id: detail.id,
+        name: detail.name,
+        location: detail.address || "Egypt",
+        rating: detail.rating ?? 0,
+        reviews: detail.reviews ?? reviews.length,
+        price: detail.priceRange || "See available dates",
+        duration: detail.currentInsight?.openStatus || "Scheduled experience",
+        image: detail.featuredImages[0]?.link || "",
+        category: detail.category,
+        description: detail.description || "",
+        highlights: detail.amenities,
+      });
+      setAvailability(slots);
+      setSelectedAvailabilityId(slots[0]?.id || "");
+      setExperienceReviews(reviews);
+      setShowDetailsModal(true);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not load experience details.");
+    }
   };
 
-  const handleViewDetails = (exp: typeof experiences[0]) => {
-    setSelectedExperience(exp);
-    setShowDetailsModal(true);
+  const handleBookExperience = async (exp: DisplayExperience) => {
+    if (!authStorage.isAuthenticated()) {
+      toast.error("Sign in as a traveler to book this experience.");
+      return;
+    }
+    if (!showDetailsModal || selectedExperience?.id !== exp.id) {
+      await handleViewDetails(exp);
+      return;
+    }
+    if (!selectedAvailabilityId) {
+      toast.error("Select an available date first.");
+      return;
+    }
+    try {
+      await experiencesApi.createBooking(exp.id, {
+        availabilityId: selectedAvailabilityId,
+        guestsCount,
+      });
+      toast.success(`"${exp.name}" booking requested.`);
+      setShowDetailsModal(false);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not create booking.");
+    }
+  };
+
+  const submitExperienceReview = async () => {
+    if (!selectedExperience || !reviewText.trim()) return;
+    try {
+      const created = await experiencesApi.createReview(selectedExperience.id, {
+        rating: reviewRating,
+        reviewText,
+      });
+      setExperienceReviews((current) => [created, ...current]);
+      setReviewText("");
+      toast.success("Review submitted.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not submit review.");
+    }
   };
 
   // Fallback sand image (only if other images fail)
@@ -343,8 +219,23 @@ const LocalBuddies = () => {
   };
 
   // Filtering logic
+  const allBuddies: DisplayBuddy[] = apiBuddies.map((buddy, index) => ({
+    id: index + 1,
+    userId: buddy.userId,
+    name: buddy.displayName,
+    location: buddy.city,
+    rating: buddy.rating,
+    reviews: buddy.reviewsCount,
+    price: "Free",
+    languages: buddy.languages || "Not specified",
+    interests: buddy.interests.map((interest) => interest.name),
+    verified: buddy.verificationStatus === "Approved",
+    photo: buddy.profileImageUrl || `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(buddy.displayName)}`,
+    bio: buddy.bio || "",
+  }));
+
   const getFilteredBuddies = () => {
-    let filtered = buddies;
+    let filtered = allBuddies;
     if (searchQuery) {
       filtered = filtered.filter(buddy => 
         buddy.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -363,23 +254,19 @@ const LocalBuddies = () => {
     return filtered;
   };
 
-  // Map API experiences to display format + merge with hardcoded
-  const allExperiences = [
-    ...experiences,
-    ...apiExperiences.map((exp, idx) => ({
-      id: 1000 + idx,
-      name: exp.title,
-      location: exp.locationName,
-      rating: 0,
-      reviews: 0,
-      price: `$${exp.pricePerPerson}`,
-      duration: `${exp.durationMinutes} min`,
-      image: "",
-      category: exp.categoryName || "General",
-      description: "",
-      highlights: [...exp.vibes.map((v: string) => v), ...exp.tags.map((t: string) => t)],
-    })),
-  ];
+  const allExperiences: DisplayExperience[] = apiExperiences.map((exp) => ({
+    id: exp.id,
+    name: exp.name,
+    location: exp.address || "Egypt",
+    rating: exp.rating ?? 0,
+    reviews: exp.reviews ?? exp.featuredReviews.length,
+    price: exp.priceRange || "See dates",
+    duration: exp.currentInsight?.openStatus || "Scheduled",
+    image: exp.featuredImages[0]?.link || "",
+    category: exp.category,
+    description: exp.description || "",
+    highlights: exp.amenities,
+  }));
 
   const getFilteredExperiences = () => {
     let filtered = allExperiences;
@@ -498,15 +385,35 @@ const LocalBuddies = () => {
         </div>
 
         {/* Results count */}
+        {loadState.status === "loading" && (
+          <div className="card-glass mb-6 p-8 text-center text-sm text-muted-foreground">
+            Loading buddies and experiences…
+          </div>
+        )}
+        {loadState.status === "error" && (
+          <div className="mb-6 rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
+            {loadState.message}
+          </div>
+        )}
         {activeTab === "buddies" && (
           <p className="text-xs text-muted-foreground mb-4">
-            Showing {filteredBuddies.length} of {buddies.length} buddies
+            Showing {filteredBuddies.length} of {allBuddies.length} buddies
           </p>
         )}
         {activeTab === "experiences" && (
           <p className="text-xs text-muted-foreground mb-4">
             Showing {filteredExperiences.length} of {allExperiences.length} experiences
           </p>
+        )}
+        {loadState.status === "ready" && activeTab === "buddies" && filteredBuddies.length === 0 && (
+          <div className="card-glass mb-6 p-8 text-center text-sm text-muted-foreground">
+            No local buddies match the current filters.
+          </div>
+        )}
+        {loadState.status === "ready" && activeTab === "experiences" && filteredExperiences.length === 0 && (
+          <div className="card-glass mb-6 p-8 text-center text-sm text-muted-foreground">
+            No experiences match the current filters.
+          </div>
         )}
 
         {/* BUDDIES CARDS (unchanged) */}
@@ -804,12 +711,62 @@ const LocalBuddies = () => {
                   ))}
                 </ul>
               </div>
+
+              <div className="mb-4">
+                <h3 className="mb-2 text-sm font-semibold">Available dates</h3>
+                {availability.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">No bookable dates are currently available.</p>
+                ) : (
+                  <div className="grid grid-cols-[1fr_auto] gap-2">
+                    <select
+                      value={selectedAvailabilityId}
+                      onChange={(event) => setSelectedAvailabilityId(event.target.value)}
+                      className="rounded-lg border border-border bg-secondary px-2 py-2 text-xs"
+                    >
+                      {availability.map((slot) => (
+                        <option key={slot.id} value={slot.id}>
+                          {new Date(slot.startTimeUtc).toLocaleString()} · ${slot.pricePerPerson} · {slot.remainingCapacity} left
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="number"
+                      min="1"
+                      max={availability.find((slot) => slot.id === selectedAvailabilityId)?.remainingCapacity ?? 1}
+                      value={guestsCount}
+                      onChange={(event) => setGuestsCount(Number(event.target.value))}
+                      className="w-20 rounded-lg border border-border bg-secondary px-2 text-xs"
+                      aria-label="Guests"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="mb-4 border-t border-border pt-4">
+                <h3 className="mb-2 text-sm font-semibold">Traveler reviews</h3>
+                <div className="max-h-28 space-y-2 overflow-y-auto">
+                  {experienceReviews.length === 0 && <p className="text-xs text-muted-foreground">No reviews yet.</p>}
+                  {experienceReviews.map((review) => (
+                    <div key={review.id} className="rounded-lg bg-secondary/40 p-2 text-xs">
+                      <p className="font-medium">{review.reviewerName || "Traveler"} · {review.rating ?? "—"}/5</p>
+                      <p className="text-muted-foreground">{review.reviewText}</p>
+                    </div>
+                  ))}
+                </div>
+                {authStorage.hasAnyRole(["Traveler"]) && (
+                  <div className="mt-2 flex gap-2">
+                    <select value={reviewRating} onChange={(event) => setReviewRating(Number(event.target.value))} className="rounded bg-secondary px-2 text-xs">
+                      {[5, 4, 3, 2, 1].map((value) => <option key={value} value={value}>{value}/5</option>)}
+                    </select>
+                    <input value={reviewText} onChange={(event) => setReviewText(event.target.value)} className="input-glass min-w-0 flex-1" placeholder="Write a review" />
+                    <button onClick={() => void submitExperienceReview()} className="rounded bg-secondary px-3 text-xs">Post</button>
+                  </div>
+                )}
+              </div>
               <button 
-                onClick={() => {
-                  handleBookExperience(selectedExperience);
-                  setShowDetailsModal(false);
-                }}
-                className="w-full btn-accent py-2 rounded-lg flex items-center justify-center gap-2"
+                onClick={() => void handleBookExperience(selectedExperience)}
+                disabled={!selectedAvailabilityId}
+                className="w-full btn-accent py-2 rounded-lg flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Calendar className="w-4 h-4" /> Book Now
               </button>

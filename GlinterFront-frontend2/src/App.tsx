@@ -152,7 +152,7 @@ const App = () => (
             path="/profile/me"
             element={(
               <RequireAuth>
-                <RequireRole roles={["Traveler", "HotelOwner", "ExperienceProvider"]}>
+                <RequireRole roles={["Traveler", "LocalBuddy", "HotelOwner", "ExperienceProvider"]}>
                   <RequireProfile><EditProfilePage /></RequireProfile>
                 </RequireRole>
               </RequireAuth>

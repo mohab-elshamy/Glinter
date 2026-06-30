@@ -36,10 +36,7 @@ public class ExperienceService
         CreateExperienceRequest request,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(request.Name))
-        {
-            throw new ArgumentException("Experience name is required.");
-        }
+        ValidateExperienceRequest(request);
 
         var userId = _currentUserService.UserId
             ?? throw new InvalidOperationException("Authenticated user id is missing.");
@@ -57,6 +54,7 @@ public class ExperienceService
         {
             Category = request.Category,
             SourceType = ExperienceSourceType.Provider,
+            ModerationStatus = ExperienceModerationStatus.Pending,
             CreatedByUserId = userId,
             ProviderProfileId = providerProfileId,
             Name = CleanText(request.Name) ?? string.Empty,
@@ -77,6 +75,462 @@ public class ExperienceService
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         return ToResponse(experience, DateTime.Now);
+    }
+
+    public async Task<List<ExperienceResponse>> GetMyExperiencesAsync(CancellationToken cancellationToken)
+    {
+        var userId = RequireCurrentUserId();
+        var experiences = await IncludeResponseData(_dbContext.Experiences.AsNoTracking())
+            .Where(x => x.CreatedByUserId == userId)
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .AsSplitQuery()
+            .ToListAsync(cancellationToken);
+
+        var now = DateTime.Now;
+        return experiences.Select(x => ToResponse(x, now)).ToList();
+    }
+
+    public async Task<List<ExperienceResponse>> GetAdminExperiencesAsync(
+        ExperienceModerationStatus? moderationStatus,
+        bool? isActive,
+        CancellationToken cancellationToken)
+    {
+        var query = IncludeResponseData(_dbContext.Experiences.AsNoTracking());
+        if (moderationStatus is not null)
+        {
+            query = query.Where(x => x.ModerationStatus == moderationStatus);
+        }
+        if (isActive is not null)
+        {
+            query = query.Where(x => x.IsActive == isActive);
+        }
+
+        var experiences = await query
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .AsSplitQuery()
+            .ToListAsync(cancellationToken);
+        var now = DateTime.Now;
+        return experiences.Select(x => ToResponse(x, now)).ToList();
+    }
+
+    public async Task<ExperienceResponse?> ModerateAsync(
+        int experienceId,
+        ModerateExperienceRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!Enum.IsDefined(request.ModerationStatus))
+        {
+            throw new ArgumentException("A valid moderation status is required.");
+        }
+        if (request.ModerationStatus == ExperienceModerationStatus.Rejected &&
+            string.IsNullOrWhiteSpace(request.ModerationNotes))
+        {
+            throw new ArgumentException("Moderation notes are required when rejecting an experience.");
+        }
+
+        var experience = await IncludeResponseData(_dbContext.Experiences)
+            .AsSplitQuery()
+            .FirstOrDefaultAsync(x => x.Id == experienceId, cancellationToken);
+        if (experience is null)
+        {
+            return null;
+        }
+
+        experience.ModerationStatus = request.ModerationStatus;
+        experience.ModerationNotes = CleanText(request.ModerationNotes);
+        experience.ModeratedByUserId = RequireCurrentUserId();
+        experience.ModeratedAtUtc = DateTime.UtcNow;
+        experience.UpdatedAtUtc = DateTime.UtcNow;
+        experience.IsActive = request.ModerationStatus != ExperienceModerationStatus.Rejected;
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return ToResponse(experience, DateTime.Now);
+    }
+
+    public async Task<ExperienceResponse?> UpdateProviderExperienceAsync(
+        int experienceId,
+        UpdateExperienceRequest request,
+        CancellationToken cancellationToken)
+    {
+        ValidateExperienceRequest(request);
+        var experience = await IncludeResponseData(_dbContext.Experiences)
+            .AsSplitQuery()
+            .FirstOrDefaultAsync(x => x.Id == experienceId, cancellationToken);
+
+        if (experience is null)
+        {
+            return null;
+        }
+
+        EnsureCanManage(experience);
+        experience.Category = request.Category;
+        experience.Name = CleanText(request.Name) ?? string.Empty;
+        experience.Description = CleanText(request.Description);
+        experience.Address = CleanText(request.Address);
+        experience.Latitude = request.Latitude;
+        experience.Longitude = request.Longitude;
+        experience.GoogleMapsLink = NormalizeString(request.GoogleMapsLink);
+        experience.PhoneInternational = NormalizeString(request.PhoneInternational);
+        experience.PriceRange = NormalizeString(request.PriceRange);
+        experience.Website = NormalizeString(request.Website);
+        experience.UpdatedAtUtc = DateTime.UtcNow;
+
+        _dbContext.ExperienceFeaturedImages.RemoveRange(experience.FeaturedImages);
+        _dbContext.ExperienceHours.RemoveRange(experience.Hours);
+        _dbContext.ExperiencePopularTimes.RemoveRange(experience.PopularTimes);
+        _dbContext.ExperienceAmenities.RemoveRange(experience.Amenities);
+        experience.FeaturedImages.Clear();
+        experience.Hours.Clear();
+        experience.PopularTimes.Clear();
+        experience.Amenities.Clear();
+
+        await AttachRegionHierarchyAsync(experience, cancellationToken);
+        AddProviderChildren(experience, request);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return ToResponse(experience, DateTime.Now);
+    }
+
+    public async Task<ExperienceResponse?> SetActiveAsync(
+        int experienceId,
+        bool isActive,
+        CancellationToken cancellationToken)
+    {
+        var experience = await IncludeResponseData(_dbContext.Experiences)
+            .AsSplitQuery()
+            .FirstOrDefaultAsync(x => x.Id == experienceId, cancellationToken);
+
+        if (experience is null)
+        {
+            return null;
+        }
+
+        EnsureCanManage(experience);
+        experience.IsActive = isActive;
+        experience.UpdatedAtUtc = DateTime.UtcNow;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return ToResponse(experience, DateTime.Now);
+    }
+
+    public async Task<List<ExperienceAvailabilityResponse>?> GetAvailabilityAsync(
+        int experienceId,
+        bool includeInactive,
+        CancellationToken cancellationToken)
+    {
+        var experience = await _dbContext.Experiences
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == experienceId, cancellationToken);
+
+        if (experience is null ||
+            (!includeInactive &&
+             (!experience.IsActive ||
+              experience.ModerationStatus != ExperienceModerationStatus.Approved)))
+        {
+            return null;
+        }
+
+        if (includeInactive)
+        {
+            EnsureCanManage(experience);
+        }
+
+        var query = _dbContext.ExperienceAvailabilitySlots
+            .AsNoTracking()
+            .Include(x => x.Bookings)
+            .Where(x => x.ExperienceId == experienceId);
+
+        if (!includeInactive)
+        {
+            query = query.Where(x => x.IsActive && x.StartTimeUtc > DateTime.UtcNow);
+        }
+
+        var slots = await query.OrderBy(x => x.StartTimeUtc).ToListAsync(cancellationToken);
+        return slots.Select(ToAvailabilityResponse).ToList();
+    }
+
+    public async Task<ExperienceAvailabilityResponse?> CreateAvailabilityAsync(
+        int experienceId,
+        CreateExperienceAvailabilityRequest request,
+        CancellationToken cancellationToken)
+    {
+        ValidateAvailabilityRequest(request);
+        var experience = await _dbContext.Experiences
+            .FirstOrDefaultAsync(x => x.Id == experienceId, cancellationToken);
+
+        if (experience is null)
+        {
+            return null;
+        }
+
+        EnsureCanManage(experience);
+        var slot = new ExperienceAvailability
+        {
+            ExperienceId = experienceId,
+            StartTimeUtc = request.StartTimeUtc.ToUniversalTime(),
+            EndTimeUtc = request.EndTimeUtc.ToUniversalTime(),
+            Capacity = request.Capacity,
+            PricePerPerson = request.PricePerPerson
+        };
+        _dbContext.ExperienceAvailabilitySlots.Add(slot);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return ToAvailabilityResponse(slot);
+    }
+
+    public async Task<ExperienceAvailabilityResponse?> UpdateAvailabilityAsync(
+        Guid availabilityId,
+        UpdateExperienceAvailabilityRequest request,
+        CancellationToken cancellationToken)
+    {
+        ValidateAvailabilityRequest(request);
+        var slot = await _dbContext.ExperienceAvailabilitySlots
+            .Include(x => x.Experience)
+            .Include(x => x.Bookings)
+            .FirstOrDefaultAsync(x => x.Id == availabilityId, cancellationToken);
+
+        if (slot is null)
+        {
+            return null;
+        }
+
+        EnsureCanManage(slot.Experience);
+        var bookedGuests = ActiveGuests(slot.Bookings);
+        if (request.Capacity < bookedGuests)
+        {
+            throw new InvalidOperationException("Capacity cannot be lower than the number of booked guests.");
+        }
+
+        slot.StartTimeUtc = request.StartTimeUtc.ToUniversalTime();
+        slot.EndTimeUtc = request.EndTimeUtc.ToUniversalTime();
+        slot.Capacity = request.Capacity;
+        slot.PricePerPerson = request.PricePerPerson;
+        slot.IsActive = request.IsActive;
+        slot.UpdatedAtUtc = DateTime.UtcNow;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return ToAvailabilityResponse(slot);
+    }
+
+    public async Task<ExperienceAvailabilityResponse?> SetAvailabilityActiveAsync(
+        Guid availabilityId,
+        bool isActive,
+        CancellationToken cancellationToken)
+    {
+        var slot = await _dbContext.ExperienceAvailabilitySlots
+            .Include(x => x.Experience)
+            .Include(x => x.Bookings)
+            .FirstOrDefaultAsync(x => x.Id == availabilityId, cancellationToken);
+
+        if (slot is null)
+        {
+            return null;
+        }
+
+        EnsureCanManage(slot.Experience);
+        slot.IsActive = isActive;
+        slot.UpdatedAtUtc = DateTime.UtcNow;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return ToAvailabilityResponse(slot);
+    }
+
+    public async Task<ExperienceBookingResponse?> CreateBookingAsync(
+        int experienceId,
+        CreateExperienceBookingRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request.GuestsCount is < 1 or > 100)
+        {
+            throw new ArgumentException("Guest count must be between 1 and 100.");
+        }
+
+        var userId = RequireCurrentUserId();
+        var travelerProfileId = await _profilesReadService.GetTravelerProfileIdByUserIdAsync(
+            userId,
+            cancellationToken)
+            ?? throw new InvalidOperationException("Create your traveler profile before booking an experience.");
+
+        var slot = await _dbContext.ExperienceAvailabilitySlots
+            .Include(x => x.Experience)
+            .Include(x => x.Bookings)
+            .FirstOrDefaultAsync(
+                x => x.Id == request.AvailabilityId && x.ExperienceId == experienceId,
+                cancellationToken);
+
+        if (slot is null ||
+            !slot.IsActive ||
+            !slot.Experience.IsActive ||
+            slot.Experience.ModerationStatus != ExperienceModerationStatus.Approved)
+        {
+            return null;
+        }
+
+        if (slot.StartTimeUtc <= DateTime.UtcNow)
+        {
+            throw new InvalidOperationException("This availability slot has already started.");
+        }
+
+        if (slot.Capacity - ActiveGuests(slot.Bookings) < request.GuestsCount)
+        {
+            throw new InvalidOperationException("This availability slot does not have enough remaining capacity.");
+        }
+
+        if (slot.Bookings.Any(x =>
+                x.CreatedByUserId == userId &&
+                x.Status != ExperienceBookingStatus.Cancelled))
+        {
+            throw new InvalidOperationException("You already booked this availability slot.");
+        }
+
+        var booking = new ExperienceBooking
+        {
+            ExperienceId = experienceId,
+            Experience = slot.Experience,
+            AvailabilityId = slot.Id,
+            Availability = slot,
+            TravelerProfileId = travelerProfileId,
+            CreatedByUserId = userId,
+            TravelerName = _currentUserService.Email ?? "Traveler",
+            GuestsCount = request.GuestsCount,
+            TotalPrice = slot.PricePerPerson * request.GuestsCount
+        };
+        _dbContext.ExperienceBookings.Add(booking);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return ToBookingResponse(booking);
+    }
+
+    public async Task<List<ExperienceBookingResponse>> GetMyBookingsAsync(CancellationToken cancellationToken)
+    {
+        var userId = RequireCurrentUserId();
+        var bookings = await BookingQuery()
+            .AsNoTracking()
+            .Where(x => x.CreatedByUserId == userId)
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .ToListAsync(cancellationToken);
+        return bookings.Select(ToBookingResponse).ToList();
+    }
+
+    public async Task<List<ExperienceBookingResponse>?> GetExperienceBookingsAsync(
+        int experienceId,
+        CancellationToken cancellationToken)
+    {
+        var experience = await _dbContext.Experiences
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == experienceId, cancellationToken);
+        if (experience is null)
+        {
+            return null;
+        }
+
+        EnsureCanManage(experience);
+        var bookings = await BookingQuery()
+            .AsNoTracking()
+            .Where(x => x.ExperienceId == experienceId)
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .ToListAsync(cancellationToken);
+        return bookings.Select(ToBookingResponse).ToList();
+    }
+
+    public async Task<ExperienceBookingResponse?> CancelBookingAsync(
+        Guid bookingId,
+        CancellationToken cancellationToken)
+    {
+        var userId = RequireCurrentUserId();
+        var booking = await BookingQuery()
+            .FirstOrDefaultAsync(x => x.Id == bookingId, cancellationToken);
+        if (booking is null)
+        {
+            return null;
+        }
+
+        if (booking.CreatedByUserId != userId &&
+            !IsAdmin() &&
+            booking.Experience.CreatedByUserId != userId)
+        {
+            throw new UnauthorizedAccessException("You cannot cancel this booking.");
+        }
+
+        if (booking.Status == ExperienceBookingStatus.Completed)
+        {
+            throw new InvalidOperationException("A completed booking cannot be cancelled.");
+        }
+
+        booking.Status = ExperienceBookingStatus.Cancelled;
+        booking.UpdatedAtUtc = DateTime.UtcNow;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return ToBookingResponse(booking);
+    }
+
+    public async Task<ExperienceBookingResponse?> UpdateBookingStatusAsync(
+        Guid bookingId,
+        ExperienceBookingStatus status,
+        CancellationToken cancellationToken)
+    {
+        if (status is not (ExperienceBookingStatus.Confirmed or ExperienceBookingStatus.Completed or ExperienceBookingStatus.Cancelled))
+        {
+            throw new ArgumentException("Booking status must be Confirmed, Completed, or Cancelled.");
+        }
+
+        var booking = await BookingQuery()
+            .FirstOrDefaultAsync(x => x.Id == bookingId, cancellationToken);
+        if (booking is null)
+        {
+            return null;
+        }
+
+        EnsureCanManage(booking.Experience);
+        if (booking.Status == ExperienceBookingStatus.Cancelled)
+        {
+            throw new InvalidOperationException("A cancelled booking cannot be changed.");
+        }
+
+        booking.Status = status;
+        booking.UpdatedAtUtc = DateTime.UtcNow;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return ToBookingResponse(booking);
+    }
+
+    public async Task<ExperienceReviewResponse?> CreateReviewAsync(
+        int experienceId,
+        CreateExperienceReviewRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request.Rating is < 1 or > 5)
+        {
+            throw new ArgumentException("Rating must be between 1 and 5.");
+        }
+        if (string.IsNullOrWhiteSpace(request.ReviewText))
+        {
+            throw new ArgumentException("Review text is required.");
+        }
+
+        var experience = await _dbContext.Experiences
+            .FirstOrDefaultAsync(
+                x => x.Id == experienceId &&
+                     x.IsActive &&
+                     x.ModerationStatus == ExperienceModerationStatus.Approved,
+                cancellationToken);
+        if (experience is null)
+        {
+            return null;
+        }
+
+        var review = new ExperienceReview
+        {
+            ExperienceId = experienceId,
+            CreatedByUserId = RequireCurrentUserId(),
+            ReviewerName = _currentUserService.Email,
+            Rating = request.Rating,
+            ReviewText = CleanText(request.ReviewText),
+            SourceList = "glinter",
+            PublishedAtDate = DateTime.UtcNow
+        };
+        _dbContext.ExperienceReviews.Add(review);
+        var previousReviews = Math.Max(0, experience.Reviews ?? 0);
+        var previousRating = experience.Rating ?? 0;
+        experience.Reviews = previousReviews + 1;
+        experience.Rating = Math.Round(
+            ((previousRating * previousReviews) + request.Rating) / experience.Reviews.Value,
+            2);
+        experience.UpdatedAtUtc = DateTime.UtcNow;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return ToReviewResponse(review);
     }
 
     public async Task<ImportExperiencesResponse> ImportThirdPartyAsync(
@@ -119,6 +573,7 @@ public class ExperienceService
             var experience = existing ?? new Experience
             {
                 SourceType = ExperienceSourceType.ThirdParty,
+                ModerationStatus = ExperienceModerationStatus.Approved,
                 CreatedAtUtc = DateTime.UtcNow
             };
 
@@ -164,7 +619,11 @@ public class ExperienceService
     {
         var page = Math.Max(1, request.Page);
         var pageSize = Math.Clamp(request.PageSize, 1, 100);
-        var query = ApplyFilters(_dbContext.Experiences.AsNoTracking(), request);
+        var query = ApplyFilters(
+            _dbContext.Experiences.AsNoTracking().Where(
+                x => x.IsActive &&
+                     x.ModerationStatus == ExperienceModerationStatus.Approved),
+            request);
 
         var totalCount = await query.CountAsync(cancellationToken);
         var experiences = await IncludeResponseData(query)
@@ -191,7 +650,11 @@ public class ExperienceService
         ExperienceListRequest request,
         CancellationToken cancellationToken)
     {
-        var experiences = await ApplyFilters(_dbContext.Experiences.AsNoTracking(), request)
+        var experiences = await ApplyFilters(
+                _dbContext.Experiences.AsNoTracking().Where(
+                    x => x.IsActive &&
+                         x.ModerationStatus == ExperienceModerationStatus.Approved),
+                request)
             .Include(x => x.FeaturedImages)
             .Include(x => x.Hours)
             .Include(x => x.PopularTimes)
@@ -236,7 +699,10 @@ public class ExperienceService
         int id,
         CancellationToken cancellationToken)
     {
-        var experience = await IncludeResponseData(_dbContext.Experiences.AsNoTracking())
+        var experience = await IncludeResponseData(
+                _dbContext.Experiences.AsNoTracking().Where(
+                    x => x.IsActive &&
+                         x.ModerationStatus == ExperienceModerationStatus.Approved))
             .AsSplitQuery()
             .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
 
@@ -358,6 +824,119 @@ public class ExperienceService
         return experience is null ? null : BuildVisitInsight(experience, visitAt);
     }
 
+    private IQueryable<ExperienceBooking> BookingQuery()
+    {
+        return _dbContext.ExperienceBookings
+            .Include(x => x.Experience)
+            .Include(x => x.Availability);
+    }
+
+    private static ExperienceAvailabilityResponse ToAvailabilityResponse(
+        ExperienceAvailability availability)
+    {
+        return new ExperienceAvailabilityResponse
+        {
+            Id = availability.Id,
+            ExperienceId = availability.ExperienceId,
+            StartTimeUtc = availability.StartTimeUtc,
+            EndTimeUtc = availability.EndTimeUtc,
+            Capacity = availability.Capacity,
+            RemainingCapacity = Math.Max(0, availability.Capacity - ActiveGuests(availability.Bookings)),
+            PricePerPerson = availability.PricePerPerson,
+            IsActive = availability.IsActive
+        };
+    }
+
+    private static ExperienceBookingResponse ToBookingResponse(ExperienceBooking booking)
+    {
+        return new ExperienceBookingResponse
+        {
+            Id = booking.Id,
+            ExperienceId = booking.ExperienceId,
+            ExperienceName = booking.Experience.Name,
+            AvailabilityId = booking.AvailabilityId,
+            TravelerProfileId = booking.TravelerProfileId,
+            TravelerName = booking.TravelerName,
+            StartTimeUtc = booking.Availability.StartTimeUtc,
+            EndTimeUtc = booking.Availability.EndTimeUtc,
+            GuestsCount = booking.GuestsCount,
+            TotalPrice = booking.TotalPrice,
+            Status = booking.Status,
+            CreatedAtUtc = booking.CreatedAtUtc,
+            UpdatedAtUtc = booking.UpdatedAtUtc
+        };
+    }
+
+    private static int ActiveGuests(IEnumerable<ExperienceBooking> bookings)
+    {
+        return bookings
+            .Where(x => x.Status != ExperienceBookingStatus.Cancelled)
+            .Sum(x => x.GuestsCount);
+    }
+
+    private static void ValidateExperienceRequest(CreateExperienceRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name))
+        {
+            throw new ArgumentException("Experience name is required.");
+        }
+
+        if (!Enum.IsDefined(request.Category))
+        {
+            throw new ArgumentException("A valid experience category is required.");
+        }
+
+        if (request.Latitude is < -90 or > 90 || request.Longitude is < -180 or > 180)
+        {
+            throw new ArgumentException("Valid latitude and longitude are required.");
+        }
+
+        if (request.Hours.Any(x => x.ClosesAt <= x.OpensAt))
+        {
+            throw new ArgumentException("Closing time must be after opening time.");
+        }
+    }
+
+    private static void ValidateAvailabilityRequest(CreateExperienceAvailabilityRequest request)
+    {
+        if (request.StartTimeUtc == default || request.EndTimeUtc == default)
+        {
+            throw new ArgumentException("Start and end times are required.");
+        }
+        if (request.EndTimeUtc <= request.StartTimeUtc)
+        {
+            throw new ArgumentException("End time must be after start time.");
+        }
+        if (request.StartTimeUtc.ToUniversalTime() <= DateTime.UtcNow)
+        {
+            throw new ArgumentException("Availability must start in the future.");
+        }
+        if (request.Capacity is < 1 or > 10000)
+        {
+            throw new ArgumentException("Capacity must be between 1 and 10000.");
+        }
+        if (request.PricePerPerson < 0)
+        {
+            throw new ArgumentException("Price per person cannot be negative.");
+        }
+    }
+
+    private Guid RequireCurrentUserId()
+    {
+        return _currentUserService.UserId
+            ?? throw new InvalidOperationException("Authenticated user id is missing.");
+    }
+
+    private bool IsAdmin() => _currentUserService.Roles.Contains(RoleNames.Admin);
+
+    private void EnsureCanManage(Experience experience)
+    {
+        if (!IsAdmin() && experience.CreatedByUserId != RequireCurrentUserId())
+        {
+            throw new UnauthorizedAccessException("You cannot manage this experience.");
+        }
+    }
+
     private static IQueryable<Experience> IncludeResponseData(IQueryable<Experience> query)
     {
         return query
@@ -452,7 +1031,8 @@ public class ExperienceService
         _dbContext.ExperiencePopularTimes.RemoveRange(experience.PopularTimes);
         _dbContext.ExperienceReviewsPerRatings.RemoveRange(experience.ReviewsPerRatings);
         _dbContext.ExperienceAmenities.RemoveRange(experience.Amenities);
-        _dbContext.ExperienceReviews.RemoveRange(experience.ExperienceReviews);
+        _dbContext.ExperienceReviews.RemoveRange(
+            experience.ExperienceReviews.Where(x => x.SourceList != "glinter"));
     }
 
     private static ExperienceResponse ToResponse(Experience experience, DateTime now)
@@ -523,7 +1103,14 @@ public class ExperienceService
                 .Take(10)
                 .Select(ToReviewResponse)
                 .ToList(),
-            CurrentInsight = BuildVisitInsight(experience, now)
+            CurrentInsight = BuildVisitInsight(experience, now),
+            IsActive = experience.IsActive,
+            CreatedAtUtc = experience.CreatedAtUtc,
+            UpdatedAtUtc = experience.UpdatedAtUtc,
+            ModerationStatus = experience.ModerationStatus,
+            ModerationNotes = experience.ModerationNotes,
+            ModeratedByUserId = experience.ModeratedByUserId,
+            ModeratedAtUtc = experience.ModeratedAtUtc
         };
     }
 

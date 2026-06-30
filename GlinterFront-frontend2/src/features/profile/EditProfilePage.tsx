@@ -28,13 +28,17 @@ const EditProfilePage = () => {
     ? "hotel-owner"
     : roles.includes("ExperienceProvider")
       ? "experience-provider"
-      : "traveler";
+      : roles.includes("LocalBuddy")
+        ? "local-buddy"
+        : "traveler";
   const tabs = useMemo(() => {
     const allowedTabKeys: readonly TabKey[] = roleKind === "hotel-owner"
-      ? ["hotels"]
+      ? ["edit", "hotels"]
       : roleKind === "experience-provider"
-        ? ["experiences"]
-        : ["edit", "bookings"];
+        ? ["edit", "experiences"]
+        : roleKind === "local-buddy"
+          ? ["edit"]
+          : ["edit", "bookings"];
     return allTabs.filter((tab) => allowedTabKeys.includes(tab.key));
   }, [roleKind]);
   const defaultTab = tabs[0]?.key ?? "edit";
@@ -50,11 +54,6 @@ const EditProfilePage = () => {
       setActiveTab(defaultTab);
     }
   }, [activeTab, defaultTab, location.state, searchParams, tabs]);
-
-  const bookingsCount = (() => {
-    const saved = localStorage.getItem("my_bookings");
-    return saved ? JSON.parse(saved).length : 0;
-  })();
 
   return (
     <div className="min-h-screen bg-background">
@@ -84,7 +83,6 @@ const EditProfilePage = () => {
             >
               <Icon className="w-3.5 h-3.5" />
               {label}
-              {key === "bookings" && bookingsCount > 0 && ` (${bookingsCount})`}
             </button>
           ))}
         </div>

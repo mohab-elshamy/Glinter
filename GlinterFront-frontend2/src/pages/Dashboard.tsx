@@ -4,37 +4,15 @@ import { motion } from "framer-motion";
 import Navbar from "@/components/Navbar";
 import { toast } from "sonner";
 import { useState, useEffect } from "react";
-import { profilesApi } from "@/shared/services/api-profiles";
-import { authStorage } from "@/shared/lib/auth";
-
-const recommendations = [
-  { 
-    title: "Top Safe Areas in Cairo", 
-    match: "91%", 
-    desc: "Based on your safety preference",
-    photo: "https://images.pexels.com/photos/16919444/pexels-photo-16919444/free-photo-of-cairo-tower-at-night.jpeg?w=150&h=150&fit=crop",
-    location: "Zamalek, Cairo, Egypt"
-  },
-  { 
-    title: "Cultural Experiences Near You", 
-    match: "88%", 
-    desc: "Recommended by AI",
-    photo: "https://images.pexels.com/photos/27595179/pexels-photo-27595179/free-photo-of-ancient-egyptian-temple-columns.jpeg?w=150&h=150&fit=crop",
-    location: "Karnak Temple, Luxor, Egypt"
-  },
-  { 
-    title: "Affordable Stays Matching Your Budget", 
-    match: "94%", 
-    desc: "Under $50/night with great reviews",
-    photo: "https://images.pexels.com/photos/30398789/pexels-photo-30398789/free-photo-of-coastal-hotel-in-dahab-egypt.jpeg?w=150&h=150&fit=crop",
-    location: "Dahab, Sinai, Egypt"
-  },
-];
+import { useMyProfile } from "@/shared/hooks/use-my-profile";
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const [profile, setProfile] = useState<{ displayName?: string; profileImageUrl?: string } | null>(null);
-  const [profileLoading, setProfileLoading] = useState(true);
+  const profileQuery = useMyProfile();
+  const profile = profileQuery.data?.profileType === "Traveler"
+    ? profileQuery.data
+    : undefined;
+  const displayName = profile?.displayName ?? "Traveler";
 
   // Load saved preferences from localStorage
   const [selectedVibes, setSelectedVibes] = useState<string[]>(() => {
@@ -61,28 +39,6 @@ const Dashboard = () => {
     localStorage.setItem("safetyPriority", selectedSafety);
     localStorage.setItem("budgetRange", selectedBudget);
   }, [selectedVibes, selectedComfort, selectedSafety, selectedBudget]);
-
-  // Fetch real profile from backend
-  useEffect(() => {
-    if (!authStorage.isAuthenticated()) {
-      setProfileLoading(false);
-      return;
-    }
-    profilesApi.getMyProfile()
-      .then((data) => {
-        setProfile(data);
-        if ("displayName" in data) {
-          localStorage.setItem("profile_displayName", data.displayName);
-        }
-      })
-      .catch(() => {
-        // Fall back to localStorage profile data
-        const savedName = localStorage.getItem("profile_displayName");
-        const savedImage = localStorage.getItem("profile_imageUrl");
-        if (savedName) setProfile({ displayName: savedName, profileImageUrl: savedImage || undefined });
-      })
-      .finally(() => setProfileLoading(false));
-  }, []);
 
   const handleEditPreferences = () => {
     // Create a modal element
@@ -290,7 +246,7 @@ const Dashboard = () => {
         {/* Header */}
         <div className="flex flex-col md:flex-row items-start justify-between gap-4 mb-8">
           <div>
-            <h1 className="text-2xl font-extrabold">Welcome back, {profile?.displayName || "Ahmed"} 👋</h1>
+            <h1 className="text-2xl font-extrabold">Welcome back, {displayName} 👋</h1>
             <p className="text-sm text-muted-foreground">Your next Egyptian journey awaits.</p>
             <div className="flex flex-wrap gap-3 mt-4">
               <Link to="/where-to-go" className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-primary to-accent text-white text-sm font-medium rounded-lg hover:opacity-90 transition-opacity shadow-lg">
@@ -420,51 +376,15 @@ const Dashboard = () => {
                 View All
               </span>
             </div>
-            <div className="space-y-3 mb-6">
-              {recommendations.map((r, index) => (
-                <motion.div 
-                  key={r.title} 
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                  className="card-glass p-4 flex items-center gap-4 cursor-pointer hover:border-primary/50 transition-all hover:shadow-lg"
-                  onClick={() => {
-                    if (r.title.includes("Safe Areas")) navigate("/where-to-stay");
-                    else if (r.title.includes("Cultural")) navigate("/where-to-go");
-                    else navigate("/explore");
-                  }}
-                >
-                  <div className="w-16 h-16 rounded-lg overflow-hidden bg-gradient-to-br from-primary/20 to-accent/20 flex-shrink-0">
-                    <img 
-                      src={r.photo} 
-                      alt={r.title}
-                      className="w-full h-full object-cover"
-                      loading="lazy"
-                      onError={(e) => {
-                        // Fallback images if the main ones don't load
-                        if (r.title.includes("Cairo")) {
-                          (e.target as HTMLImageElement).src = "https://images.pexels.com/photos/2034851/pexels-photo-2034851.jpeg?w=150&h=150&fit=crop";
-                        } else if (r.title.includes("Cultural")) {
-                          (e.target as HTMLImageElement).src = "https://images.pexels.com/photos/3274842/pexels-photo-3274842.jpeg?w=150&h=150&fit=crop";
-                        } else {
-                          (e.target as HTMLImageElement).src = "https://images.pexels.com/photos/2614818/pexels-photo-2614818.jpeg?w=150&h=150&fit=crop";
-                        }
-                      }}
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-sm">{r.title}</h3>
-                    <p className="text-xs text-muted-foreground">{r.desc}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-xs text-accent cursor-pointer">Explore Now →</span>
-                      <span className="text-[10px] text-muted-foreground">📍 {r.location}</span>
-                    </div>
-                  </div>
-                  <span className="text-xs font-semibold bg-primary/20 text-primary px-2 py-1 rounded-full whitespace-nowrap">
-                    📈 {r.match} Match
-                  </span>
-                </motion.div>
-              ))}
+            <div className="card-glass mb-6 p-8 text-center">
+              <Sparkles className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
+              <h3 className="text-sm font-semibold">No personalized recommendations yet</h3>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Recommendations will appear here when the backend recommendation module is available.
+              </p>
+              <Link to="/explore" className="mt-4 inline-block text-xs font-medium text-accent">
+                Explore available content →
+              </Link>
             </div>
 
             {/* Upcoming Trip */}
@@ -499,13 +419,13 @@ const Dashboard = () => {
                 <div className="relative">
                   <img 
                     src={profile?.profileImageUrl || "https://images.pexels.com/photos/2379005/pexels-photo-2379005.jpeg?w=150&h=150&fit=crop"}
-                    alt={profile?.displayName || "User"}
+                    alt={displayName}
                     className="w-14 h-14 rounded-full object-cover border-2 border-accent shadow-lg"
                   />
                   <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-green-500 border-2 border-white"></div>
                 </div>
                 <div>
-                  <p className="font-bold text-base">{profile?.displayName || "Ahmed"}</p>
+                  <p className="font-bold text-base">{displayName}</p>
                   <span className="text-[10px] bg-gold/20 text-gold px-2 py-0.5 rounded-full font-medium">Explorer Level</span>
                 </div>
               </div>

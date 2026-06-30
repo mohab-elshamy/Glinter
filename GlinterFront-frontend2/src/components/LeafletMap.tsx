@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { MapContainer, TileLayer, useMap, Marker, Popup, useMapEvents } from "react-leaflet";
+import { MapContainer, TileLayer, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet.markercluster";
 import "leaflet.fullscreen";
@@ -29,7 +29,11 @@ interface MapMarker {
   lng: number;
   name: string;
   cheapestPrice?: number;
-  data?: any;
+  data?: Partial<{
+    price: number;
+    rating: number;
+    area: string;
+  }>;
 }
 
 interface LeafletMapProps {
@@ -43,8 +47,6 @@ interface LeafletMapProps {
   showSearch?: boolean;
   showFullscreen?: boolean;
   showMarkers?: boolean;
-  heatmapLayerType?: string;
-  comparisonNeighborhoods?: any[];
 }
 
 // Component to add search control
@@ -54,8 +56,7 @@ function SearchControl({ showSearch }: { showSearch?: boolean }) {
   useEffect(() => {
     if (showSearch) {
       const provider = new OpenStreetMapProvider();
-      // @ts-ignore - GeoSearchControl types issue
-      const searchControl = new GeoSearchControl({
+      const searchControl = GeoSearchControl({
         provider,
         style: "bar",
         searchLabel: "Search location...",
@@ -64,7 +65,7 @@ function SearchControl({ showSearch }: { showSearch?: boolean }) {
         marker: {
           icon: DefaultIcon,
         },
-      });
+      }) as unknown as L.Control;
 
       map.addControl(searchControl);
 
@@ -84,18 +85,9 @@ function FullscreenControl({ showFullscreen }: { showFullscreen?: boolean }) {
 
   useEffect(() => {
     if (showFullscreen) {
-      // Dynamically import and add fullscreen control
-      import("leaflet.fullscreen").then((module) => {
-        // @ts-ignore - leaflet.fullscreen types issue
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-        const Fullscreen = module.default || module;
-        // @ts-ignore - Fullscreen constructor types
-        const fullscreenControl = new Fullscreen();
-        map.addControl(fullscreenControl);
-        controlRef.current = fullscreenControl;
-      }).catch((err) => {
-        console.warn("Failed to load fullscreen control:", err);
-      });
+      const fullscreenControl = L.control.fullscreen();
+      map.addControl(fullscreenControl);
+      controlRef.current = fullscreenControl;
     }
 
     return () => {
@@ -113,33 +105,17 @@ const BRAND_PURPLE = "#9333ea";
 const SELECTED_GOLD = "#FFD700";
 const COMPARISON_TEAL = "#00CED1";
 
-const SCORE_COLORS = {
-  great: "#22c55e",
-  good: "#fbbf24",
-  okay: "#f97316",
-  poor: "#ef4444",
-};
-
-function getScoreColor(score: number): string {
-  if (score >= 85) return SCORE_COLORS.great;
-  if (score >= 75) return SCORE_COLORS.good;
-  if (score >= 65) return SCORE_COLORS.okay;
-  return SCORE_COLORS.poor;
-}
-
 // Component to handle markers (without clustering)
 function MarkerGroup({
   markers,
   onMarkerClick,
   selectedMarker,
   comparisonMarkers,
-  layerType,
 }: {
   markers: MapMarker[];
   onMarkerClick?: (marker: MapMarker) => void;
   selectedMarker?: MapMarker | null;
   comparisonMarkers?: MapMarker[];
-  layerType?: string;
 }) {
   const map = useMap();
   const markersRef = useRef<L.Marker[]>([]);
@@ -152,9 +128,6 @@ function MarkerGroup({
       const isSelected = selectedMarker?.name === marker.name;
       const isInComparison = comparisonMarkers?.some((m) => m.name === marker.name);
 
-      const isScoring = layerType && layerType !== "none" && marker.data && layerType in marker.data;
-      const score = isScoring ? marker.data[layerType] : null;
-
       let markerColor = BRAND_PURPLE;
       let bgOpacity = "0.5";
       const hexSize = isSelected ? "scale(1.4)" : isInComparison ? "scale(1.2)" : "";
@@ -165,9 +138,6 @@ function MarkerGroup({
       } else if (isInComparison) {
         markerColor = COMPARISON_TEAL;
         bgOpacity = "0.8";
-      } else if (isScoring && score !== null) {
-        markerColor = getScoreColor(score);
-        bgOpacity = "1";
       }
 
       const cp = marker.cheapestPrice;
@@ -211,38 +181,14 @@ function MarkerGroup({
         
         if (marker.data) {
           const data = marker.data;
-          if ("safety" in data) {
-            // It's a neighborhood
-            const n = data as any;
-            popupContent += `
-              <div style="margin-top: 8px; font-size: 12px;">
-                <div style="display: flex; justify-content: space-between; margin: 4px 0;">
-                  <span>🛡️ Safety:</span>
-                  <strong style="color: ${n.safety >= 85 ? '#22c55e' : n.safety >= 70 ? '#fbbf24' : '#ef4444'}">${n.safety}%</strong>
-                </div>
-                <div style="display: flex; justify-content: space-between; margin: 4px 0;">
-                  <span>💰 Price:</span>
-                  <strong>${n.price}/100</strong>
-                </div>
-                <div style="display: flex; justify-content: space-between; margin: 4px 0;">
-                  <span>🛋️ Comfort:</span>
-                  <strong style="color: ${n.comfort >= 85 ? '#22c55e' : n.comfort >= 70 ? '#fbbf24' : '#ef4444'}">${n.comfort}%</strong>
-                </div>
-              </div>
-            `;
-          } else if ("rating" in data) {
-            // It's a hotel
-            const h = data as any;
+          if ("rating" in data) {
+            const h = data as Required<Pick<NonNullable<MapMarker["data"]>, "area" | "rating" | "price">>;
             popupContent += `
               <div style="margin-top: 8px; font-size: 12px;">
                 <div style="margin: 4px 0;">📍 ${h.area}</div>
                 <div style="display: flex; justify-content: space-between; margin: 4px 0;">
                   <span>⭐ Rating:</span>
                   <strong>${h.rating}</strong>
-                </div>
-                <div style="display: flex; justify-content: space-between; margin: 4px 0;">
-                  <span>🛡️ Safety:</span>
-                  <strong style="color: ${h.safety >= 85 ? '#22c55e' : h.safety >= 70 ? '#fbbf24' : '#ef4444'}">${h.safety}%</strong>
                 </div>
                 <div style="display: flex; justify-content: space-between; margin: 4px 0;">
                   <span>💰 Price:</span>
@@ -272,7 +218,7 @@ function MarkerGroup({
       });
       markersRef.current = [];
     };
-  }, [map, markers, onMarkerClick, selectedMarker, comparisonMarkers, layerType]);
+  }, [map, markers, onMarkerClick, selectedMarker, comparisonMarkers]);
 
   return null;
 }
@@ -300,7 +246,7 @@ function MapBounds({
         const hotelMarkers = allMarkers.filter(m => 
           m.data && "rating" in m.data && 
           comparisonMarkers.some(cm => {
-            const hotelArea = (m.data as any).area;
+            const hotelArea = m.data?.area;
             return cm.name === hotelArea;
           })
         );
@@ -312,7 +258,7 @@ function MapBounds({
       if (allMarkers) {
         const hotelMarkers = allMarkers.filter(m => 
           m.data && "rating" in m.data && 
-          (m.data as any).area === selectedMarker.name
+          m.data?.area === selectedMarker.name
         );
         markersToFit.push(...hotelMarkers);
       }
@@ -330,15 +276,8 @@ function MapBounds({
 }
 
 // Marker legend for the map
-function MarkerLegend({ layerType }: { layerType?: string }) {
-  const isScoring = layerType && layerType !== "none";
-  const items = isScoring ? [
-    { color: "#22c55e", label: "Great (85+)" },
-    { color: "#fbbf24", label: "Good (75-84)" },
-    { color: "#f97316", label: "Okay (65-74)" },
-    { color: "#ef4444", label: "Poor (<65)" },
-    { color: "#FFD700", label: "Selected" },
-  ] : [
+function MarkerLegend() {
+  const items = [
     { color: "#9333ea", label: "Matching place" },
     { color: "#FFD700", label: "Selected" },
     { color: "#00CED1", label: "Comparing" },
@@ -383,8 +322,6 @@ const LeafletMap: React.FC<LeafletMapProps> = ({
   showSearch = true,
   showFullscreen = true,
   showMarkers = true,
-  heatmapLayerType,
-  comparisonNeighborhoods = [],
 }) => {
   return (
     <div style={{ position: "relative", height, width: "100%" }} className="rounded-lg overflow-hidden border border-border/30">
@@ -414,11 +351,10 @@ const LeafletMap: React.FC<LeafletMapProps> = ({
             onMarkerClick={onMarkerClick}
             selectedMarker={selectedMarker}
             comparisonMarkers={comparisonMarkers}
-            layerType={heatmapLayerType}
           />
         )}
       </MapContainer>
-      <MarkerLegend layerType={heatmapLayerType} />
+      <MarkerLegend />
     </div>
   );
 };
