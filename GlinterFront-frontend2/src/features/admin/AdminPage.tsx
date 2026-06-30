@@ -25,6 +25,7 @@ import type {
 } from "@/shared/types/api";
 import { toast } from "sonner";
 import type { LoadState } from "@/shared/types/async-state";
+import RegionsAdminPanel from "./RegionsAdminPanel";
 
 const sections = [
   "Overview",
@@ -33,6 +34,7 @@ const sections = [
   "Experience Moderation",
   "Analytics",
   "Audit Events",
+  "Regions",
 ] as const;
 
 type Section = (typeof sections)[number];
@@ -345,6 +347,8 @@ const AdminPage = () => {
                   </div>
                 </div>
               )}
+
+              {section === "Regions" && <RegionsAdminPanel />}
 
               {section === "Audit Events" && (
                 <div>

@@ -14,6 +14,10 @@ public class CreateStayRequest
     public string? LocationSummaryDescription { get; set; }
     public double? Latitude { get; set; }
     public double? Longitude { get; set; }
+    public int? Adm0Gid { get; set; }
+    public int? Adm1Gid { get; set; }
+    public int? Adm2Gid { get; set; }
+    public int? Adm3Gid { get; set; }
     public List<string> ImageLinks { get; set; } = [];
     public List<string> Amenities { get; set; } = [];
     public List<StayBookingPlatformRequest> BookingPlatforms { get; set; } = [];

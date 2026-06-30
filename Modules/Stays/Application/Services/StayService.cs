@@ -64,7 +64,11 @@ public class StayService
             PhoneInternational = NormalizeString(request.PhoneInternational),
             LocationSummaryDescription = CleanText(request.LocationSummaryDescription),
             Latitude = request.Latitude,
-            Longitude = request.Longitude
+            Longitude = request.Longitude,
+            Adm0Gid = request.Adm0Gid,
+            Adm1Gid = request.Adm1Gid,
+            Adm2Gid = request.Adm2Gid,
+            Adm3Gid = request.Adm3Gid
         };
 
         await AttachRegionHierarchyAsync(stay, cancellationToken);
@@ -118,6 +122,10 @@ public class StayService
         stay.LocationSummaryDescription = CleanText(request.LocationSummaryDescription);
         stay.Latitude = request.Latitude;
         stay.Longitude = request.Longitude;
+        stay.Adm0Gid = request.Adm0Gid;
+        stay.Adm1Gid = request.Adm1Gid;
+        stay.Adm2Gid = request.Adm2Gid;
+        stay.Adm3Gid = request.Adm3Gid;
         stay.UpdatedAtUtc = DateTime.UtcNow;
 
         _dbContext.StayImages.RemoveRange(stay.Images);
@@ -896,6 +904,12 @@ public class StayService
         {
             throw new ArgumentException("Valid latitude and longitude are required.");
         }
+
+        if (new[] { request.Adm0Gid, request.Adm1Gid, request.Adm2Gid, request.Adm3Gid }
+            .Any(x => x is <= 0))
+        {
+            throw new ArgumentException("Region identifiers must be positive.");
+        }
     }
 
     private static void ValidateBookingRequest(CreateStayBookingRequest request)
@@ -1190,10 +1204,13 @@ public class StayService
 
     private async Task AttachRegionHierarchyAsync(Stay stay, CancellationToken cancellationToken)
     {
-        stay.Adm0Gid = null;
-        stay.Adm1Gid = null;
-        stay.Adm2Gid = null;
-        stay.Adm3Gid = null;
+        if (stay.Adm0Gid is not null ||
+            stay.Adm1Gid is not null ||
+            stay.Adm2Gid is not null ||
+            stay.Adm3Gid is not null)
+        {
+            return;
+        }
 
         if (stay.Latitude is null || stay.Longitude is null)
         {
@@ -1205,10 +1222,13 @@ public class StayService
             stay.Longitude.Value,
             cancellationToken);
 
-        stay.Adm0Gid = hierarchy?.Adm0Gid;
-        stay.Adm1Gid = hierarchy?.Adm1Gid;
-        stay.Adm2Gid = hierarchy?.Adm2Gid;
-        stay.Adm3Gid = hierarchy?.Adm3Gid;
+        if (hierarchy is not null)
+        {
+            stay.Adm0Gid = hierarchy.Adm0Gid;
+            stay.Adm1Gid = hierarchy.Adm1Gid;
+            stay.Adm2Gid = hierarchy.Adm2Gid;
+            stay.Adm3Gid = hierarchy.Adm3Gid;
+        }
     }
 
     private static string? NormalizeExternalReviewId(

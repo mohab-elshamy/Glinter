@@ -15,6 +15,8 @@ import type {
   LocalBuddyListItemResponse,
 } from "@/shared/types/api";
 import type { LoadState } from "@/shared/types/async-state";
+import type { RegionHierarchyGids } from "@/shared/types/regions";
+import RegionCascadeSelect from "@/components/RegionCascadeSelect";
 
 const filters = ["All", "Favorites", "Free", "Verified", "Top Rated", "Available Now"];
 
@@ -66,6 +68,7 @@ const LocalBuddies = () => {
   const [apiExperiences, setApiExperiences] = useState<ExperienceSummaryDto[]>([]);
   const [apiBuddies, setApiBuddies] = useState<LocalBuddyListItemResponse[]>([]);
   const [loadState, setLoadState] = useState<LoadState>({ status: "loading" });
+  const [region, setRegion] = useState<RegionHierarchyGids>({});
 
   // Load liked items from localStorage
   useEffect(() => {
@@ -77,8 +80,15 @@ const LocalBuddies = () => {
 
   // Fetch public experiences from the backend.
   useEffect(() => {
+    setLoadState({ status: "loading" });
     Promise.all([
-      experiencesApi.getExperiences({ pageSize: 100 }),
+      experiencesApi.getExperiences({
+        pageSize: 100,
+        adm0Gid: region.adm0Gid,
+        adm1Gid: region.adm1Gid,
+        adm2Gid: region.adm2Gid,
+        adm3Gid: region.adm3Gid,
+      }),
       profilesApi.getLocalBuddies(),
     ])
       .then(([experiencePage, loadedBuddies]) => {
@@ -91,7 +101,7 @@ const LocalBuddies = () => {
         setLoadState({ status: "error", message });
         toast.error(message);
       });
-  }, []);
+  }, [region.adm0Gid, region.adm1Gid, region.adm2Gid, region.adm3Gid]);
 
   useEffect(() => {
     localStorage.setItem("likedBuddies", JSON.stringify(likedBuddies));
@@ -363,6 +373,16 @@ const LocalBuddies = () => {
             </button>
           ))}
         </div>
+
+        {activeTab === "experiences" && (
+          <div className="card-glass mb-6 p-4">
+            <RegionCascadeSelect
+              value={region}
+              onChange={setRegion}
+              label="Filter experiences by backend region"
+            />
+          </div>
+        )}
 
         {/* Tabs */}
         <div className="flex rounded-lg bg-secondary p-1 mb-8 max-w-xs">

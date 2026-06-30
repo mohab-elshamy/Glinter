@@ -8,6 +8,7 @@ interface HeatmapPanelProps {
     comparisonMarkers: Array<{ lat: number; lng: number; name: string; cheapestPrice?: number; data: Hotel }>;
   };
   onSelectHotel: (hotel: Hotel) => void;
+  onMapClick: (lat: number, lng: number) => void;
   showMarkers?: boolean;
   height?: string;
 }
@@ -15,6 +16,7 @@ interface HeatmapPanelProps {
 const HeatmapPanel = ({
   mapData,
   onSelectHotel,
+  onMapClick,
   showMarkers = true,
   height,
 }: HeatmapPanelProps) => (
@@ -26,6 +28,7 @@ const HeatmapPanel = ({
       onMarkerClick={(marker) => {
         if (marker.data) onSelectHotel(marker.data as Hotel);
       }}
+      onMapClick={onMapClick}
       selectedMarker={mapData.selectedMarker}
       comparisonMarkers={mapData.comparisonMarkers}
       showMarkers={showMarkers}

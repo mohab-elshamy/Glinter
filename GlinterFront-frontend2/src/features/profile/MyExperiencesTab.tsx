@@ -11,6 +11,7 @@ import type {
   ExperienceResponseDto,
 } from "@/shared/types/api";
 import type { LoadState } from "@/shared/types/async-state";
+import RegionCascadeSelect from "@/components/RegionCascadeSelect";
 
 const emptyExperience: CreateExperienceRequest = {
   category: "Historical",
@@ -85,6 +86,10 @@ const MyExperiencesTab = () => {
       address: experience.address ?? "",
       latitude: experience.latitude,
       longitude: experience.longitude,
+      adm0Gid: experience.adm0Gid,
+      adm1Gid: experience.adm1Gid,
+      adm2Gid: experience.adm2Gid,
+      adm3Gid: experience.adm3Gid,
       featuredImageLinks: experience.featuredImages.map((image) => image.link),
       hours: experience.hours.map(({ dayOfWeek, opensAt, closesAt }) => ({
         dayOfWeek,
@@ -367,6 +372,13 @@ const MyExperiencesTab = () => {
               <label className="text-xs">Name *<input className="input-glass mt-1 w-full" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label>
               <label className="text-xs">Category<select className="input-glass mt-1 w-full" value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value as ExperienceCategory })}>{(categories.length ? categories : ["Historical", "Nature", "Shopping", "Nightlife", "Dining"]).map((category) => <option key={category}>{category}</option>)}</select></label>
               <label className="text-xs md:col-span-2">Description<textarea className="input-glass mt-1 w-full" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} /></label>
+              <div className="md:col-span-2">
+                <RegionCascadeSelect
+                  value={form}
+                  onChange={(selection) => setForm({ ...form, ...selection })}
+                  label="Backend region"
+                />
+              </div>
               <label className="text-xs md:col-span-2">Address<input className="input-glass mt-1 w-full" value={form.address} onChange={(event) => setForm({ ...form, address: event.target.value })} /></label>
               <label className="text-xs">Latitude<input type="number" step="any" className="input-glass mt-1 w-full" value={form.latitude ?? ""} onChange={(event) => setForm({ ...form, latitude: Number(event.target.value) })} /></label>
               <label className="text-xs">Longitude<input type="number" step="any" className="input-glass mt-1 w-full" value={form.longitude ?? ""} onChange={(event) => setForm({ ...form, longitude: Number(event.target.value) })} /></label>

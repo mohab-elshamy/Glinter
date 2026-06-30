@@ -62,6 +62,10 @@ public class ExperienceService
             Address = CleanText(request.Address),
             Latitude = request.Latitude,
             Longitude = request.Longitude,
+            Adm0Gid = request.Adm0Gid,
+            Adm1Gid = request.Adm1Gid,
+            Adm2Gid = request.Adm2Gid,
+            Adm3Gid = request.Adm3Gid,
             GoogleMapsLink = NormalizeString(request.GoogleMapsLink),
             PhoneInternational = NormalizeString(request.PhoneInternational),
             PriceRange = NormalizeString(request.PriceRange),
@@ -169,6 +173,10 @@ public class ExperienceService
         experience.Address = CleanText(request.Address);
         experience.Latitude = request.Latitude;
         experience.Longitude = request.Longitude;
+        experience.Adm0Gid = request.Adm0Gid;
+        experience.Adm1Gid = request.Adm1Gid;
+        experience.Adm2Gid = request.Adm2Gid;
+        experience.Adm3Gid = request.Adm3Gid;
         experience.GoogleMapsLink = NormalizeString(request.GoogleMapsLink);
         experience.PhoneInternational = NormalizeString(request.PhoneInternational);
         experience.PriceRange = NormalizeString(request.PriceRange);
@@ -891,6 +899,12 @@ public class ExperienceService
             throw new ArgumentException("Valid latitude and longitude are required.");
         }
 
+        if (new[] { request.Adm0Gid, request.Adm1Gid, request.Adm2Gid, request.Adm3Gid }
+            .Any(x => x is <= 0))
+        {
+            throw new ArgumentException("Region identifiers must be positive.");
+        }
+
         if (request.Hours.Any(x => x.ClosesAt <= x.OpensAt))
         {
             throw new ArgumentException("Closing time must be after opening time.");
@@ -1412,10 +1426,13 @@ public class ExperienceService
         Experience experience,
         CancellationToken cancellationToken)
     {
-        experience.Adm0Gid = null;
-        experience.Adm1Gid = null;
-        experience.Adm2Gid = null;
-        experience.Adm3Gid = null;
+        if (experience.Adm0Gid is not null ||
+            experience.Adm1Gid is not null ||
+            experience.Adm2Gid is not null ||
+            experience.Adm3Gid is not null)
+        {
+            return;
+        }
 
         if (experience.Latitude is null || experience.Longitude is null)
         {
@@ -1427,10 +1444,13 @@ public class ExperienceService
             experience.Longitude.Value,
             cancellationToken);
 
-        experience.Adm0Gid = hierarchy?.Adm0Gid;
-        experience.Adm1Gid = hierarchy?.Adm1Gid;
-        experience.Adm2Gid = hierarchy?.Adm2Gid;
-        experience.Adm3Gid = hierarchy?.Adm3Gid;
+        if (hierarchy is not null)
+        {
+            experience.Adm0Gid = hierarchy.Adm0Gid;
+            experience.Adm1Gid = hierarchy.Adm1Gid;
+            experience.Adm2Gid = hierarchy.Adm2Gid;
+            experience.Adm3Gid = hierarchy.Adm3Gid;
+        }
     }
 
     private static VisitInsightResponse BuildVisitInsight(Experience experience, DateTime visitAt)

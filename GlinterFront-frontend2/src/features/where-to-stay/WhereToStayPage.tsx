@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { authStorage } from "@/shared/lib/auth";
 import type { Hotel } from "./types";
 import { staysApi } from "@/shared/services/api-stays";
+import RegionCascadeSelect from "@/components/RegionCascadeSelect";
 
 const WhereToStayPage = () => {
   const {
@@ -25,6 +26,9 @@ const WhereToStayPage = () => {
     minRating, setMinRating,
     selectedHotel, setSelectedHotel,
     selectHotel,
+    region, setRegion,
+    locatingRegion,
+    resolveRegionByPoint,
     staysState,
     isLoadingStays,
     handleSearch,
@@ -79,6 +83,7 @@ const WhereToStayPage = () => {
           <HeatmapPanel
             mapData={mapData}
             onSelectHotel={(hotel) => void selectHotel(hotel)}
+            onMapClick={(lat, lng) => void resolveRegionByPoint(lat, lng)}
             showMarkers={showMarkers}
             height="calc(100vh - 5rem)"
           />
@@ -88,10 +93,10 @@ const WhereToStayPage = () => {
           <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
             <div className="bg-black/70 backdrop-blur-sm rounded-2xl px-8 py-6 max-w-sm text-center border border-white/10">
               <p className="text-white/90 text-sm font-medium">
-                No places match all your filters.
+                No mapped stays match the selected backend region and filters.
               </p>
               <p className="text-white/50 text-xs mt-2">
-                Try lowering your price, safety, or comfort requirements.
+                Try another region or price/rating filter. Some listings may not have coordinates yet.
               </p>
             </div>
           </div>
@@ -178,6 +183,14 @@ const WhereToStayPage = () => {
       {/* MAIN CONTENT */}
       <main className="relative z-10 -mt-20 pb-20" style={{ backgroundColor: '#0B0C10' }}>
         <div className="container mx-auto max-w-7xl px-0 sm:px-2 max-md:px-4">
+          <div className="card-glass mb-6 p-4">
+            <RegionCascadeSelect
+              value={region}
+              onChange={setRegion}
+              label={locatingRegion ? "Finding region from map point…" : "Filter by backend region or click the map"}
+              disabled={locatingRegion}
+            />
+          </div>
 
           <div className="flex justify-between items-end mb-8 pt-10 max-md:flex-col max-md:items-start max-md:gap-2">
             <div>

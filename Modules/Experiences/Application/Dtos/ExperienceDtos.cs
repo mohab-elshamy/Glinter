@@ -11,6 +11,10 @@ public class CreateExperienceRequest
     public string? Address { get; set; }
     public double? Latitude { get; set; }
     public double? Longitude { get; set; }
+    public int? Adm0Gid { get; set; }
+    public int? Adm1Gid { get; set; }
+    public int? Adm2Gid { get; set; }
+    public int? Adm3Gid { get; set; }
     public List<string> FeaturedImageLinks { get; set; } = [];
     public List<ExperienceHourRequest> Hours { get; set; } = [];
     public string? GoogleMapsLink { get; set; }

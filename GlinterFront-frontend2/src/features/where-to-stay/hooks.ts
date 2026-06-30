@@ -4,6 +4,8 @@ import { toast } from "sonner";
 import { staysApi } from "@/shared/services/api-stays";
 import type { LoadState } from "@/shared/types/async-state";
 import type { Hotel } from "./types";
+import { regionsApi } from "@/shared/services/api-regions";
+import type { RegionHierarchyGids } from "@/shared/types/regions";
 
 const toHotel = (stay: Awaited<ReturnType<typeof staysApi.getStayById>>): Hotel => ({
   id: stay.id,
@@ -28,6 +30,8 @@ export function useWhereToStay() {
   const [checkout, setCheckout] = useState("");
   const [guests, setGuests] = useState(1);
   const [selectedHotel, setSelectedHotel] = useState<Hotel | null>(null);
+  const [region, setRegion] = useState<RegionHierarchyGids>({});
+  const [locatingRegion, setLocatingRegion] = useState(false);
   const [apiHotels, setApiHotels] = useState<Hotel[]>([]);
   const [staysState, setStaysState] = useState<LoadState>({ status: "loading" });
 
@@ -37,17 +41,30 @@ export function useWhereToStay() {
   }, [searchParams]);
 
   useEffect(() => {
-    staysApi.getStays({ pageSize: 100 })
+    let active = true;
+    setStaysState({ status: "loading" });
+    staysApi.getStays({
+      pageSize: 100,
+      adm0Gid: region.adm0Gid,
+      adm1Gid: region.adm1Gid,
+      adm2Gid: region.adm2Gid,
+      adm3Gid: region.adm3Gid,
+    })
       .then((response) => {
+        if (!active) return;
         setApiHotels(response.items.map(toHotel));
         setStaysState({ status: "ready" });
       })
       .catch((error: unknown) => {
+        if (!active) return;
         const message = error instanceof Error ? error.message : "Could not load stays.";
         setStaysState({ status: "error", message });
         toast.error(message);
       });
-  }, []);
+    return () => {
+      active = false;
+    };
+  }, [region.adm0Gid, region.adm1Gid, region.adm2Gid, region.adm3Gid]);
 
   const filteredHotels = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -67,6 +84,17 @@ export function useWhereToStay() {
       setSelectedHotel(toHotel(await staysApi.getStayById(hotel.id)));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not load stay details.");
+    }
+  };
+
+  const resolveRegionByPoint = async (lat: number, lng: number) => {
+    setLocatingRegion(true);
+    try {
+      setRegion(await regionsApi.getByPoint(lat, lng));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No backend region contains this map point.");
+    } finally {
+      setLocatingRegion(false);
     }
   };
 
@@ -100,6 +128,9 @@ export function useWhereToStay() {
     maxPrice, setMaxPrice,
     minRating, setMinRating,
     selectedHotel, setSelectedHotel,
+    region, setRegion,
+    locatingRegion,
+    resolveRegionByPoint,
     selectHotel,
     staysState,
     isLoadingStays: staysState.status === "loading",

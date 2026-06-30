@@ -1,8 +1,7 @@
 import { useEffect, useRef } from "react";
-import { MapContainer, TileLayer, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet.markercluster";
-import "leaflet.fullscreen";
 import "leaflet-geosearch/dist/geosearch.css";
 import { GeoSearchControl, OpenStreetMapProvider } from "leaflet-geosearch";
 
@@ -41,12 +40,20 @@ interface LeafletMapProps {
   zoom: number;
   markers?: MapMarker[];
   onMarkerClick?: (marker: MapMarker) => void;
+  onMapClick?: (lat: number, lng: number) => void;
   selectedMarker?: MapMarker | null;
   comparisonMarkers?: MapMarker[];
   height?: string;
   showSearch?: boolean;
   showFullscreen?: boolean;
   showMarkers?: boolean;
+}
+
+function MapClickHandler({ onMapClick }: { onMapClick?: (lat: number, lng: number) => void }) {
+  useMapEvents({
+    click: (event) => onMapClick?.(event.latlng.lat, event.latlng.lng),
+  });
+  return null;
 }
 
 // Component to add search control
@@ -84,13 +91,21 @@ function FullscreenControl({ showFullscreen }: { showFullscreen?: boolean }) {
   const controlRef = useRef<L.Control | null>(null);
 
   useEffect(() => {
+    let active = true;
     if (showFullscreen) {
-      const fullscreenControl = L.control.fullscreen();
-      map.addControl(fullscreenControl);
-      controlRef.current = fullscreenControl;
+      void import("leaflet.fullscreen").then((module) => {
+        if (!active) return;
+        const Fullscreen = module.default as unknown as new () => L.Control;
+        const fullscreenControl = new Fullscreen();
+        map.addControl(fullscreenControl);
+        controlRef.current = fullscreenControl;
+      }).catch((error: unknown) => {
+        console.error("Could not load the fullscreen map control.", error);
+      });
     }
 
     return () => {
+      active = false;
       if (controlRef.current) {
         map.removeControl(controlRef.current);
         controlRef.current = null;
@@ -278,9 +293,8 @@ function MapBounds({
 // Marker legend for the map
 function MarkerLegend() {
   const items = [
-    { color: "#9333ea", label: "Matching place" },
+    { color: "#9333ea", label: "Backend stay" },
     { color: "#FFD700", label: "Selected" },
-    { color: "#00CED1", label: "Comparing" },
   ];
   return (
     <div style={{
@@ -316,6 +330,7 @@ const LeafletMap: React.FC<LeafletMapProps> = ({
   zoom,
   markers = [],
   onMarkerClick,
+  onMapClick,
   selectedMarker,
   comparisonMarkers = [],
   height = "400px",
@@ -340,6 +355,7 @@ const LeafletMap: React.FC<LeafletMapProps> = ({
         />
         <SearchControl showSearch={showSearch} />
         <FullscreenControl showFullscreen={showFullscreen} />
+        <MapClickHandler onMapClick={onMapClick} />
         <MapBounds 
           comparisonMarkers={comparisonMarkers} 
           selectedMarker={selectedMarker}

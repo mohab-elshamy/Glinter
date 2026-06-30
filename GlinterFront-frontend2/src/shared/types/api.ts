@@ -162,6 +162,10 @@ export interface CreateExperienceRequest {
   address?: string;
   latitude?: number;
   longitude?: number;
+  adm0Gid?: number;
+  adm1Gid?: number;
+  adm2Gid?: number;
+  adm3Gid?: number;
   featuredImageLinks: string[];
   hours: Array<{ dayOfWeek: string; opensAt: string; closesAt: string }>;
   googleMapsLink?: string;
@@ -301,6 +305,10 @@ export interface CreateStayRequest {
   locationSummaryDescription?: string;
   latitude?: number;
   longitude?: number;
+  adm0Gid?: number;
+  adm1Gid?: number;
+  adm2Gid?: number;
+  adm3Gid?: number;
   imageLinks: string[];
   amenities: string[];
   bookingPlatforms: Array<{

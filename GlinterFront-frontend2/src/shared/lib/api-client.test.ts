@@ -53,6 +53,24 @@ describe("API client", () => {
     expect(apiActivity.getSnapshot()).toBe(0);
   });
 
+  it("sends FormData without forcing a JSON content type", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }));
+    const form = new FormData();
+    form.append("file", new File(["{}"], "regions.geojson"));
+
+    await request("/admin/regions/import/adm0", {
+      method: "POST",
+      body: form,
+    });
+
+    const options = vi.mocked(fetch).mock.calls[0][1] as RequestInit;
+    expect(options.body).toBe(form);
+    expect(new Headers(options.headers).has("Content-Type")).toBe(false);
+  });
+
   it("rotates the refresh token and retries a failed authorized request", async () => {
     authStorage.setTokens(
       "expired-access-token",
