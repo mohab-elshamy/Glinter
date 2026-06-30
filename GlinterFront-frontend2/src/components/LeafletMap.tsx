@@ -47,6 +47,7 @@ interface LeafletMapProps {
   showSearch?: boolean;
   showFullscreen?: boolean;
   showMarkers?: boolean;
+  showLegend?: boolean;
 }
 
 function MapClickHandler({ onMapClick }: { onMapClick?: (lat: number, lng: number) => void }) {
@@ -337,6 +338,7 @@ const LeafletMap: React.FC<LeafletMapProps> = ({
   showSearch = true,
   showFullscreen = true,
   showMarkers = true,
+  showLegend = true,
 }) => {
   return (
     <div style={{ position: "relative", height, width: "100%" }} className="rounded-lg overflow-hidden border border-border/30">
@@ -370,7 +372,7 @@ const LeafletMap: React.FC<LeafletMapProps> = ({
           />
         )}
       </MapContainer>
-      <MarkerLegend />
+      {showLegend && <MarkerLegend />}
     </div>
   );
 };

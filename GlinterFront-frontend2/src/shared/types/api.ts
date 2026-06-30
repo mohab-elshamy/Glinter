@@ -394,6 +394,47 @@ export interface GetStaysRequest {
   pageSize?: number;
 }
 
+export type StayRegionGroupBy = "Adm0" | "Adm1" | "Adm2" | "Adm3";
+
+export interface StayRegionStatsRequest {
+  groupBy: StayRegionGroupBy;
+  sourceType?: StaySourceType;
+  adm0Gid?: number;
+  adm1Gid?: number;
+  adm2Gid?: number;
+  adm3Gid?: number;
+  minPrice?: number;
+  maxPrice?: number;
+  minRating?: number;
+}
+
+export interface StayRegionStatsDto {
+  groupBy: StayRegionGroupBy;
+  regionGid: number;
+  hotelsCount: number;
+  averagePrice?: number;
+  pricePercentage?: number;
+}
+
+export interface StayImageUploadDto {
+  link: string;
+  fileName: string;
+  sizeBytes: number;
+}
+
+export interface ImportStaysResult {
+  created: number;
+  updated: number;
+  skipped: number;
+}
+
+export interface StayReviewsForLlmDto {
+  stayId: number;
+  stayName: string;
+  reviewsCount: number;
+  reviewsText: string;
+}
+
 export interface PagedResponse<T> {
   page: number;
   pageSize: number;

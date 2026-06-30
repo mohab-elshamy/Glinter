@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Building2, Edit, Eye, EyeOff, MapPin, Plus, Save, X } from "lucide-react";
+import { Building2, Edit, Eye, EyeOff, ImagePlus, MapPin, Plus, Save, X } from "lucide-react";
 import { toast } from "sonner";
 import { staysApi } from "@/shared/services/api-stays";
 import type {
@@ -10,6 +10,8 @@ import type {
 } from "@/shared/types/api";
 import type { LoadState } from "@/shared/types/async-state";
 import RegionCascadeSelect from "@/components/RegionCascadeSelect";
+import LeafletMap from "@/components/LeafletMap";
+import { regionsApi } from "@/shared/services/api-regions";
 
 const emptyForm: CreateStayRequest = {
   name: "",
@@ -19,8 +21,8 @@ const emptyForm: CreateStayRequest = {
   website: "",
   phoneInternational: "",
   locationSummaryDescription: "",
-  latitude: 30.0444,
-  longitude: 31.2357,
+  latitude: undefined,
+  longitude: undefined,
   imageLinks: [],
   amenities: [],
   bookingPlatforms: [],
@@ -41,6 +43,8 @@ const MyHotelsTab = () => {
   const [showForm, setShowForm] = useState(false);
   const [loadState, setLoadState] = useState<LoadState>({ status: "loading" });
   const [saving, setSaving] = useState(false);
+  const [uploadingImages, setUploadingImages] = useState(false);
+  const [locatingRegion, setLocatingRegion] = useState(false);
 
   const loadHotels = async () => {
     try {
@@ -91,8 +95,8 @@ const MyHotelsTab = () => {
   };
 
   const save = async () => {
-    if (!form.name.trim() || form.price <= 0) {
-      toast.error("Name and a positive nightly price are required.");
+    if (!form.name.trim() || form.price <= 0 || form.latitude == null || form.longitude == null) {
+      toast.error("Name, a positive nightly price, and a map location are required.");
       return;
     }
 
@@ -113,6 +117,38 @@ const MyHotelsTab = () => {
       toast.error(errorMessage(error));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const selectLocation = async (latitude: number, longitude: number) => {
+    setForm((current) => ({ ...current, latitude, longitude }));
+    setLocatingRegion(true);
+    try {
+      const hierarchy = await regionsApi.getByPoint(latitude, longitude);
+      setForm((current) => ({ ...current, ...hierarchy, latitude, longitude }));
+    } catch (error) {
+      toast.error(errorMessage(error));
+    } finally {
+      setLocatingRegion(false);
+    }
+  };
+
+  const uploadImages = async (files: FileList | null) => {
+    if (!files?.length) return;
+    setUploadingImages(true);
+    try {
+      const uploaded = await Promise.all(
+        Array.from(files).map((file) => staysApi.uploadImage(file)),
+      );
+      setForm((current) => ({
+        ...current,
+        imageLinks: [...current.imageLinks, ...uploaded.map((image) => image.link)],
+      }));
+      toast.success(`${uploaded.length} image${uploaded.length === 1 ? "" : "s"} uploaded.`);
+    } catch (error) {
+      toast.error(errorMessage(error));
+    } finally {
+      setUploadingImages(false);
     }
   };
 
@@ -267,8 +303,36 @@ const MyHotelsTab = () => {
                 />
               </div>
               <label className="text-xs md:col-span-2">Location summary<input className="input-glass mt-1 w-full" value={form.locationSummaryDescription} onChange={(event) => setForm({ ...form, locationSummaryDescription: event.target.value })} /></label>
-              <label className="text-xs">Latitude<input type="number" step="any" className="input-glass mt-1 w-full" value={form.latitude ?? ""} onChange={(event) => setForm({ ...form, latitude: Number(event.target.value) })} /></label>
-              <label className="text-xs">Longitude<input type="number" step="any" className="input-glass mt-1 w-full" value={form.longitude ?? ""} onChange={(event) => setForm({ ...form, longitude: Number(event.target.value) })} /></label>
+              <div className="md:col-span-2">
+                <p className="mb-2 text-xs">
+                  Click the map to set the exact location and resolve its backend region.
+                  {locatingRegion && <span className="ml-2 text-accent">Resolving region…</span>}
+                </p>
+                <LeafletMap
+                  center={[
+                    form.latitude ?? 30.0444,
+                    form.longitude ?? 31.2357,
+                  ]}
+                  zoom={form.latitude == null ? 10 : 14}
+                  markers={form.latitude != null && form.longitude != null
+                    ? [{
+                        lat: form.latitude,
+                        lng: form.longitude,
+                        name: form.name || "Selected stay location",
+                      }]
+                    : []}
+                  onMapClick={(latitude, longitude) => void selectLocation(latitude, longitude)}
+                  showSearch
+                  showFullscreen={false}
+                  showLegend={false}
+                  height="280px"
+                />
+                <p className="mt-2 text-[11px] text-muted-foreground">
+                  {form.latitude == null
+                    ? "No location selected."
+                    : `${form.latitude.toFixed(6)}, ${form.longitude?.toFixed(6)}`}
+                </p>
+              </div>
               <label className="text-xs">Website<input className="input-glass mt-1 w-full" value={form.website} onChange={(event) => setForm({ ...form, website: event.target.value })} /></label>
               <label className="text-xs">Phone<input className="input-glass mt-1 w-full" value={form.phoneInternational} onChange={(event) => setForm({ ...form, phoneInternational: event.target.value })} /></label>
               <label className="text-xs md:col-span-2">Google Maps link<input className="input-glass mt-1 w-full" value={form.googleMapsLink} onChange={(event) => setForm({ ...form, googleMapsLink: event.target.value })} /></label>
@@ -276,8 +340,35 @@ const MyHotelsTab = () => {
 
             <div className="mt-5">
               <p className="mb-2 text-xs">Images</p>
-              <div className="flex gap-2"><input className="input-glass flex-1" value={imageUrl} onChange={(event) => setImageUrl(event.target.value)} placeholder="https://…" /><button onClick={() => { if (imageUrl.trim()) setForm({ ...form, imageLinks: [...form.imageLinks, imageUrl.trim()] }); setImageUrl(""); }} className="rounded bg-secondary px-3">Add</button></div>
-              <div className="mt-2 flex flex-wrap gap-1">{form.imageLinks.map((url) => <button key={url} onClick={() => setForm({ ...form, imageLinks: form.imageLinks.filter((item) => item !== url) })} className="max-w-full truncate rounded bg-secondary px-2 py-1 text-[10px]" title="Click to remove">{url}</button>)}</div>
+              <label className="mb-3 flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-accent/50 bg-accent/5 p-4 text-sm text-accent">
+                <ImagePlus className="h-4 w-4" />
+                {uploadingImages ? "Uploading images…" : "Upload JPEG, PNG, or WebP images"}
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  multiple
+                  disabled={uploadingImages}
+                  className="sr-only"
+                  onChange={(event) => void uploadImages(event.target.files)}
+                />
+              </label>
+              <div className="flex gap-2">
+                <input className="input-glass flex-1" value={imageUrl} onChange={(event) => setImageUrl(event.target.value)} placeholder="Or add an external image URL" />
+                <button onClick={() => { if (imageUrl.trim()) setForm({ ...form, imageLinks: [...form.imageLinks, imageUrl.trim()] }); setImageUrl(""); }} className="rounded bg-secondary px-3">Add</button>
+              </div>
+              <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
+                {form.imageLinks.map((url) => (
+                  <button
+                    key={url}
+                    onClick={() => setForm({ ...form, imageLinks: form.imageLinks.filter((item) => item !== url) })}
+                    className="group relative overflow-hidden rounded-lg border border-border"
+                    title="Click to remove"
+                  >
+                    <img src={url} alt="" className="h-20 w-full object-cover" />
+                    <span className="absolute inset-0 hidden items-center justify-center bg-black/60 text-xs group-hover:flex">Remove</span>
+                  </button>
+                ))}
+              </div>
             </div>
             <div className="mt-5">
               <p className="mb-2 text-xs">Amenities</p>

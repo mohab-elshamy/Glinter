@@ -1,6 +1,7 @@
 using Glinter.Modules.Stays.Application.Services;
 using Glinter.Modules.Stays.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Glinter.Modules.Stays.Infrastructure.Files;
 
 namespace Glinter.Modules.Stays.Infrastructure.DependencyInjection;
 
@@ -14,6 +15,7 @@ public static class StaysModule
             options.UseNpgsql(configuration.GetConnectionString("DefaultConnection")));
 
         services.AddScoped<StayService>();
+        services.AddSingleton<StayImageStorage>();
 
         return services;
     }

@@ -10,6 +10,11 @@ import type {
   StayReviewDto,
   CreateStayReviewRequest,
   StayBookingStatus,
+  StayRegionStatsRequest,
+  StayRegionStatsDto,
+  StayImageUploadDto,
+  ImportStaysResult,
+  StayReviewsForLlmDto,
 } from "@/shared/types/api";
 
 export const staysApi = {
@@ -27,6 +32,16 @@ export const staysApi = {
 
   getStayById: (id: number) =>
     request<StayResponseDto>(`/stays/${id}`),
+
+  getRegionStats: (params: StayRegionStatsRequest) => {
+    const query = new URLSearchParams(
+      Object.entries(params).reduce<Record<string, string>>((acc, [key, value]) => {
+        if (value !== undefined && value !== null) acc[key] = String(value);
+        return acc;
+      }, {}),
+    );
+    return request<StayRegionStatsDto[]>(`/stays/region-stats?${query}`);
+  },
 
   getMyStays: () =>
     request<StayResponseDto[]>("/stays/mine"),
@@ -66,4 +81,25 @@ export const staysApi = {
 
   createReview: (stayId: number, data: CreateStayReviewRequest) =>
     request<StayReviewDto>(`/stays/${stayId}/reviews`, { method: "POST", body: data }),
+
+  uploadImage: (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return request<StayImageUploadDto>("/stays/images", {
+      method: "POST",
+      body: form,
+    });
+  },
+
+  importStays: (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return request<ImportStaysResult>("/stays/import", {
+      method: "POST",
+      body: form,
+    });
+  },
+
+  getReviewsForLlm: (stayId: number) =>
+    request<StayReviewsForLlmDto>(`/stays/${stayId}/reviews/llm-input`),
 };

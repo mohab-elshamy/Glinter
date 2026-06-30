@@ -1,4 +1,5 @@
 using Glinter.IntegrationTests.Infrastructure;
+using System.Text.Json;
 
 namespace Glinter.IntegrationTests;
 
@@ -58,6 +59,74 @@ public sealed class StaysAndExperiencesTests : ApiTestBase
         Assert.Contains(
             searchJson.RootElement.GetProperty("items").EnumerateArray(),
             item => item.GetProperty("id").GetInt32() == stayId);
+
+        var filtered = await Client.GetAsync(
+            $"/api/stays?search={Uri.EscapeDataString(name)}&minPrice=999&maxPrice=1001&sortBy=Price&sortDirection=Asc&page=1&pageSize=1");
+        filtered.EnsureSuccessStatusCode();
+        using var filteredJson = await ReadJsonAsync(filtered);
+        Assert.Equal(1, filteredJson.RootElement.GetProperty("pageSize").GetInt32());
+        Assert.Equal(stayId, filteredJson.RootElement.GetProperty("items")[0].GetProperty("id").GetInt32());
+
+        var stats = await Client.GetAsync("/api/stays/region-stats?groupBy=Adm0");
+        stats.EnsureSuccessStatusCode();
+        using var statsJson = await ReadJsonAsync(stats);
+        Assert.Equal(JsonValueKind.Array, statsJson.RootElement.ValueKind);
+    }
+
+    [Fact]
+    public async Task Stay_image_upload_validates_content_and_serves_the_stored_image()
+    {
+        var owner = await CreateUserAsync("HotelOwner", "stay-image-owner");
+        var traveler = await CreateUserAsync("Traveler", "stay-image-traveler");
+        await UpsertHotelOwnerAsync(owner);
+
+        var pngBytes = new byte[]
+        {
+            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+            0x00, 0x00, 0x00, 0x00
+        };
+        using var content = new MultipartFormDataContent();
+        var imageContent = new ByteArrayContent(pngBytes);
+        imageContent.Headers.ContentType =
+            new System.Net.Http.Headers.MediaTypeHeaderValue("image/png");
+        content.Add(imageContent, "file", "stay.png");
+        using var uploadRequest = new HttpRequestMessage(HttpMethod.Post, "/api/stays/images");
+        uploadRequest.Headers.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", owner.Token);
+        uploadRequest.Content = content;
+
+        var upload = await Client.SendAsync(uploadRequest);
+        upload.EnsureSuccessStatusCode();
+        using var uploadJson = await ReadJsonAsync(upload);
+        var link = uploadJson.RootElement.GetProperty("link").GetString();
+        Assert.False(string.IsNullOrWhiteSpace(link));
+
+        var image = await Client.GetAsync(link);
+        image.EnsureSuccessStatusCode();
+        Assert.Equal("image/png", image.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(pngBytes, await image.Content.ReadAsByteArrayAsync());
+
+        using var invalidContent = new MultipartFormDataContent();
+        var fakeImage = new ByteArrayContent("not an image"u8.ToArray());
+        fakeImage.Headers.ContentType =
+            new System.Net.Http.Headers.MediaTypeHeaderValue("image/png");
+        invalidContent.Add(fakeImage, "file", "fake.png");
+        using var invalidRequest = new HttpRequestMessage(HttpMethod.Post, "/api/stays/images");
+        invalidRequest.Headers.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", owner.Token);
+        invalidRequest.Content = invalidContent;
+        await AssertProblemAsync(await Client.SendAsync(invalidRequest), 400, "validation_error");
+
+        using var forbiddenContent = new MultipartFormDataContent();
+        var travelerImage = new ByteArrayContent(pngBytes);
+        travelerImage.Headers.ContentType =
+            new System.Net.Http.Headers.MediaTypeHeaderValue("image/png");
+        forbiddenContent.Add(travelerImage, "file", "stay.png");
+        using var forbiddenRequest = new HttpRequestMessage(HttpMethod.Post, "/api/stays/images");
+        forbiddenRequest.Headers.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", traveler.Token);
+        forbiddenRequest.Content = forbiddenContent;
+        await AssertProblemAsync(await Client.SendAsync(forbiddenRequest), 403, "forbidden");
     }
 
     [Fact]

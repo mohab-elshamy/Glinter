@@ -15,6 +15,7 @@ import { authStorage } from "@/shared/lib/auth";
 import type { Hotel } from "./types";
 import { staysApi } from "@/shared/services/api-stays";
 import RegionCascadeSelect from "@/components/RegionCascadeSelect";
+import RegionStatsPanel from "./components/RegionStatsPanel";
 
 const WhereToStayPage = () => {
   const {
@@ -33,6 +34,13 @@ const WhereToStayPage = () => {
     isLoadingStays,
     handleSearch,
     filteredHotels,
+    page,
+    pageSize,
+    totalCount,
+    totalPages,
+    setPage,
+    regionStats,
+    statsState,
     mapData,
     isMapEmpty,
   } = useWhereToStay();
@@ -191,6 +199,12 @@ const WhereToStayPage = () => {
               disabled={locatingRegion}
             />
           </div>
+          <RegionStatsPanel
+            stats={regionStats}
+            state={statsState}
+            region={region}
+            onSelectRegion={setRegion}
+          />
 
           <div className="flex justify-between items-end mb-8 pt-10 max-md:flex-col max-md:items-start max-md:gap-2">
             <div>
@@ -201,7 +215,13 @@ const WhereToStayPage = () => {
               </h3>
               <p className="text-gray-400 text-sm">Showing top matches based on your preferences</p>
             </div>
-            <span className="text-sm text-gray-500">{isLoadingStays ? "Loading stays…" : `${filteredHotels.length} hotels found`}</span>
+            <span className="text-sm text-gray-500">
+              {isLoadingStays
+                ? "Loading stays…"
+                : totalCount === 0
+                  ? "0 hotels found"
+                  : `${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, totalCount)} of ${totalCount}`}
+            </span>
           </div>
 
           {staysState.status === "error" && (
@@ -223,6 +243,26 @@ const WhereToStayPage = () => {
               checkout={checkout}
               onSelectHotel={(hotel) => void selectHotel(hotel)}
             />
+          )}
+
+          {staysState.status === "ready" && totalPages > 1 && (
+            <nav aria-label="Stay results pages" className="mb-12 flex items-center justify-center gap-3">
+              <button
+                disabled={page <= 1}
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+                className="rounded-lg border border-border px-4 py-2 text-sm disabled:opacity-40"
+              >
+                Previous
+              </button>
+              <span className="text-sm text-muted-foreground">Page {page} of {totalPages}</span>
+              <button
+                disabled={page >= totalPages}
+                onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                className="rounded-lg border border-border px-4 py-2 text-sm disabled:opacity-40"
+              >
+                Next
+              </button>
+            </nav>
           )}
 
         </div>

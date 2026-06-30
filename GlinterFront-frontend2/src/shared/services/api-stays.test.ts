@@ -62,4 +62,31 @@ describe("stays API", () => {
       body: { rating: 5, reviewText: "Great" },
     });
   });
+
+  it("wires region statistics and multipart image/import uploads", async () => {
+    vi.mocked(request).mockResolvedValue({});
+
+    await staysApi.getRegionStats({
+      groupBy: "Adm2",
+      adm1Gid: 7,
+      maxPrice: 250,
+    });
+    expect(request).toHaveBeenLastCalledWith(
+      "/stays/region-stats?groupBy=Adm2&adm1Gid=7&maxPrice=250",
+    );
+
+    const image = new File(["image"], "hotel.png", { type: "image/png" });
+    await staysApi.uploadImage(image);
+    expect(request).toHaveBeenLastCalledWith(
+      "/stays/images",
+      expect.objectContaining({ method: "POST", body: expect.any(FormData) }),
+    );
+
+    const json = new File(["[]"], "stays.json", { type: "application/json" });
+    await staysApi.importStays(json);
+    expect(request).toHaveBeenLastCalledWith(
+      "/stays/import",
+      expect.objectContaining({ method: "POST", body: expect.any(FormData) }),
+    );
+  });
 });

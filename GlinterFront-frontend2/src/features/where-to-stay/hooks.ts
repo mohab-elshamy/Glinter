@@ -6,8 +6,13 @@ import type { LoadState } from "@/shared/types/async-state";
 import type { Hotel } from "./types";
 import { regionsApi } from "@/shared/services/api-regions";
 import type { RegionHierarchyGids } from "@/shared/types/regions";
+import type {
+  StayRegionGroupBy,
+  StayRegionStatsDto,
+  StayResponseDto,
+} from "@/shared/types/api";
 
-const toHotel = (stay: Awaited<ReturnType<typeof staysApi.getStayById>>): Hotel => ({
+const toHotel = (stay: StayResponseDto): Hotel => ({
   id: stay.id,
   name: stay.name,
   area: stay.locationSummaryDescription || "Egypt",
@@ -24,6 +29,7 @@ const toHotel = (stay: Awaited<ReturnType<typeof staysApi.getStayById>>): Hotel 
 export function useWhereToStay() {
   const [searchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
   const [maxPrice, setMaxPrice] = useState(200);
   const [minRating, setMinRating] = useState(0);
   const [checkin, setCheckin] = useState("");
@@ -34,25 +40,40 @@ export function useWhereToStay() {
   const [locatingRegion, setLocatingRegion] = useState(false);
   const [apiHotels, setApiHotels] = useState<Hotel[]>([]);
   const [staysState, setStaysState] = useState<LoadState>({ status: "loading" });
+  const [statsState, setStatsState] = useState<LoadState>({ status: "loading" });
+  const [regionStats, setRegionStats] = useState<StayRegionStatsDto[]>([]);
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const pageSize = 12;
 
   useEffect(() => {
     const city = searchParams.get("city");
-    if (city) setSearchQuery(city);
+    if (city) {
+      setSearchQuery(city);
+      setAppliedSearch(city);
+    }
   }, [searchParams]);
 
   useEffect(() => {
     let active = true;
     setStaysState({ status: "loading" });
     staysApi.getStays({
-      pageSize: 100,
+      page,
+      pageSize,
+      search: appliedSearch || undefined,
       adm0Gid: region.adm0Gid,
       adm1Gid: region.adm1Gid,
       adm2Gid: region.adm2Gid,
       adm3Gid: region.adm3Gid,
+      maxPrice,
+      minRating: minRating || undefined,
+      sortBy: "Recommended",
+      sortDirection: "Desc",
     })
       .then((response) => {
         if (!active) return;
         setApiHotels(response.items.map(toHotel));
+        setTotalCount(response.totalCount);
         setStaysState({ status: "ready" });
       })
       .catch((error: unknown) => {
@@ -64,19 +85,64 @@ export function useWhereToStay() {
     return () => {
       active = false;
     };
-  }, [region.adm0Gid, region.adm1Gid, region.adm2Gid, region.adm3Gid]);
+  }, [
+    appliedSearch,
+    maxPrice,
+    minRating,
+    page,
+    region.adm0Gid,
+    region.adm1Gid,
+    region.adm2Gid,
+    region.adm3Gid,
+  ]);
 
-  const filteredHotels = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    return apiHotels
-      .filter((hotel) =>
-        (!query ||
-          hotel.name.toLowerCase().includes(query) ||
-          hotel.area.toLowerCase().includes(query)) &&
-        hotel.price <= maxPrice &&
-        hotel.rating >= minRating)
-      .sort((left, right) => left.price - right.price);
-  }, [apiHotels, maxPrice, minRating, searchQuery]);
+  useEffect(() => {
+    let active = true;
+    setStatsState({ status: "loading" });
+    const groupBy: StayRegionGroupBy = region.adm3Gid
+      ? "Adm3"
+      : region.adm2Gid
+        ? "Adm3"
+        : region.adm1Gid
+          ? "Adm2"
+          : region.adm0Gid
+            ? "Adm1"
+            : "Adm0";
+    staysApi.getRegionStats({
+      groupBy,
+      adm0Gid: region.adm0Gid,
+      adm1Gid: region.adm1Gid,
+      adm2Gid: region.adm2Gid,
+      adm3Gid: region.adm3Gid,
+      maxPrice,
+      minRating: minRating || undefined,
+    })
+      .then((stats) => {
+        if (!active) return;
+        setRegionStats(stats);
+        setStatsState({ status: "ready" });
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        setRegionStats([]);
+        setStatsState({
+          status: "error",
+          message: error instanceof Error ? error.message : "Could not load region statistics.",
+        });
+      });
+    return () => {
+      active = false;
+    };
+  }, [
+    maxPrice,
+    minRating,
+    region.adm0Gid,
+    region.adm1Gid,
+    region.adm2Gid,
+    region.adm3Gid,
+  ]);
+
+  const filteredHotels = apiHotels;
 
   const selectHotel = async (hotel: Hotel) => {
     if (!hotel.id) return;
@@ -91,6 +157,7 @@ export function useWhereToStay() {
     setLocatingRegion(true);
     try {
       setRegion(await regionsApi.getByPoint(lat, lng));
+      setPage(1);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "No backend region contains this map point.");
     } finally {
@@ -125,17 +192,25 @@ export function useWhereToStay() {
     checkin, setCheckin,
     checkout, setCheckout,
     guests, setGuests,
-    maxPrice, setMaxPrice,
-    minRating, setMinRating,
+    maxPrice, setMaxPrice: (value: number) => { setMaxPrice(value); setPage(1); },
+    minRating, setMinRating: (value: number) => { setMinRating(value); setPage(1); },
     selectedHotel, setSelectedHotel,
-    region, setRegion,
+    region,
+    setRegion: (value: RegionHierarchyGids) => { setRegion(value); setPage(1); },
     locatingRegion,
     resolveRegionByPoint,
     selectHotel,
     staysState,
     isLoadingStays: staysState.status === "loading",
-    handleSearch: () => undefined,
+    handleSearch: () => { setAppliedSearch(searchQuery.trim()); setPage(1); },
     filteredHotels,
+    page,
+    pageSize,
+    totalCount,
+    totalPages: Math.max(1, Math.ceil(totalCount / pageSize)),
+    setPage,
+    regionStats,
+    statsState,
     mapData,
     isMapEmpty: staysState.status === "ready" && mapData.markers.length === 0,
   };

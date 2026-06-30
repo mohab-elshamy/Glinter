@@ -39,6 +39,18 @@ public class ImportStaysFileRequest
     public IFormFile? File { get; set; }
 }
 
+public class UploadStayImageRequest
+{
+    public IFormFile? File { get; set; }
+}
+
+public class StayImageUploadResponse
+{
+    public string Link { get; set; } = string.Empty;
+    public string FileName { get; set; } = string.Empty;
+    public long SizeBytes { get; set; }
+}
+
 public class StayListRequest
 {
     public StaySourceType? SourceType { get; set; }

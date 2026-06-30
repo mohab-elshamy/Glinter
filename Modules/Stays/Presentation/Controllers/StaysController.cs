@@ -5,6 +5,7 @@ using Glinter.Modules.Stays.Application.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Glinter.Modules.Stays.Infrastructure.Files;
 
 namespace Glinter.Modules.Stays.Presentation.Controllers;
 
@@ -13,10 +14,12 @@ namespace Glinter.Modules.Stays.Presentation.Controllers;
 public class StaysController : ControllerBase
 {
     private readonly StayService _stayService;
+    private readonly StayImageStorage _imageStorage;
 
-    public StaysController(StayService stayService)
+    public StaysController(StayService stayService, StayImageStorage imageStorage)
     {
         _stayService = stayService;
+        _imageStorage = imageStorage;
     }
 
     [HttpGet]
@@ -77,6 +80,7 @@ public class StaysController : ControllerBase
     }
 
     [HttpGet("{id:int}/reviews/llm-input")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = RoleNames.Admin)]
     public async Task<IActionResult> GetReviewsForLlm(int id, CancellationToken cancellationToken)
     {
         var result = await _stayService.GetReviewsForLlmAsync(id, cancellationToken);
@@ -110,6 +114,38 @@ public class StaysController : ControllerBase
         {
             return BadRequest(new { message = ex.Message });
         }
+    }
+
+    [Authorize(
+        AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme,
+        Roles = RoleNames.HotelOwner + "," + RoleNames.Admin)]
+    [HttpPost("images")]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(StayImageStorage.MaxImageBytes)]
+    [RequestFormLimits(MultipartBodyLengthLimit = StayImageStorage.MaxImageBytes)]
+    public async Task<IActionResult> UploadImage(
+        [FromForm] UploadStayImageRequest request,
+        CancellationToken cancellationToken)
+    {
+        var stored = await _imageStorage.SaveAsync(request.File, cancellationToken);
+        return Ok(new StayImageUploadResponse
+        {
+            FileName = stored.FileName,
+            SizeBytes = stored.SizeBytes,
+            Link = Url.ActionLink(
+                nameof(GetImage),
+                values: new { fileName = stored.FileName })!
+        });
+    }
+
+    [AllowAnonymous]
+    [HttpGet("images/{fileName}")]
+    public IActionResult GetImage(string fileName)
+    {
+        var stored = _imageStorage.Find(fileName);
+        return stored is null
+            ? NotFound()
+            : PhysicalFile(stored.Value.Path, stored.Value.ContentType);
     }
 
     [Authorize(
