@@ -14,6 +14,11 @@ import type {
   ExperienceBookingStatus,
   ExperienceReviewDto,
   CreateExperienceReviewRequest,
+  ExperienceImageUploadDto,
+  ExperienceMapItemDto,
+  ExperienceReviewsForLlmDto,
+  ExperienceVisitInsightDto,
+  ImportExperiencesResult,
 } from "@/shared/types/api";
 
 export const experiencesApi = {
@@ -32,8 +37,20 @@ export const experiencesApi = {
   getExperienceById: (id: number) =>
     request<ExperienceResponseDto>(`/experiences/${id}`),
 
+  getMapExperiences: (params?: GetExperiencesRequest) => {
+    const query = params
+      ? "?" + new URLSearchParams(
+          Object.entries(params).reduce<Record<string, string>>((acc, [key, value]) => {
+            if (value !== undefined && value !== null) acc[key] = String(value);
+            return acc;
+          }, {}),
+        ).toString()
+      : "";
+    return request<ExperienceMapItemDto[]>(`/experiences/map${query}`);
+  },
+
   getMyExperiences: () =>
-    request<ExperienceResponseDto[]>("/experiences/my"),
+    request<ExperienceResponseDto[]>("/experiences/mine"),
 
   createExperience: (data: CreateExperienceRequest) =>
     request<ExperienceResponseDto>("/experiences", { method: "POST", body: data }),
@@ -99,4 +116,33 @@ export const experiencesApi = {
 
   createReview: (experienceId: number, data: CreateExperienceReviewRequest) =>
     request<ExperienceReviewDto>(`/experiences/${experienceId}/reviews`, { method: "POST", body: data }),
+
+  getVisitInsights: (experienceId: number, visitAt?: string) => {
+    const query = visitAt
+      ? `?visitAt=${encodeURIComponent(visitAt)}`
+      : "";
+    return request<ExperienceVisitInsightDto>(`/experiences/${experienceId}/visit-insights${query}`);
+  },
+
+  uploadImage: (file: File) => {
+    const body = new FormData();
+    body.append("file", file);
+    return request<ExperienceImageUploadDto>("/experiences/images", {
+      method: "POST",
+      body,
+    });
+  },
+
+  importExperiences: (category: ExperienceCategory, file: File) => {
+    const body = new FormData();
+    body.append("category", category);
+    body.append("file", file);
+    return request<ImportExperiencesResult>("/experiences/import", {
+      method: "POST",
+      body,
+    });
+  },
+
+  getReviewsForLlm: (experienceId: number) =>
+    request<ExperienceReviewsForLlmDto>(`/experiences/${experienceId}/reviews/llm-input`),
 };

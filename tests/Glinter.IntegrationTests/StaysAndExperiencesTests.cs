@@ -151,6 +151,24 @@ public sealed class StaysAndExperiencesTests : ApiTestBase
                 latitude = 30.05,
                 longitude = 31.25,
                 featuredImageLinks = new[] { "https://example.test/experience.jpg" },
+                hours = new[]
+                {
+                    new
+                    {
+                        dayOfWeek = DateTime.Now.DayOfWeek.ToString(),
+                        opensAt = "00:00:00",
+                        closesAt = "23:59:59"
+                    }
+                },
+                popularTimes = new[]
+                {
+                    new
+                    {
+                        dayOfWeek = DateTime.Now.DayOfWeek.ToString(),
+                        hourOfDay = DateTime.Now.Hour,
+                        popularityPercentage = 42
+                    }
+                },
                 amenities = new[] { "Guided tour" }
             });
 
@@ -182,6 +200,92 @@ public sealed class StaysAndExperiencesTests : ApiTestBase
         Assert.Contains(
             searchJson.RootElement.GetProperty("items").EnumerateArray(),
             item => item.GetProperty("id").GetInt32() == experienceId);
+
+        var paged = await Client.GetAsync(
+            $"/api/experiences?search={Uri.EscapeDataString(name)}&page=1&pageSize=1");
+        paged.EnsureSuccessStatusCode();
+        using var pagedJson = await ReadJsonAsync(paged);
+        Assert.Equal(1, pagedJson.RootElement.GetProperty("pageSize").GetInt32());
+        Assert.Equal(experienceId, pagedJson.RootElement.GetProperty("items")[0].GetProperty("id").GetInt32());
+
+        var map = await Client.GetAsync(
+            $"/api/experiences/map?search={Uri.EscapeDataString(name)}");
+        map.EnsureSuccessStatusCode();
+        using var mapJson = await ReadJsonAsync(map);
+        Assert.Contains(
+            mapJson.RootElement.EnumerateArray(),
+            item => item.GetProperty("id").GetInt32() == experienceId &&
+                    item.GetProperty("latitude").GetDouble() == 30.05);
+
+        var insight = await Client.GetAsync($"/api/experiences/{experienceId}/visit-insights");
+        insight.EnsureSuccessStatusCode();
+        using var insightJson = await ReadJsonAsync(insight);
+        Assert.Equal("open", insightJson.RootElement.GetProperty("openStatus").GetString());
+        Assert.Equal(42, insightJson.RootElement.GetProperty("popularityPercentage").GetInt32());
+
+        Assert.Equal(
+            HttpStatusCode.Unauthorized,
+            (await Client.GetAsync($"/api/experiences/{experienceId}/reviews/llm-input")).StatusCode);
+        (await SendAsync(
+            HttpMethod.Get,
+            $"/api/experiences/{experienceId}/reviews/llm-input",
+            adminToken)).EnsureSuccessStatusCode();
+    }
+
+    [Fact]
+    public async Task Experience_image_upload_validates_content_and_serves_the_stored_image()
+    {
+        var provider = await CreateUserAsync("ExperienceProvider", "experience-image-provider");
+        var traveler = await CreateUserAsync("Traveler", "experience-image-traveler");
+        await UpsertProviderAsync(provider);
+
+        var pngBytes = new byte[]
+        {
+            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+            0x00, 0x00, 0x00, 0x00
+        };
+        using var content = new MultipartFormDataContent();
+        var imageContent = new ByteArrayContent(pngBytes);
+        imageContent.Headers.ContentType =
+            new System.Net.Http.Headers.MediaTypeHeaderValue("image/png");
+        content.Add(imageContent, "file", "experience.png");
+        using var uploadRequest = new HttpRequestMessage(HttpMethod.Post, "/api/experiences/images");
+        uploadRequest.Headers.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", provider.Token);
+        uploadRequest.Content = content;
+
+        var upload = await Client.SendAsync(uploadRequest);
+        upload.EnsureSuccessStatusCode();
+        using var uploadJson = await ReadJsonAsync(upload);
+        var link = uploadJson.RootElement.GetProperty("link").GetString();
+        Assert.False(string.IsNullOrWhiteSpace(link));
+
+        var image = await Client.GetAsync(link);
+        image.EnsureSuccessStatusCode();
+        Assert.Equal("image/png", image.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(pngBytes, await image.Content.ReadAsByteArrayAsync());
+
+        using var invalidContent = new MultipartFormDataContent();
+        var fakeImage = new ByteArrayContent("not an image"u8.ToArray());
+        fakeImage.Headers.ContentType =
+            new System.Net.Http.Headers.MediaTypeHeaderValue("image/png");
+        invalidContent.Add(fakeImage, "file", "fake.png");
+        using var invalidRequest = new HttpRequestMessage(HttpMethod.Post, "/api/experiences/images");
+        invalidRequest.Headers.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", provider.Token);
+        invalidRequest.Content = invalidContent;
+        await AssertProblemAsync(await Client.SendAsync(invalidRequest), 400, "validation_error");
+
+        using var forbiddenContent = new MultipartFormDataContent();
+        var travelerImage = new ByteArrayContent(pngBytes);
+        travelerImage.Headers.ContentType =
+            new System.Net.Http.Headers.MediaTypeHeaderValue("image/png");
+        forbiddenContent.Add(travelerImage, "file", "experience.png");
+        using var forbiddenRequest = new HttpRequestMessage(HttpMethod.Post, "/api/experiences/images");
+        forbiddenRequest.Headers.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", traveler.Token);
+        forbiddenRequest.Content = forbiddenContent;
+        await AssertProblemAsync(await Client.SendAsync(forbiddenRequest), 403, "forbidden");
     }
 
     [Fact]

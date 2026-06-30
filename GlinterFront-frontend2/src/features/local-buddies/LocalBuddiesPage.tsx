@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Search, Filter, Star, MapPin, MessageSquare, Heart, Languages, Trash2, Clock, Calendar, X } from "lucide-react";
+import { Search, Filter, Star, MapPin, MessageSquare, Heart, Languages, Trash2, Clock, Calendar, X, Users } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import Navbar from "@/components/Navbar";
@@ -10,13 +10,16 @@ import { profilesApi } from "@/shared/services/api-profiles";
 import { authStorage } from "@/shared/lib/auth";
 import type {
   ExperienceAvailabilityDto,
+  ExperienceMapItemDto,
   ExperienceReviewDto,
   ExperienceSummaryDto,
+  ExperienceVisitInsightDto,
   LocalBuddyListItemResponse,
 } from "@/shared/types/api";
 import type { LoadState } from "@/shared/types/async-state";
 import type { RegionHierarchyGids } from "@/shared/types/regions";
 import RegionCascadeSelect from "@/components/RegionCascadeSelect";
+import LeafletMap, { type MapMarker } from "@/components/LeafletMap";
 
 const buddyFilters = ["All", "Following", "Free", "Verified", "Top Rated", "Available Now"];
 const experienceFilters = ["All", "Favorites", "Free", "Top Rated"];
@@ -28,7 +31,7 @@ interface DisplayExperience {
   rating: number;
   reviews: number;
   price: string;
-  duration: string;
+  openStatus: string;
   image: string;
   category: string;
   description: string;
@@ -52,6 +55,16 @@ interface DisplayBuddy {
   isFollowing: boolean;
 }
 
+const formatOpenStatus = (insight?: ExperienceVisitInsightDto) => {
+  if (!insight || insight.openStatus === "unknown") return "Hours unknown";
+  return insight.openStatus === "open" ? "Open now" : "Closed now";
+};
+
+const toLocalDateTimeInput = (value = new Date()) => {
+  const offset = value.getTimezoneOffset() * 60_000;
+  return new Date(value.getTime() - offset).toISOString().slice(0, 16);
+};
+
 const LocalBuddies = () => {
   const navigate = useNavigate();
   const [activeFilter, setActiveFilter] = useState("All");
@@ -66,11 +79,21 @@ const LocalBuddies = () => {
   const [experienceReviews, setExperienceReviews] = useState<ExperienceReviewDto[]>([]);
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewText, setReviewText] = useState("");
+  const [visitAt, setVisitAt] = useState("");
+  const [visitInsight, setVisitInsight] = useState<ExperienceVisitInsightDto>();
+  const [insightLoading, setInsightLoading] = useState(false);
 
   const [apiExperiences, setApiExperiences] = useState<ExperienceSummaryDto[]>([]);
+  const [mapExperiences, setMapExperiences] = useState<ExperienceMapItemDto[]>([]);
   const [apiBuddies, setApiBuddies] = useState<LocalBuddyListItemResponse[]>([]);
-  const [loadState, setLoadState] = useState<LoadState>({ status: "loading" });
+  const [buddyLoadState, setBuddyLoadState] = useState<LoadState>({ status: "loading" });
+  const [experienceLoadState, setExperienceLoadState] = useState<LoadState>({ status: "loading" });
   const [region, setRegion] = useState<RegionHierarchyGids>({});
+  const [experiencePage, setExperiencePage] = useState(1);
+  const [experienceTotal, setExperienceTotal] = useState(0);
+  const [appliedExperienceSearch, setAppliedExperienceSearch] = useState("");
+  const experiencePageSize = 12;
+  const loadState = activeTab === "buddies" ? buddyLoadState : experienceLoadState;
 
   // Experience favorites do not have a backend contract yet.
   useEffect(() => {
@@ -78,30 +101,66 @@ const LocalBuddies = () => {
     if (savedExperiences) setLikedExperiences(JSON.parse(savedExperiences));
   }, []);
 
-  // Fetch public experiences from the backend.
   useEffect(() => {
-    setLoadState({ status: "loading" });
-    Promise.all([
-      experiencesApi.getExperiences({
-        pageSize: 100,
-        adm0Gid: region.adm0Gid,
-        adm1Gid: region.adm1Gid,
-        adm2Gid: region.adm2Gid,
-        adm3Gid: region.adm3Gid,
-      }),
-      profilesApi.getLocalBuddies(),
-    ])
-      .then(([experiencePage, loadedBuddies]) => {
-        setApiExperiences(experiencePage.items);
+    profilesApi.getLocalBuddies()
+      .then((loadedBuddies) => {
         setApiBuddies(loadedBuddies);
-        setLoadState({ status: "ready" });
+        setBuddyLoadState({ status: "ready" });
       })
       .catch((error: unknown) => {
-        const message = error instanceof Error ? error.message : "Could not load buddies and experiences.";
-        setLoadState({ status: "error", message });
-        toast.error(message);
+        const errorText = error instanceof Error ? error.message : "Could not load local buddies.";
+        setBuddyLoadState({ status: "error", message: errorText });
       });
-  }, [region.adm0Gid, region.adm1Gid, region.adm2Gid, region.adm3Gid]);
+  }, []);
+
+  useEffect(() => {
+    if (activeTab !== "experiences") return;
+    const timer = window.setTimeout(() => {
+      setAppliedExperienceSearch(searchQuery.trim());
+      setExperiencePage(1);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [activeTab, searchQuery]);
+
+  // Fetch public experiences and map markers from the backend.
+  useEffect(() => {
+    if (activeTab !== "experiences") return;
+    setExperienceLoadState({ status: "loading" });
+    const filters = {
+      page: experiencePage,
+      pageSize: experiencePageSize,
+      search: appliedExperienceSearch || undefined,
+      minRating: activeFilter === "Top Rated" ? 4.8 : undefined,
+      adm0Gid: region.adm0Gid,
+      adm1Gid: region.adm1Gid,
+      adm2Gid: region.adm2Gid,
+      adm3Gid: region.adm3Gid,
+    };
+    Promise.all([
+      experiencesApi.getExperiences(filters),
+      experiencesApi.getMapExperiences(filters),
+    ])
+      .then(([pageResult, mapItems]) => {
+        setApiExperiences(pageResult.items);
+        setMapExperiences(mapItems);
+        setExperienceTotal(pageResult.totalCount);
+        setExperienceLoadState({ status: "ready" });
+      })
+      .catch((error: unknown) => {
+        const errorText = error instanceof Error ? error.message : "Could not load experiences.";
+        setExperienceLoadState({ status: "error", message: errorText });
+        toast.error(errorText);
+      });
+  }, [
+    activeTab,
+    activeFilter,
+    appliedExperienceSearch,
+    experiencePage,
+    region.adm0Gid,
+    region.adm1Gid,
+    region.adm2Gid,
+    region.adm3Gid,
+  ]);
 
   useEffect(() => {
     localStorage.setItem("likedExperiences", JSON.stringify(likedExperiences));
@@ -175,10 +234,11 @@ const LocalBuddies = () => {
   // Experience actions
   const handleViewDetails = async (exp: DisplayExperience) => {
     try {
-      const [detail, slots, reviews] = await Promise.all([
+      const [detail, slots, reviews, insight] = await Promise.all([
         experiencesApi.getExperienceById(exp.id),
         experiencesApi.getAvailability(exp.id),
         experiencesApi.getReviews(exp.id),
+        experiencesApi.getVisitInsights(exp.id),
       ]);
       setSelectedExperience({
         id: detail.id,
@@ -187,7 +247,7 @@ const LocalBuddies = () => {
         rating: detail.rating ?? 0,
         reviews: detail.reviews ?? reviews.length,
         price: detail.priceRange || "See available dates",
-        duration: detail.currentInsight?.openStatus || "Scheduled experience",
+        openStatus: formatOpenStatus(insight),
         image: detail.featuredImages[0]?.link || "",
         category: detail.category,
         description: detail.description || "",
@@ -196,9 +256,69 @@ const LocalBuddies = () => {
       setAvailability(slots);
       setSelectedAvailabilityId(slots[0]?.id || "");
       setExperienceReviews(reviews);
+      setVisitInsight(insight);
+      setVisitAt(toLocalDateTimeInput(new Date(insight.requestedAt)));
       setShowDetailsModal(true);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not load experience details.");
+    }
+  };
+
+  const loadVisitInsight = async () => {
+    if (!selectedExperience || !visitAt) return;
+    setInsightLoading(true);
+    try {
+      const insight = await experiencesApi.getVisitInsights(
+        selectedExperience.id,
+        new Date(visitAt).toISOString(),
+      );
+      setVisitInsight(insight);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not load visit insights.");
+    } finally {
+      setInsightLoading(false);
+    }
+  };
+
+  const handleMapMarker = async (marker: MapMarker) => {
+    if (marker.id == null) return;
+    const listedDto = apiExperiences.find((experience) => experience.id === marker.id);
+    const listed = listedDto
+      ? {
+          id: listedDto.id,
+          name: listedDto.name,
+          location: listedDto.address || "Egypt",
+          rating: listedDto.rating ?? 0,
+          reviews: listedDto.reviews ?? listedDto.featuredReviews.length,
+          price: listedDto.priceRange || "See dates",
+          openStatus: formatOpenStatus(listedDto.currentInsight),
+          image: listedDto.featuredImages[0]?.link || "",
+          category: listedDto.category,
+          description: listedDto.description || "",
+          highlights: listedDto.amenities,
+        }
+      : undefined;
+    if (listed) {
+      await handleViewDetails(listed);
+      return;
+    }
+    try {
+      const detail = await experiencesApi.getExperienceById(marker.id);
+      await handleViewDetails({
+        id: detail.id,
+        name: detail.name,
+        location: detail.address || "Egypt",
+        rating: detail.rating ?? 0,
+        reviews: detail.reviews ?? 0,
+        price: detail.priceRange || "See available dates",
+        openStatus: formatOpenStatus(detail.currentInsight),
+        image: detail.featuredImages[0]?.link || "",
+        category: detail.category,
+        description: detail.description || "",
+        highlights: detail.amenities,
+      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not load the mapped experience.");
     }
   };
 
@@ -294,7 +414,7 @@ const LocalBuddies = () => {
     rating: exp.rating ?? 0,
     reviews: exp.reviews ?? exp.featuredReviews.length,
     price: exp.priceRange || "See dates",
-    duration: exp.currentInsight?.openStatus || "Scheduled",
+    openStatus: formatOpenStatus(exp.currentInsight),
     image: exp.featuredImages[0]?.link || "",
     category: exp.category,
     description: exp.description || "",
@@ -321,6 +441,21 @@ const LocalBuddies = () => {
 
   const filteredBuddies = getFilteredBuddies();
   const filteredExperiences = getFilteredExperiences();
+  const experienceMarkers: MapMarker[] = mapExperiences.flatMap((experience) =>
+    experience.latitude == null || experience.longitude == null
+      ? []
+      : [{
+          id: experience.id,
+          lat: experience.latitude,
+          lng: experience.longitude,
+          name: experience.name,
+          data: {
+            rating: experience.rating ?? 0,
+            area: `${experience.isOpenNow === true ? "Open" : experience.isOpenNow === false ? "Closed" : "Hours unknown"}${experience.popularityPercentageNow == null ? "" : ` · ${experience.popularityPercentageNow}% busy`}`,
+          },
+        }],
+  );
+  const experienceTotalPages = Math.max(1, Math.ceil(experienceTotal / experiencePageSize));
   const favoriteCount = activeTab === "buddies"
     ? allBuddies.filter((buddy) => buddy.isFollowing).length
     : likedExperiences.length;
@@ -386,7 +521,10 @@ const LocalBuddies = () => {
           {filters.map((f) => (
             <button
               key={f}
-              onClick={() => setActiveFilter(f)}
+              onClick={() => {
+                setActiveFilter(f);
+                if (activeTab === "experiences") setExperiencePage(1);
+              }}
               className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap flex items-center gap-1 ${
                 activeFilter === f
                   ? "bg-primary text-primary-foreground"
@@ -408,9 +546,28 @@ const LocalBuddies = () => {
           <div className="card-glass mb-6 p-4">
             <RegionCascadeSelect
               value={region}
-              onChange={setRegion}
+              onChange={(selection) => {
+                setRegion(selection);
+                setExperiencePage(1);
+              }}
               label="Filter experiences by backend region"
             />
+            <div className="mt-4 overflow-hidden rounded-xl border border-border">
+              <LeafletMap
+                center={[26.8206, 30.8025]}
+                zoom={6}
+                markers={experienceMarkers}
+                onMarkerClick={(marker) => void handleMapMarker(marker)}
+                showSearch
+                showLegend={false}
+                height="360px"
+              />
+            </div>
+            {experienceLoadState.status === "ready" && experienceMarkers.length === 0 && (
+              <p className="mt-3 text-xs text-muted-foreground">
+                No mapped experiences match the current search and region filters.
+              </p>
+            )}
           </div>
         )}
 
@@ -437,7 +594,7 @@ const LocalBuddies = () => {
         {/* Results count */}
         {loadState.status === "loading" && (
           <div className="card-glass mb-6 p-8 text-center text-sm text-muted-foreground">
-            Loading buddies and experiences…
+            {activeTab === "experiences" ? "Loading experiences and map…" : "Loading local buddies…"}
           </div>
         )}
         {loadState.status === "error" && (
@@ -452,7 +609,7 @@ const LocalBuddies = () => {
         )}
         {activeTab === "experiences" && (
           <p className="text-xs text-muted-foreground mb-4">
-            Showing {filteredExperiences.length} of {allExperiences.length} experiences
+            Showing {filteredExperiences.length} of {experienceTotal} experiences · page {experiencePage} of {experienceTotalPages}
           </p>
         )}
         {loadState.status === "ready" && activeTab === "buddies" && filteredBuddies.length === 0 && (
@@ -631,7 +788,7 @@ const LocalBuddies = () => {
                       <span>{exp.location}</span>
                       <span className="mx-1">•</span>
                       <Clock className="w-3 h-3" />
-                      <span>{exp.duration}</span>
+                      <span>{exp.openStatus}</span>
                     </div>
 
                     <div className="flex items-center gap-3 mb-3">
@@ -687,6 +844,29 @@ const LocalBuddies = () => {
             </AnimatePresence>
           </div>
         )}
+        {activeTab === "experiences" && experienceTotalPages > 1 && (
+          <nav aria-label="Experience pages" className="mt-7 flex items-center justify-center gap-3">
+            <button
+              type="button"
+              disabled={experiencePage <= 1}
+              onClick={() => setExperiencePage((value) => Math.max(1, value - 1))}
+              className="rounded-lg border border-border px-4 py-2 text-xs disabled:opacity-40"
+            >
+              Previous
+            </button>
+            <span className="text-xs text-muted-foreground">
+              Page {experiencePage} of {experienceTotalPages}
+            </span>
+            <button
+              type="button"
+              disabled={experiencePage >= experienceTotalPages}
+              onClick={() => setExperiencePage((value) => Math.min(experienceTotalPages, value + 1))}
+              className="rounded-lg border border-border px-4 py-2 text-xs disabled:opacity-40"
+            >
+              Next
+            </button>
+          </nav>
+        )}
 
       </div>
 
@@ -722,9 +902,45 @@ const LocalBuddies = () => {
               <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
                 <MapPin className="w-3 h-3" /> {selectedExperience.location}
                 <span className="mx-1">•</span>
-                <Clock className="w-3 h-3" /> {selectedExperience.duration}
+                <Clock className="w-3 h-3" /> {selectedExperience.openStatus}
               </div>
               <p className="text-sm text-foreground mb-4">{selectedExperience.description}</p>
+              <div className="mb-4 rounded-xl border border-border bg-secondary/30 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="text-sm font-semibold">Visit insights</h3>
+                  <span className={`rounded-full px-2 py-1 text-[10px] ${
+                    visitInsight?.openStatus === "open"
+                      ? "bg-green-500/15 text-green-300"
+                      : visitInsight?.openStatus === "closed"
+                        ? "bg-red-500/15 text-red-300"
+                        : "bg-slate-500/15 text-slate-300"
+                  }`}>
+                    {formatOpenStatus(visitInsight)}
+                  </span>
+                </div>
+                <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
+                  <input
+                    type="datetime-local"
+                    value={visitAt}
+                    onChange={(event) => setVisitAt(event.target.value)}
+                    className="rounded-lg border border-border bg-background px-2 py-2 text-xs"
+                    aria-label="Visit date and time"
+                  />
+                  <button
+                    type="button"
+                    disabled={!visitAt || insightLoading}
+                    onClick={() => void loadVisitInsight()}
+                    className="rounded-lg border border-border px-3 py-2 text-xs disabled:opacity-40"
+                  >
+                    {insightLoading ? "Checking…" : "Check"}
+                  </button>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
+                  <span className="flex items-center gap-1"><Users className="h-3 w-3" /> Crowd: {visitInsight?.crowdLevel || "unknown"}</span>
+                  {visitInsight?.popularityPercentage != null && <span>{visitInsight.popularityPercentage}% busy</span>}
+                  {visitInsight?.bestKnownOpenWindow && <span>Open window: {visitInsight.bestKnownOpenWindow}</span>}
+                </div>
+              </div>
               <div className="mb-4">
                 <h3 className="font-semibold text-sm mb-2">Highlights</h3>
                 <ul className="space-y-1">

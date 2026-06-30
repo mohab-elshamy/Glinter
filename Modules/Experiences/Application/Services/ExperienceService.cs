@@ -658,6 +658,8 @@ public class ExperienceService
         ExperienceListRequest request,
         CancellationToken cancellationToken)
     {
+        var page = Math.Max(1, request.Page);
+        var pageSize = Math.Clamp(request.PageSize, 1, 100);
         var experiences = await ApplyFilters(
                 _dbContext.Experiences.AsNoTracking().Where(
                     x => x.IsActive &&
@@ -669,7 +671,9 @@ public class ExperienceService
             .Where(x => x.Latitude != null && x.Longitude != null)
             .OrderByDescending(x => x.Rating)
             .ThenByDescending(x => x.Reviews)
-            .Take(1000)
+            .ThenBy(x => x.Name)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .AsSplitQuery()
             .ToListAsync(cancellationToken);
 

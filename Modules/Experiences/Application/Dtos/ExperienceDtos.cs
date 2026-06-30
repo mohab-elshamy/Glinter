@@ -114,6 +114,18 @@ public class ImportExperiencesFileRequest
     public IFormFile? File { get; set; }
 }
 
+public class UploadExperienceImageRequest
+{
+    public IFormFile? File { get; set; }
+}
+
+public class ExperienceImageUploadResponse
+{
+    public string Link { get; set; } = string.Empty;
+    public string FileName { get; set; } = string.Empty;
+    public long SizeBytes { get; set; }
+}
+
 public class ExperienceListRequest
 {
     public ExperienceCategory? Category { get; set; }

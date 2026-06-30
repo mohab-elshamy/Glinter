@@ -2,6 +2,7 @@ using System.Text.Json;
 using Glinter.Modules.Experiences.Application.Dtos;
 using Glinter.Modules.Experiences.Application.Services;
 using Glinter.Modules.Experiences.Domain.Enums;
+using Glinter.Modules.Experiences.Infrastructure.Files;
 using Glinter.Modules.IdentityAccess.Domain.Constants;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
@@ -14,10 +15,14 @@ namespace Glinter.Modules.Experiences.Presentation.Controllers;
 public class ExperiencesController : ControllerBase
 {
     private readonly ExperienceService _experienceService;
+    private readonly ExperienceImageStorage _imageStorage;
 
-    public ExperiencesController(ExperienceService experienceService)
+    public ExperiencesController(
+        ExperienceService experienceService,
+        ExperienceImageStorage imageStorage)
     {
         _experienceService = experienceService;
+        _imageStorage = imageStorage;
     }
 
     [HttpGet]
@@ -84,6 +89,7 @@ public class ExperiencesController : ControllerBase
     }
 
     [HttpGet("{id:int}/reviews/llm-input")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = RoleNames.Admin)]
     public async Task<IActionResult> GetReviewsForLlm(int id, CancellationToken cancellationToken)
     {
         var result = await _experienceService.GetReviewsForLlmAsync(id, cancellationToken);
@@ -136,6 +142,38 @@ public class ExperiencesController : ControllerBase
         {
             return BadRequest(new { message = ex.Message });
         }
+    }
+
+    [Authorize(
+        AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme,
+        Roles = RoleNames.ExperienceProvider + "," + RoleNames.Admin)]
+    [HttpPost("images")]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(ExperienceImageStorage.MaxImageBytes)]
+    [RequestFormLimits(MultipartBodyLengthLimit = ExperienceImageStorage.MaxImageBytes)]
+    public async Task<IActionResult> UploadImage(
+        [FromForm] UploadExperienceImageRequest request,
+        CancellationToken cancellationToken)
+    {
+        var stored = await _imageStorage.SaveAsync(request.File, cancellationToken);
+        return Ok(new ExperienceImageUploadResponse
+        {
+            FileName = stored.FileName,
+            SizeBytes = stored.SizeBytes,
+            Link = Url.ActionLink(
+                nameof(GetImage),
+                values: new { fileName = stored.FileName })!
+        });
+    }
+
+    [AllowAnonymous]
+    [HttpGet("images/{fileName}")]
+    public IActionResult GetImage(string fileName)
+    {
+        var stored = _imageStorage.Find(fileName);
+        return stored is null
+            ? NotFound()
+            : PhysicalFile(stored.Value.Path, stored.Value.ContentType);
     }
 
     [Authorize(

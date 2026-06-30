@@ -19,7 +19,39 @@ describe("experiences API", () => {
     expect(request).toHaveBeenLastCalledWith("/experiences/14");
 
     await experiencesApi.getMyExperiences();
-    expect(request).toHaveBeenLastCalledWith("/experiences/my");
+    expect(request).toHaveBeenLastCalledWith("/experiences/mine");
+  });
+
+  it("wires map filters and visit insights", async () => {
+    await experiencesApi.getMapExperiences({
+      category: "Nature",
+      adm1Gid: 12,
+      search: "Nile",
+    });
+    expect(request).toHaveBeenLastCalledWith(
+      "/experiences/map?category=Nature&adm1Gid=12&search=Nile",
+    );
+
+    await experiencesApi.getVisitInsights(14, "2026-08-01T10:00:00.000Z");
+    expect(request).toHaveBeenLastCalledWith(
+      "/experiences/14/visit-insights?visitAt=2026-08-01T10%3A00%3A00.000Z",
+    );
+  });
+
+  it("uploads images and imports third-party experiences with multipart bodies", async () => {
+    const image = new File(["image"], "experience.png", { type: "image/png" });
+    await experiencesApi.uploadImage(image);
+    const imageCall = vi.mocked(request).mock.calls.at(-1);
+    expect(imageCall?.[0]).toBe("/experiences/images");
+    expect(imageCall?.[1]).toMatchObject({ method: "POST" });
+    expect(imageCall?.[1]?.body).toBeInstanceOf(FormData);
+
+    const json = new File(["[]"], "experiences.json", { type: "application/json" });
+    await experiencesApi.importExperiences("Historical", json);
+    const importCall = vi.mocked(request).mock.calls.at(-1);
+    expect(importCall?.[0]).toBe("/experiences/import");
+    expect(importCall?.[1]).toMatchObject({ method: "POST" });
+    expect(importCall?.[1]?.body).toBeInstanceOf(FormData);
   });
 
   it("wires availability and capacity-aware booking routes", async () => {

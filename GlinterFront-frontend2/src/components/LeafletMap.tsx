@@ -23,7 +23,8 @@ const DefaultIcon = L.icon({
 
 L.Marker.prototype.options.icon = DefaultIcon;
 
-interface MapMarker {
+export interface MapMarker {
+  id?: number;
   lat: number;
   lng: number;
   name: string;
@@ -121,7 +122,14 @@ const BRAND_PURPLE = "#9333ea";
 const SELECTED_GOLD = "#FFD700";
 const COMPARISON_TEAL = "#00CED1";
 
-// Component to handle markers (without clustering)
+const escapeMapHtml = (value: string) => value
+  .replaceAll("&", "&amp;")
+  .replaceAll("<", "&lt;")
+  .replaceAll(">", "&gt;")
+  .replaceAll('"', "&quot;")
+  .replaceAll("'", "&#039;");
+
+// Component to handle markers, clustering larger datasets for responsiveness.
 function MarkerGroup({
   markers,
   onMarkerClick,
@@ -134,11 +142,16 @@ function MarkerGroup({
   comparisonMarkers?: MapMarker[];
 }) {
   const map = useMap();
-  const markersRef = useRef<L.Marker[]>([]);
+  const markerLayerRef = useRef<L.LayerGroup | null>(null);
 
   useEffect(() => {
-    markersRef.current.forEach((marker) => map.removeLayer(marker));
-    markersRef.current = [];
+    if (markerLayerRef.current) {
+      map.removeLayer(markerLayerRef.current);
+      markerLayerRef.current = null;
+    }
+    const markerLayer: L.LayerGroup = markers.length > 50
+      ? L.markerClusterGroup({ chunkedLoading: true, maxClusterRadius: 55 })
+      : L.layerGroup();
 
     markers.forEach((marker) => {
       const isSelected = selectedMarker?.name === marker.name;
@@ -193,26 +206,33 @@ function MarkerGroup({
 
       if (marker.name) {
         // Create detailed popup content
-        let popupContent = `<div style="min-width: 200px;"><strong style="font-size: 14px;">${marker.name}</strong>`;
+        let popupContent = `<div style="min-width: 200px;"><strong style="font-size: 14px;">${escapeMapHtml(marker.name)}</strong>`;
         
         if (marker.data) {
           const data = marker.data;
-          if ("rating" in data) {
-            const h = data as Required<Pick<NonNullable<MapMarker["data"]>, "area" | "rating" | "price">>;
+          if (data.area) {
             popupContent += `
               <div style="margin-top: 8px; font-size: 12px;">
-                <div style="margin: 4px 0;">📍 ${h.area}</div>
-                <div style="display: flex; justify-content: space-between; margin: 4px 0;">
-                  <span>⭐ Rating:</span>
-                  <strong>${h.rating}</strong>
-                </div>
-                <div style="display: flex; justify-content: space-between; margin: 4px 0;">
-                  <span>💰 Price:</span>
-                  <strong>$${h.price}/night</strong>
-                </div>
-              </div>
+                <div style="margin: 4px 0;">📍 ${escapeMapHtml(data.area)}</div>
             `;
           }
+          if (data.rating != null) {
+            popupContent += `
+                <div style="display: flex; justify-content: space-between; margin: 4px 0;">
+                  <span>⭐ Rating:</span>
+                  <strong>${data.rating}</strong>
+                </div>
+            `;
+          }
+          if (data.price != null) {
+            popupContent += `
+                <div style="display: flex; justify-content: space-between; margin: 4px 0;">
+                  <span>💰 Price:</span>
+                  <strong>$${data.price}/night</strong>
+                </div>
+            `;
+          }
+          if (data.area) popupContent += "</div>";
         }
         popupContent += `</div>`;
         leafletMarker.bindPopup(popupContent);
@@ -224,15 +244,14 @@ function MarkerGroup({
         });
       }
 
-      leafletMarker.addTo(map);
-      markersRef.current.push(leafletMarker);
+      markerLayer.addLayer(leafletMarker);
     });
+    markerLayer.addTo(map);
+    markerLayerRef.current = markerLayer;
 
     return () => {
-      markersRef.current.forEach((marker) => {
-        map.removeLayer(marker);
-      });
-      markersRef.current = [];
+      map.removeLayer(markerLayer);
+      markerLayerRef.current = null;
     };
   }, [map, markers, onMarkerClick, selectedMarker, comparisonMarkers]);
 

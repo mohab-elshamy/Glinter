@@ -28,6 +28,7 @@ import { toast } from "sonner";
 import type { LoadState } from "@/shared/types/async-state";
 import RegionsAdminPanel from "./RegionsAdminPanel";
 import StayImportAdminPanel from "./StayImportAdminPanel";
+import ExperienceImportAdminPanel from "./ExperienceImportAdminPanel";
 
 const sections = [
   "Overview",
@@ -38,6 +39,7 @@ const sections = [
   "Audit Events",
   "Regions",
   "Stay Import",
+  "Experience Import",
 ] as const;
 
 type Section = (typeof sections)[number];
@@ -400,6 +402,7 @@ const AdminPage = () => {
 
               {section === "Regions" && <RegionsAdminPanel />}
               {section === "Stay Import" && <StayImportAdminPanel />}
+              {section === "Experience Import" && <ExperienceImportAdminPanel />}
 
               {section === "Audit Events" && (
                 <div>

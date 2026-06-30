@@ -136,6 +136,7 @@ export type ExperienceCategory = "Historical" | "Nature" | "Shopping" | "Nightli
 export type ExperienceSourceType = "ThirdParty" | "Provider";
 export type ExperienceBookingStatus = "Pending" | "Confirmed" | "Completed" | "Cancelled";
 export type ExperienceModerationStatus = "Pending" | "Approved" | "Rejected";
+export type ExperienceOpenStatus = "open" | "closed" | "unknown";
 
 export interface ExperienceImageDto {
   id: number;
@@ -157,6 +158,55 @@ export interface ExperienceReviewDto {
   reviewText?: string;
   publishedAtDate?: string;
   sourceList: string;
+}
+
+export interface ExperienceVisitInsightDto {
+  requestedAt: string;
+  dayOfWeek: string;
+  hourOfDay: number;
+  isOpen?: boolean;
+  openStatus: ExperienceOpenStatus;
+  popularityPercentage?: number;
+  crowdLevel: string;
+  bestKnownOpenWindow?: string;
+}
+
+export interface ExperienceMapItemDto {
+  id: number;
+  category: ExperienceCategory;
+  sourceType: ExperienceSourceType;
+  name: string;
+  address?: string;
+  adm0Gid?: number;
+  adm1Gid?: number;
+  adm2Gid?: number;
+  adm3Gid?: number;
+  latitude?: number;
+  longitude?: number;
+  rating?: number;
+  reviews?: number;
+  primaryImage?: string;
+  isOpenNow?: boolean;
+  popularityPercentageNow?: number;
+}
+
+export interface ExperienceImageUploadDto {
+  link: string;
+  fileName: string;
+  sizeBytes: number;
+}
+
+export interface ImportExperiencesResult {
+  created: number;
+  updated: number;
+  skipped: number;
+}
+
+export interface ExperienceReviewsForLlmDto {
+  experienceId: number;
+  experienceName: string;
+  reviewsCount: number;
+  reviewsText: string;
 }
 
 export interface ExperienceResponseDto {
@@ -195,16 +245,7 @@ export interface ExperienceResponseDto {
   isActive: boolean;
   createdAtUtc: string;
   updatedAtUtc?: string;
-  currentInsight?: {
-    requestedAt: string;
-    dayOfWeek: string;
-    hourOfDay: number;
-    isOpen?: boolean;
-    openStatus: string;
-    popularityPercentage?: number;
-    crowdLevel: string;
-    bestKnownOpenWindow?: string;
-  };
+  currentInsight?: ExperienceVisitInsightDto;
   moderationStatus: ExperienceModerationStatus;
   moderationNotes?: string;
   moderatedByUserId?: string;
