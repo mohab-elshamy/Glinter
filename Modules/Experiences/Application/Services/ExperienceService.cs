@@ -697,8 +697,10 @@ public class ExperienceService
         ExperienceListRequest request,
         CancellationToken cancellationToken)
     {
+        ValidateListRequest(request);
         var page = Math.Max(1, request.Page);
         var pageSize = Math.Clamp(request.PageSize, 1, 100);
+        var now = DateTime.Now;
         var query = ApplyFilters(
             _dbContext.Experiences.AsNoTracking().Where(
                 x => x.IsActive &&
@@ -706,16 +708,11 @@ public class ExperienceService
             request);
 
         var totalCount = await query.CountAsync(cancellationToken);
-        var experiences = await IncludeResponseData(query)
-            .OrderByDescending(x => x.Rating)
-            .ThenByDescending(x => x.Reviews)
-            .ThenBy(x => x.Name)
+        var experiences = await IncludeResponseData(ApplySorting(query, request, now))
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .AsSplitQuery()
             .ToListAsync(cancellationToken);
-
-        var now = DateTime.Now;
 
         return new PagedResponse<ExperienceResponse>
         {
@@ -730,26 +727,25 @@ public class ExperienceService
         ExperienceListRequest request,
         CancellationToken cancellationToken)
     {
+        ValidateListRequest(request);
         var page = Math.Max(1, request.Page);
         var pageSize = Math.Clamp(request.PageSize, 1, 100);
-        var experiences = await ApplyFilters(
+        var now = DateTime.Now;
+        var query = ApplyFilters(
                 _dbContext.Experiences.AsNoTracking().Where(
                     x => x.IsActive &&
                          x.ModerationStatus == ExperienceModerationStatus.Approved),
                 request)
+            .Where(x => x.Latitude != null && x.Longitude != null);
+        var experiences = await ApplySorting(query, request, now)
             .Include(x => x.FeaturedImages)
             .Include(x => x.Hours)
             .Include(x => x.PopularTimes)
-            .Where(x => x.Latitude != null && x.Longitude != null)
-            .OrderByDescending(x => x.Rating)
-            .ThenByDescending(x => x.Reviews)
-            .ThenBy(x => x.Name)
+            .Include(x => x.AvailabilitySlots)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .AsSplitQuery()
             .ToListAsync(cancellationToken);
-
-        var now = DateTime.Now;
 
         return experiences
             .Select(x =>
@@ -771,6 +767,7 @@ public class ExperienceService
                     Longitude = x.Longitude,
                     Rating = x.Rating,
                     Reviews = x.Reviews,
+                    StartingPricePerPerson = GetStartingPricePerPerson(x, now),
                     PrimaryImage = x.FeaturedImages.OrderBy(i => i.Id).FirstOrDefault()?.Link,
                     IsOpenNow = insight.IsOpen,
                     PopularityPercentageNow = insight.PopularityPercentage
@@ -1035,7 +1032,8 @@ public class ExperienceService
             .Include(x => x.PopularTimes)
             .Include(x => x.ReviewsPerRatings)
             .Include(x => x.Amenities)
-            .Include(x => x.ExperienceReviews);
+            .Include(x => x.ExperienceReviews)
+            .Include(x => x.AvailabilitySlots);
     }
 
     private IQueryable<Experience> ApplyFilters(
@@ -1066,6 +1064,20 @@ public class ExperienceService
             query = query.Where(x => x.Rating >= request.MinRating);
         }
 
+        if (request.IsFree is true)
+        {
+            var nowUtc = DateTime.UtcNow;
+            query = query.Where(x =>
+                x.AvailabilitySlots.Any(slot =>
+                    slot.IsActive &&
+                    slot.StartTimeUtc > nowUtc &&
+                    slot.PricePerPerson == 0) ||
+                (!x.AvailabilitySlots.Any(slot =>
+                     slot.IsActive && slot.StartTimeUtc > nowUtc) &&
+                 x.PriceRange != null &&
+                 x.PriceRange.ToLower() == "free"));
+        }
+
         if (request.Adm0Gid is not null)
         {
             query = query.Where(x => x.Adm0Gid == request.Adm0Gid);
@@ -1087,6 +1099,157 @@ public class ExperienceService
         }
 
         return query;
+    }
+
+    private static IOrderedQueryable<Experience> ApplySorting(
+        IQueryable<Experience> query,
+        ExperienceListRequest request,
+        DateTime now)
+    {
+        var descending = request.SortDirection == ExperienceSortDirection.Desc;
+        var nowUtc = now.Kind == DateTimeKind.Utc ? now : now.ToUniversalTime();
+        var day = now.DayOfWeek;
+        var time = TimeOnly.FromDateTime(now);
+
+        return request.SortBy switch
+        {
+            ExperienceSortBy.Price => descending
+                ? query
+                    .OrderBy(x => !x.AvailabilitySlots.Any(slot =>
+                        slot.IsActive && slot.StartTimeUtc > nowUtc))
+                    .ThenByDescending(x => x.AvailabilitySlots
+                        .Where(slot => slot.IsActive && slot.StartTimeUtc > nowUtc)
+                        .Min(slot => (decimal?)slot.PricePerPerson))
+                    .ThenBy(x => x.Name)
+                    .ThenBy(x => x.Id)
+                : query
+                    .OrderBy(x => !x.AvailabilitySlots.Any(slot =>
+                        slot.IsActive && slot.StartTimeUtc > nowUtc))
+                    .ThenBy(x => x.AvailabilitySlots
+                        .Where(slot => slot.IsActive && slot.StartTimeUtc > nowUtc)
+                        .Min(slot => (decimal?)slot.PricePerPerson))
+                    .ThenBy(x => x.Name)
+                    .ThenBy(x => x.Id),
+
+            ExperienceSortBy.Rating => descending
+                ? query.OrderBy(x => x.Rating == null).ThenByDescending(x => x.Rating).ThenByDescending(x => x.Reviews).ThenBy(x => x.Name).ThenBy(x => x.Id)
+                : query.OrderBy(x => x.Rating == null).ThenBy(x => x.Rating).ThenByDescending(x => x.Reviews).ThenBy(x => x.Name).ThenBy(x => x.Id),
+
+            ExperienceSortBy.Reviews => descending
+                ? query.OrderBy(x => x.Reviews == null).ThenByDescending(x => x.Reviews).ThenByDescending(x => x.Rating).ThenBy(x => x.Name).ThenBy(x => x.Id)
+                : query.OrderBy(x => x.Reviews == null).ThenBy(x => x.Reviews).ThenByDescending(x => x.Rating).ThenBy(x => x.Name).ThenBy(x => x.Id),
+
+            ExperienceSortBy.Name => descending
+                ? query.OrderByDescending(x => x.Name).ThenBy(x => x.Id)
+                : query.OrderBy(x => x.Name).ThenBy(x => x.Id),
+
+            ExperienceSortBy.Newest => descending
+                ? query.OrderByDescending(x => x.CreatedAtUtc).ThenByDescending(x => x.Id)
+                : query.OrderBy(x => x.CreatedAtUtc).ThenBy(x => x.Id),
+
+            ExperienceSortBy.Popularity => descending
+                ? query
+                    .OrderBy(x => !x.PopularTimes.Any(item =>
+                        item.DayOfWeek == day && item.HourOfDay == now.Hour))
+                    .ThenByDescending(x => x.PopularTimes
+                        .Where(item => item.DayOfWeek == day && item.HourOfDay == now.Hour)
+                        .Select(item => (int?)item.PopularityPercentage)
+                        .FirstOrDefault())
+                    .ThenBy(x => x.Rating == null)
+                    .ThenByDescending(x => x.Rating)
+                    .ThenBy(x => x.Name)
+                    .ThenBy(x => x.Id)
+                : query
+                    .OrderBy(x => !x.PopularTimes.Any(item =>
+                        item.DayOfWeek == day && item.HourOfDay == now.Hour))
+                    .ThenBy(x => x.PopularTimes
+                        .Where(item => item.DayOfWeek == day && item.HourOfDay == now.Hour)
+                        .Select(item => (int?)item.PopularityPercentage)
+                        .FirstOrDefault())
+                    .ThenBy(x => x.Rating == null)
+                    .ThenByDescending(x => x.Rating)
+                    .ThenBy(x => x.Name)
+                    .ThenBy(x => x.Id),
+
+            ExperienceSortBy.OpenNow => descending
+                ? query
+                    .OrderByDescending(x => x.Hours.Any(hour =>
+                        hour.DayOfWeek == day && hour.OpensAt <= time && hour.ClosesAt > time))
+                    .ThenBy(x => x.Rating == null)
+                    .ThenByDescending(x => x.Rating)
+                    .ThenBy(x => x.Name)
+                    .ThenBy(x => x.Id)
+                : query
+                    .OrderBy(x => x.Hours.Any(hour =>
+                        hour.DayOfWeek == day && hour.OpensAt <= time && hour.ClosesAt > time))
+                    .ThenBy(x => x.Rating == null)
+                    .ThenByDescending(x => x.Rating)
+                    .ThenBy(x => x.Name)
+                    .ThenBy(x => x.Id),
+
+            ExperienceSortBy.Distance => ApplyDistanceSorting(query, request),
+
+            _ => query
+                .OrderBy(x => x.Rating == null)
+                .ThenByDescending(x => x.Rating)
+                .ThenByDescending(x => x.Reviews)
+                .ThenBy(x => x.Name)
+                .ThenBy(x => x.Id)
+        };
+    }
+
+    private static IOrderedQueryable<Experience> ApplyDistanceSorting(
+        IQueryable<Experience> query,
+        ExperienceListRequest request)
+    {
+        var latitude = request.CurrentLatitude!.Value;
+        var longitude = request.CurrentLongitude!.Value;
+        var longitudeScale = Math.Cos(latitude * Math.PI / 180d);
+        var descending = request.SortDirection == ExperienceSortDirection.Desc;
+
+        return descending
+            ? query
+                .OrderBy(x => x.Latitude == null || x.Longitude == null)
+                .ThenByDescending(x =>
+                    ((x.Latitude!.Value - latitude) * (x.Latitude.Value - latitude)) +
+                    ((x.Longitude!.Value - longitude) * longitudeScale *
+                     (x.Longitude.Value - longitude) * longitudeScale))
+                .ThenBy(x => x.Name)
+                .ThenBy(x => x.Id)
+            : query
+                .OrderBy(x => x.Latitude == null || x.Longitude == null)
+                .ThenBy(x =>
+                    ((x.Latitude!.Value - latitude) * (x.Latitude.Value - latitude)) +
+                    ((x.Longitude!.Value - longitude) * longitudeScale *
+                     (x.Longitude.Value - longitude) * longitudeScale))
+                .ThenBy(x => x.Name)
+                .ThenBy(x => x.Id);
+    }
+
+    private static void ValidateListRequest(ExperienceListRequest request)
+    {
+        if (!Enum.IsDefined(request.SortBy) || !Enum.IsDefined(request.SortDirection))
+        {
+            throw new ValidationException("A valid experience sort and direction are required.");
+        }
+
+        var hasLatitude = request.CurrentLatitude is not null;
+        var hasLongitude = request.CurrentLongitude is not null;
+        if (hasLatitude != hasLongitude)
+        {
+            throw new ValidationException("Current latitude and longitude must be provided together.");
+        }
+
+        if (request.CurrentLatitude is < -90 or > 90 ||
+            request.CurrentLongitude is < -180 or > 180)
+        {
+            throw new ValidationException("Current latitude or longitude is outside its valid range.");
+        }
+
+        if (request.SortBy == ExperienceSortBy.Distance && (!hasLatitude || !hasLongitude))
+        {
+            throw new ValidationException("Current coordinates are required for distance sorting.");
+        }
     }
 
     private async Task<Experience?> FindExistingImportedExperienceAsync(
@@ -1173,6 +1336,7 @@ public class ExperienceService
                 .ToList(),
             PhoneInternational = experience.PhoneInternational,
             PriceRange = experience.PriceRange,
+            StartingPricePerPerson = GetStartingPricePerPerson(experience, now),
             Reviews = experience.Reviews,
             Rating = experience.Rating,
             ReviewsPerRating = experience.ReviewsPerRatings
@@ -1202,6 +1366,15 @@ public class ExperienceService
             ModeratedByUserId = experience.ModeratedByUserId,
             ModeratedAtUtc = experience.ModeratedAtUtc
         };
+    }
+
+    private static decimal? GetStartingPricePerPerson(Experience experience, DateTime now)
+    {
+        var nowUtc = now.Kind == DateTimeKind.Utc ? now : now.ToUniversalTime();
+        return experience.AvailabilitySlots
+            .Where(x => x.IsActive && x.StartTimeUtc > nowUtc)
+            .Select(x => (decimal?)x.PricePerPerson)
+            .Min();
     }
 
     private static ExperienceReviewResponse ToReviewResponse(ExperienceReview review)

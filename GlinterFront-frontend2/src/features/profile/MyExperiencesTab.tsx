@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Calendar, Edit, Eye, EyeOff, ImagePlus, MapPin, Plus, Save, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 import { experiencesApi } from "@/shared/services/api-experiences";
+import { formatExperiencePrice, formatUsdPrice } from "@/shared/lib/price";
 import type {
   CreateExperienceRequest,
   ExperienceAvailabilityDto,
@@ -340,7 +341,9 @@ const MyExperiencesTab = () => {
                     </span>
                   </div>
                   <p className="flex items-center gap-1 text-xs text-muted-foreground"><MapPin className="h-3 w-3" /> {experience.address || "No address"}</p>
-                  <p className="mt-2 text-sm text-accent">{experience.priceRange || "Price set per availability slot"}</p>
+                  <p className="mt-2 text-sm text-accent">
+                    {formatExperiencePrice(experience.startingPricePerPerson, experience.priceRange)}
+                  </p>
                   <div className="mt-3 flex flex-wrap gap-1">{experience.amenities.map((item) => <span key={item} className="rounded-full bg-secondary px-2 py-1 text-[10px]">{item}</span>)}</div>
                 </div>
                 <div className="flex gap-1">
@@ -368,7 +371,7 @@ const MyExperiencesTab = () => {
                             <span>{new Date(slot.startTimeUtc).toLocaleString()}</span>
                             <button onClick={() => void toggleSlot(experience.id, slot)} className={slot.isActive ? "text-green-400" : "text-red-400"}>{slot.isActive ? "Active" : "Inactive"}</button>
                           </div>
-                          <p className="mt-1 text-muted-foreground">{slot.remainingCapacity}/{slot.capacity} remaining · ${slot.pricePerPerson}/person</p>
+                          <p className="mt-1 text-muted-foreground">{slot.remainingCapacity}/{slot.capacity} remaining · {formatUsdPrice(slot.pricePerPerson)}/person</p>
                           <button onClick={() => editSlot(experience.id, slot)} className="mt-1 text-accent">Edit</button>
                         </div>
                       ))}
@@ -384,7 +387,7 @@ const MyExperiencesTab = () => {
                             <span>{booking.travelerName} · {booking.guestsCount} guest(s)</span>
                             <span>{booking.status}</span>
                           </div>
-                          <p className="mt-1 text-muted-foreground">{new Date(booking.startTimeUtc).toLocaleString()} · ${booking.totalPrice}</p>
+                          <p className="mt-1 text-muted-foreground">{new Date(booking.startTimeUtc).toLocaleString()} · {formatUsdPrice(booking.totalPrice)}</p>
                           {booking.status === "Pending" && (
                             <div className="mt-2 flex gap-3">
                               <button onClick={() => void updateBooking(experience.id, booking.id, "Confirmed")} className="text-green-400">Confirm</button>

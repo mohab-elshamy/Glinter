@@ -81,4 +81,28 @@ describe("profilesApi", () => {
       },
     });
   });
+
+  it("uploads profile images using multipart form data", async () => {
+    const file = new File(["image"], "profile.png", { type: "image/png" });
+    await profilesApi.uploadProfileImage(file);
+    const call = vi.mocked(request).mock.calls.at(-1);
+    expect(call?.[0]).toBe("/profiles/images");
+    expect(call?.[1]).toMatchObject({ method: "POST" });
+    expect(call?.[1]?.body).toBeInstanceOf(FormData);
+  });
+
+  it("persists experience favorites through Profiles", async () => {
+    await profilesApi.getExperienceFavoriteIds();
+    expect(request).toHaveBeenLastCalledWith("/profiles/experience-favorites");
+
+    await profilesApi.addExperienceFavorite(14);
+    expect(request).toHaveBeenLastCalledWith("/profiles/experience-favorites/14", {
+      method: "PUT",
+    });
+
+    await profilesApi.removeExperienceFavorite(14);
+    expect(request).toHaveBeenLastCalledWith("/profiles/experience-favorites/14", {
+      method: "DELETE",
+    });
+  });
 });

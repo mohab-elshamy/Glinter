@@ -1,9 +1,20 @@
 import { useEffect, useRef } from "react";
-import { MapContainer, TileLayer, useMap, useMapEvents } from "react-leaflet";
+import {
+  Circle,
+  GeoJSON,
+  MapContainer,
+  Marker,
+  TileLayer,
+  Tooltip,
+  useMap,
+  useMapEvents,
+} from "react-leaflet";
 import L from "leaflet";
+import type { Feature, GeoJsonObject, Geometry } from "geojson";
 import "leaflet.markercluster";
 import "leaflet-geosearch/dist/geosearch.css";
 import { GeoSearchControl, OpenStreetMapProvider } from "leaflet-geosearch";
+import { formatUsdPrice } from "@/shared/lib/price";
 
 // Fix for default marker icons in React/Webpack
 import icon from "leaflet/dist/images/marker-icon.png";
@@ -23,17 +34,51 @@ const DefaultIcon = L.icon({
 
 L.Marker.prototype.options.icon = DefaultIcon;
 
+const CurrentLocationIcon = L.divIcon({
+  className: "current-location-marker",
+  html: `<div style="
+    position:relative;width:24px;height:24px;
+    display:flex;align-items:center;justify-content:center;
+  ">
+    <span style="
+      position:absolute;width:24px;height:24px;border-radius:9999px;
+      background:rgba(14,165,233,.28);box-shadow:0 0 0 8px rgba(14,165,233,.12);
+    "></span>
+    <span style="
+      position:relative;width:14px;height:14px;border-radius:9999px;
+      border:3px solid white;background:#0ea5e9;
+      box-shadow:0 2px 12px rgba(14,165,233,.8);
+    "></span>
+  </div>`,
+  iconSize: [24, 24],
+  iconAnchor: [12, 12],
+});
+
 export interface MapMarker {
   id?: number;
   lat: number;
   lng: number;
   name: string;
   cheapestPrice?: number;
+  color?: string;
+  label?: string;
   data?: Partial<{
-    price: number;
+    price: number | null;
     rating: number;
     area: string;
+    comfortScore: number;
+    safetyScore: number;
   }>;
+}
+
+export interface MapOverlayArea {
+  id: number;
+  name: string;
+  value?: number | null;
+  color: string;
+  geometry: Geometry | Feature;
+  fillOpacity?: number;
+  dashArray?: string;
 }
 
 interface LeafletMapProps {
@@ -49,6 +94,13 @@ interface LeafletMapProps {
   showFullscreen?: boolean;
   showMarkers?: boolean;
   showLegend?: boolean;
+  overlayAreas?: MapOverlayArea[];
+  currentLocation?: {
+    latitude: number;
+    longitude: number;
+    accuracy?: number;
+  };
+  recenterSequence?: number;
 }
 
 function MapClickHandler({ onMapClick }: { onMapClick?: (lat: number, lng: number) => void }) {
@@ -129,6 +181,17 @@ const escapeMapHtml = (value: string) => value
   .replaceAll('"', "&quot;")
   .replaceAll("'", "&#039;");
 
+const toGeoJson = (area: MapOverlayArea): GeoJsonObject => {
+  if ("type" in area.geometry && area.geometry.type === "Feature") {
+    return area.geometry as Feature;
+  }
+  return {
+    type: "Feature",
+    properties: { id: area.id },
+    geometry: area.geometry as Geometry,
+  } satisfies Feature;
+};
+
 // Component to handle markers, clustering larger datasets for responsiveness.
 function MarkerGroup({
   markers,
@@ -157,7 +220,7 @@ function MarkerGroup({
       const isSelected = selectedMarker?.name === marker.name;
       const isInComparison = comparisonMarkers?.some((m) => m.name === marker.name);
 
-      let markerColor = BRAND_PURPLE;
+      let markerColor = marker.color || BRAND_PURPLE;
       let bgOpacity = "0.5";
       const hexSize = isSelected ? "scale(1.4)" : isInComparison ? "scale(1.2)" : "";
 
@@ -170,7 +233,8 @@ function MarkerGroup({
       }
 
       const cp = marker.cheapestPrice;
-      const displayPrice = cp !== undefined && cp !== null ? `$${cp}` : "";
+      const displayPrice = marker.label ??
+        (cp !== undefined && cp !== null ? formatUsdPrice(cp) : "");
       const markerIcon = L.divIcon({
         className: `custom-marker ${isSelected || isInComparison ? "selected" : ""}`,
         html: `<div style="
@@ -196,7 +260,7 @@ function MarkerGroup({
           <span style="
             position:relative;z-index:2;
             color:white;font-size:10px;font-weight:700;
-          ">${displayPrice}</span>
+          ">${escapeMapHtml(displayPrice)}</span>
         </div>`,
         iconSize: [32, 36],
         iconAnchor: [16, 18],
@@ -228,7 +292,23 @@ function MarkerGroup({
             popupContent += `
                 <div style="display: flex; justify-content: space-between; margin: 4px 0;">
                   <span>💰 Price:</span>
-                  <strong>$${data.price}/night</strong>
+                  <strong>${escapeMapHtml(formatUsdPrice(data.price))}/night</strong>
+                </div>
+            `;
+          }
+          if (data.comfortScore != null) {
+            popupContent += `
+                <div style="display: flex; justify-content: space-between; margin: 4px 0;">
+                  <span>✨ Comfort:</span>
+                  <strong>${data.comfortScore}/100</strong>
+                </div>
+            `;
+          }
+          if (data.safetyScore != null) {
+            popupContent += `
+                <div style="display: flex; justify-content: space-between; margin: 4px 0;">
+                  <span>🛡️ Safety:</span>
+                  <strong>${data.safetyScore}/100</strong>
                 </div>
             `;
           }
@@ -256,6 +336,63 @@ function MarkerGroup({
   }, [map, markers, onMarkerClick, selectedMarker, comparisonMarkers]);
 
   return null;
+}
+
+function OverlayBounds({ areas }: { areas: MapOverlayArea[] }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (areas.length === 0) return;
+    const group = L.geoJSON({
+      type: "FeatureCollection",
+      features: areas.map((area) => toGeoJson(area) as Feature),
+    });
+    const bounds = group.getBounds();
+    if (bounds.isValid()) map.fitBounds(bounds, { padding: [32, 32], maxZoom: 11 });
+  }, [areas, map]);
+
+  return null;
+}
+
+function CurrentLocationLayer({
+  location,
+  recenterSequence,
+}: {
+  location?: LeafletMapProps["currentLocation"];
+  recenterSequence?: number;
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!location || !recenterSequence) return;
+    map.setView([location.latitude, location.longitude], Math.max(map.getZoom(), 14), {
+      animate: true,
+    });
+  }, [location, map, recenterSequence]);
+
+  if (!location) return null;
+  const center: [number, number] = [location.latitude, location.longitude];
+
+  return (
+    <>
+      {location.accuracy != null && (
+        <Circle
+          center={center}
+          radius={Math.max(20, location.accuracy)}
+          pathOptions={{
+            color: "#38bdf8",
+            fillColor: "#38bdf8",
+            fillOpacity: 0.08,
+            opacity: 0.35,
+            weight: 1,
+          }}
+        />
+      )}
+      <Marker position={center} icon={CurrentLocationIcon} zIndexOffset={2000}>
+        <Tooltip direction="top" offset={[0, -8]} permanent>You are here</Tooltip>
+      </Marker>
+    </>
+  );
 }
 
 // Component to handle map bounds for comparison mode
@@ -358,6 +495,9 @@ const LeafletMap: React.FC<LeafletMapProps> = ({
   showFullscreen = true,
   showMarkers = true,
   showLegend = true,
+  overlayAreas = [],
+  currentLocation,
+  recenterSequence,
 }) => {
   return (
     <div style={{ position: "relative", height, width: "100%" }} className="rounded-lg overflow-hidden border border-border/30">
@@ -377,6 +517,30 @@ const LeafletMap: React.FC<LeafletMapProps> = ({
         <SearchControl showSearch={showSearch} />
         <FullscreenControl showFullscreen={showFullscreen} />
         <MapClickHandler onMapClick={onMapClick} />
+        <OverlayBounds areas={overlayAreas} />
+        {overlayAreas.map((area) => (
+          <GeoJSON
+            key={`${area.id}-${area.value ?? "none"}-${area.color}`}
+            data={toGeoJson(area)}
+            onEachFeature={(_feature, layer) => {
+              const tooltip = document.createElement("span");
+              tooltip.textContent = `${area.name}: ${area.value ?? "No data"}`;
+              layer.bindTooltip(tooltip);
+            }}
+            style={{
+              color: area.color,
+              fillColor: area.color,
+              fillOpacity: area.fillOpacity ?? 0.52,
+              opacity: 0.95,
+              weight: 2,
+              dashArray: area.dashArray,
+            }}
+          />
+        ))}
+        <CurrentLocationLayer
+          location={currentLocation}
+          recenterSequence={recenterSequence}
+        />
         <MapBounds 
           comparisonMarkers={comparisonMarkers} 
           selectedMarker={selectedMarker}

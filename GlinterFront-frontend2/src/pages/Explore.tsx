@@ -67,7 +67,7 @@ const spotlightDestinations = [
 const quickLinks = [
   { label: "Where to Stay", icon: Map, color: "text-purple-400", bg: "bg-purple-500/10", link: "/where-to-stay" },
   { label: "Local Buddies", icon: Users, color: "text-blue-400", bg: "bg-blue-500/10", link: "/local-buddies" },
-  { label: "AI Itinerary", icon: Sparkles, color: "text-yellow-400", bg: "bg-yellow-500/10", link: "/where-to-go" },
+  { label: "Trip Planner", icon: Sparkles, color: "text-yellow-400", bg: "bg-yellow-500/10", link: "/where-to-go" },
   { label: "Travel Guide", icon: BookOpen, color: "text-emerald-400", bg: "bg-emerald-500/10", link: "/where-to-go?guide=true" },
 ];
 
@@ -472,7 +472,7 @@ const Explore = () => {
                 <span className="text-shimmer">Starts Here</span>
               </h2>
               <p className="text-gray-400 max-w-md mx-auto mb-8">
-                Let AI craft the perfect itinerary based on your interests, budget, and travel style.
+                Build a flexible itinerary from real experiences based on your interests, budget, and travel style.
               </p>
               <motion.button
                 whileHover={{ scale: 1.03 }}
@@ -481,7 +481,7 @@ const Explore = () => {
                 className="inline-flex items-center gap-2 bg-purple-600 hover:bg-purple-500 text-white rounded-full px-8 py-3.5 font-medium transition-all shadow-lg shadow-purple-600/25"
               >
                 <Sparkles className="w-4 h-4" />
-                Plan My Trip with AI
+                Plan My Trip
                 <ArrowRight className="w-4 h-4" />
               </motion.button>
             </motion.div>

@@ -518,6 +518,92 @@ public sealed class StaysAndExperiencesTests : ApiTestBase
         var availabilityId = availabilityJson.RootElement.GetProperty("id").GetGuid();
         Assert.Equal(6, availabilityJson.RootElement.GetProperty("remainingCapacity").GetInt32());
 
+        var pricedDetail = await Client.GetAsync($"/api/experiences/{experienceId}");
+        pricedDetail.EnsureSuccessStatusCode();
+        using var pricedDetailJson = await ReadJsonAsync(pricedDetail);
+        Assert.Equal(
+            40,
+            pricedDetailJson.RootElement.GetProperty("startingPricePerPerson").GetDecimal());
+
+        var pricedMap = await Client.GetAsync(
+            $"/api/experiences/map?search={Uri.EscapeDataString("Lifecycle Experience Updated")}");
+        pricedMap.EnsureSuccessStatusCode();
+        using var pricedMapJson = await ReadJsonAsync(pricedMap);
+        Assert.Contains(
+            pricedMapJson.RootElement.EnumerateArray(),
+            item => item.GetProperty("id").GetInt32() == experienceId &&
+                    item.GetProperty("startingPricePerPerson").GetDecimal() == 40);
+
+        var budgetCreate = await SendAsync(
+            HttpMethod.Post,
+            "/api/experiences",
+            provider.Token,
+            new
+            {
+                category = "Nature",
+                name = "Lifecycle Experience Budget",
+                description = "Lower priced option",
+                address = "Alexandria",
+                latitude = 31.2,
+                longitude = 29.9,
+                featuredImageLinks = Array.Empty<string>(),
+                hours = Array.Empty<object>(),
+                popularTimes = Array.Empty<object>(),
+                priceRange = "$10",
+                amenities = Array.Empty<string>()
+            });
+        budgetCreate.EnsureSuccessStatusCode();
+        using var budgetCreateJson = await ReadJsonAsync(budgetCreate);
+        var budgetExperienceId = budgetCreateJson.RootElement.GetProperty("id").GetInt32();
+        (await SendAsync(
+            HttpMethod.Patch,
+            $"/api/admin/experiences/{budgetExperienceId}/moderation",
+            adminToken,
+            new { moderationStatus = "Approved" })).EnsureSuccessStatusCode();
+        (await SendAsync(
+            HttpMethod.Post,
+            $"/api/experiences/{budgetExperienceId}/availability",
+            provider.Token,
+            new
+            {
+                startTimeUtc = startsAt.AddDays(1),
+                endTimeUtc = endsAt.AddDays(1),
+                capacity = 4,
+                pricePerPerson = 10
+            })).EnsureSuccessStatusCode();
+
+        var priceSorted = await Client.GetAsync(
+            "/api/experiences?search=Lifecycle%20Experience&sortBy=Price&sortDirection=Asc&pageSize=10");
+        priceSorted.EnsureSuccessStatusCode();
+        using var priceSortedJson = await ReadJsonAsync(priceSorted);
+        Assert.Equal(
+            budgetExperienceId,
+            priceSortedJson.RootElement.GetProperty("items")[0].GetProperty("id").GetInt32());
+        Assert.Equal(
+            experienceId,
+            priceSortedJson.RootElement.GetProperty("items")[1].GetProperty("id").GetInt32());
+
+        var distanceSorted = await Client.GetAsync(
+            "/api/experiences?search=Lifecycle%20Experience&sortBy=Distance&sortDirection=Asc" +
+            "&currentLatitude=30.06&currentLongitude=31.26&pageSize=10");
+        distanceSorted.EnsureSuccessStatusCode();
+        using var distanceSortedJson = await ReadJsonAsync(distanceSorted);
+        Assert.Equal(
+            experienceId,
+            distanceSortedJson.RootElement.GetProperty("items")[0].GetProperty("id").GetInt32());
+
+        foreach (var sortBy in new[] { "Rating", "Reviews", "Name", "Newest", "Popularity", "OpenNow" })
+        {
+            (await Client.GetAsync(
+                $"/api/experiences?search=Lifecycle%20Experience&sortBy={sortBy}&sortDirection=Desc"))
+                .EnsureSuccessStatusCode();
+        }
+
+        await AssertProblemAsync(
+            await Client.GetAsync("/api/experiences?sortBy=Distance&sortDirection=Asc"),
+            400,
+            "validation_error");
+
         var booking = await SendAsync(
             HttpMethod.Post,
             $"/api/experiences/{experienceId}/bookings",

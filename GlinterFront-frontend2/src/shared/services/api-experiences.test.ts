@@ -12,8 +12,8 @@ describe("experiences API", () => {
   });
 
   it("uses paged public listings, details, and provider routes", async () => {
-    await experiencesApi.getExperiences({ category: "Historical", pageSize: 20 });
-    expect(request).toHaveBeenLastCalledWith("/experiences?category=Historical&pageSize=20");
+    await experiencesApi.getExperiences({ category: "Historical", isFree: true, pageSize: 20 });
+    expect(request).toHaveBeenLastCalledWith("/experiences?category=Historical&isFree=true&pageSize=20");
 
     await experiencesApi.getExperienceById(14);
     expect(request).toHaveBeenLastCalledWith("/experiences/14");
@@ -27,9 +27,13 @@ describe("experiences API", () => {
       category: "Nature",
       adm1Gid: 12,
       search: "Nile",
+      sortBy: "Distance",
+      sortDirection: "Asc",
+      currentLatitude: 30.04,
+      currentLongitude: 31.24,
     });
     expect(request).toHaveBeenLastCalledWith(
-      "/experiences/map?category=Nature&adm1Gid=12&search=Nile",
+      "/experiences/map?category=Nature&adm1Gid=12&search=Nile&sortBy=Distance&sortDirection=Asc&currentLatitude=30.04&currentLongitude=31.24",
     );
 
     await experiencesApi.getVisitInsights(14, "2026-08-01T10:00:00.000Z");
@@ -86,5 +90,8 @@ describe("experiences API", () => {
       method: "POST",
       body: { rating: 5, reviewText: "Excellent" },
     });
+
+    await experiencesApi.getReviews(14, 3, 5);
+    expect(request).toHaveBeenLastCalledWith("/experiences/14/reviews?page=3&pageSize=5");
   });
 });

@@ -155,6 +155,24 @@ namespace Glinter.Modules.Profiles.Infrastructure.Persistence.Migrations
                     b.ToTable("buddy_reviews", (string)null);
                 });
 
+            modelBuilder.Entity("Glinter.Modules.Profiles.Domain.Entities.ExperienceFavorite", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("ExperienceId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("UserId", "ExperienceId");
+
+                    b.HasIndex("UserId", "CreatedAtUtc");
+
+                    b.ToTable("experience_favorites", (string)null);
+                });
+
             modelBuilder.Entity("Glinter.Modules.Profiles.Domain.Entities.ExperienceProviderProfile", b =>
                 {
                     b.Property<Guid>("Id")

@@ -13,7 +13,12 @@ describe("communication API", () => {
 
   it("wires chat threads, messages, and read state", async () => {
     await chatApi.getThreads();
-    expect(request).toHaveBeenLastCalledWith("/chat/threads?page=1&pageSize=100");
+    expect(request).toHaveBeenLastCalledWith("/chat/threads?page=1&pageSize=20");
+
+    await chatApi.getMessages("thread-id");
+    expect(request).toHaveBeenLastCalledWith(
+      "/chat/threads/thread-id/messages?page=1&pageSize=50",
+    );
 
     await chatApi.createDirectThread("other-user");
     expect(request).toHaveBeenLastCalledWith("/chat/threads/direct", {

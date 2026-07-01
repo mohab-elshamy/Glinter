@@ -26,6 +26,7 @@ public class ProfilesDbContext : DbContext, IProfilesDbContext
     public DbSet<TravelerInterest> TravelerInterests => Set<TravelerInterest>();
 
     public DbSet<UserFollow> UserFollows => Set<UserFollow>();
+    public DbSet<ExperienceFavorite> ExperienceFavorites => Set<ExperienceFavorite>();
     public DbSet<LocalBuddyVerificationEvent> LocalBuddyVerificationEvents =>
         Set<LocalBuddyVerificationEvent>();
     public DbSet<BuddyAvailability> BuddyAvailabilities => Set<BuddyAvailability>();

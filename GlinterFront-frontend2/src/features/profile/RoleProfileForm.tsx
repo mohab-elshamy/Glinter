@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, Loader2, Save } from "lucide-react";
+import { Check, ImagePlus, Loader2, Save } from "lucide-react";
 import type { ProfileRole } from "@/shared/lib/auth-routing";
 import { useInterests } from "@/shared/hooks/use-interests";
 import {
@@ -69,12 +69,30 @@ const RoleProfileForm = ({
     [],
   );
   const [saving, setSaving] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [error, setError] = useState("");
 
   const toggleInterest = (interestId: string) => {
     setSelectedInterestIds((current) => current.includes(interestId)
       ? current.filter((id) => id !== interestId)
       : [...current, interestId]);
+  };
+
+  const uploadProfileImage = async (files: FileList | null) => {
+    const file = files?.[0];
+    if (!file) return;
+    setError("");
+    setUploadingImage(true);
+    try {
+      const uploaded = await profilesApi.uploadProfileImage(file);
+      setProfileImageUrl(uploaded.link);
+    } catch (requestError) {
+      setError(requestError instanceof Error
+        ? requestError.message
+        : "Profile image could not be uploaded.");
+    } finally {
+      setUploadingImage(false);
+    }
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -312,21 +330,38 @@ const RoleProfileForm = ({
         </fieldset>
       )}
 
-      <label className="block text-sm font-medium">
-        Profile image URL
-        <input
-          type="url"
-          maxLength={1000}
-          value={profileImageUrl}
-          onChange={(event) => setProfileImageUrl(event.target.value)}
-          placeholder="https://..."
-          className={inputClass}
-        />
-      </label>
+      <div className="rounded-xl border border-border bg-secondary/20 p-4">
+        <p className="text-sm font-medium">Profile image</p>
+        <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-full bg-secondary">
+            {profileImageUrl
+              ? <img src={profileImageUrl} alt="Profile preview" className="h-full w-full object-cover" />
+              : <ImagePlus className="h-6 w-6 text-muted-foreground" />}
+          </div>
+          <div>
+            <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-border px-4 py-2 text-xs font-semibold hover:bg-secondary">
+              {uploadingImage
+                ? <Loader2 className="h-4 w-4 animate-spin" />
+                : <ImagePlus className="h-4 w-4" />}
+              {uploadingImage ? "Uploading…" : "Choose image"}
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                disabled={uploadingImage}
+                onChange={(event) => void uploadProfileImage(event.target.files)}
+                className="sr-only"
+              />
+            </label>
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              JPEG, PNG or WebP. Maximum 5 MB.
+            </p>
+          </div>
+        </div>
+      </div>
 
       <button
         type="submit"
-        disabled={saving || (supportsInterests && interestsQuery.isPending)}
+        disabled={saving || uploadingImage || (supportsInterests && interestsQuery.isPending)}
         className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-3 font-semibold text-primary-foreground disabled:opacity-50"
       >
         {saving

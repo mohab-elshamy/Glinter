@@ -7,35 +7,55 @@ import type { Hotel } from "./types";
 import { regionsApi } from "@/shared/services/api-regions";
 import type { RegionHierarchyGids } from "@/shared/types/regions";
 import type {
+  SortDirection,
+  StaySortBy,
   StayRegionGroupBy,
   StayRegionStatsDto,
   StayResponseDto,
 } from "@/shared/types/api";
 
-const toHotel = (stay: StayResponseDto): Hotel => ({
+export const toHotel = (stay: StayResponseDto): Hotel => ({
   id: stay.id,
   name: stay.name,
   area: stay.locationSummaryDescription || "Egypt",
   rating: stay.rating ?? 0,
   reviews: stay.reviews ?? stay.featuredReviews.length,
-  price: Math.round(stay.price ?? 0),
+  price: stay.price,
   amenities: stay.amenities,
   image: stay.images[0]?.link,
+  images: stay.images,
   description: stay.description,
+  bookingPlatforms: stay.bookingPlatforms,
+  reviewsPerRating: stay.reviewsPerRating,
+  featuredReviews: stay.featuredReviews,
+  sourceType: stay.sourceType,
+  website: stay.website,
+  phoneInternational: stay.phoneInternational,
+  googleMapsLink: stay.googleMapsLink,
+  cid: stay.cid,
+  createdAtUtc: stay.createdAtUtc,
+  updatedAtUtc: stay.updatedAtUtc,
   latitude: stay.latitude,
   longitude: stay.longitude,
+  adm0Gid: stay.adm0Gid,
+  adm1Gid: stay.adm1Gid,
+  adm2Gid: stay.adm2Gid,
+  adm3Gid: stay.adm3Gid,
 });
 
 export function useWhereToStay() {
   const [searchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
-  const [maxPrice, setMaxPrice] = useState(200);
+  const [maxPrice, setMaxPrice] = useState<number>();
   const [minRating, setMinRating] = useState(0);
+  const [sortBy, setSortBy] = useState<StaySortBy>("Recommended");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("Desc");
   const [checkin, setCheckin] = useState("");
   const [checkout, setCheckout] = useState("");
   const [guests, setGuests] = useState(1);
   const [selectedHotel, setSelectedHotel] = useState<Hotel | null>(null);
+  const [previewHotel, setPreviewHotel] = useState<Hotel | null>(null);
   const [region, setRegion] = useState<RegionHierarchyGids>({});
   const [locatingRegion, setLocatingRegion] = useState(false);
   const [apiHotels, setApiHotels] = useState<Hotel[]>([]);
@@ -67,8 +87,8 @@ export function useWhereToStay() {
       adm3Gid: region.adm3Gid,
       maxPrice,
       minRating: minRating || undefined,
-      sortBy: "Recommended",
-      sortDirection: "Desc",
+      sortBy,
+      sortDirection,
     })
       .then((response) => {
         if (!active) return;
@@ -90,6 +110,8 @@ export function useWhereToStay() {
     maxPrice,
     minRating,
     page,
+    sortBy,
+    sortDirection,
     region.adm0Gid,
     region.adm1Gid,
     region.adm2Gid,
@@ -146,10 +168,32 @@ export function useWhereToStay() {
 
   const selectHotel = async (hotel: Hotel) => {
     if (!hotel.id) return;
+    let detail: Hotel;
     try {
-      setSelectedHotel(toHotel(await staysApi.getStayById(hotel.id)));
+      detail = toHotel(await staysApi.getStayById(hotel.id));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not load stay details.");
+      return;
+    }
+
+    try {
+      const names = await Promise.all([
+        detail.adm0Gid
+          ? regionsApi.getCountry(detail.adm0Gid).then((item) => item.nameEn)
+          : undefined,
+        detail.adm1Gid
+          ? regionsApi.getGovernorate(detail.adm1Gid).then((item) => item.nameEn)
+          : undefined,
+        detail.adm2Gid
+          ? regionsApi.getDistrict(detail.adm2Gid).then((item) => item.nameEn)
+          : undefined,
+        detail.adm3Gid
+          ? regionsApi.getNeighbourhood(detail.adm3Gid).then((item) => item.nameEn ?? item.nameAr)
+          : undefined,
+      ]);
+      setSelectedHotel({ ...detail, regionNames: names.filter((name): name is string => Boolean(name)) });
+    } catch {
+      setSelectedHotel(detail);
     }
   };
 
@@ -175,26 +219,34 @@ export function useWhereToStay() {
         cheapestPrice: hotel.price,
         data: hotel,
       })),
-    selectedMarker: selectedHotel?.latitude != null && selectedHotel.longitude != null
+    selectedMarker: previewHotel?.latitude != null && previewHotel.longitude != null
       ? {
-          lat: selectedHotel.latitude,
-          lng: selectedHotel.longitude,
-          name: selectedHotel.name,
-          cheapestPrice: selectedHotel.price,
-          data: selectedHotel,
+          lat: previewHotel.latitude,
+          lng: previewHotel.longitude,
+          name: previewHotel.name,
+          cheapestPrice: previewHotel.price,
+          data: previewHotel,
         }
       : null,
     comparisonMarkers: [],
-  }), [filteredHotels, selectedHotel]);
+  }), [filteredHotels, previewHotel]);
 
   return {
     searchQuery, setSearchQuery,
     checkin, setCheckin,
     checkout, setCheckout,
     guests, setGuests,
-    maxPrice, setMaxPrice: (value: number) => { setMaxPrice(value); setPage(1); },
+    maxPrice, setMaxPrice: (value?: number) => { setMaxPrice(value); setPage(1); },
     minRating, setMinRating: (value: number) => { setMinRating(value); setPage(1); },
+    sortBy,
+    sortDirection,
+    setSorting: (nextSortBy: StaySortBy, nextDirection: SortDirection) => {
+      setSortBy(nextSortBy);
+      setSortDirection(nextDirection);
+      setPage(1);
+    },
     selectedHotel, setSelectedHotel,
+    previewHotel, setPreviewHotel,
     region,
     setRegion: (value: RegionHierarchyGids) => { setRegion(value); setPage(1); },
     locatingRegion,

@@ -15,6 +15,9 @@ describe("admin API", () => {
     await adminApi.getUsers();
     expect(request).toHaveBeenLastCalledWith("/admin/users");
 
+    await adminApi.getUserById("user-id");
+    expect(request).toHaveBeenLastCalledWith("/admin/users/user-id");
+
     await adminApi.getRoles();
     expect(request).toHaveBeenLastCalledWith("/admin/users/roles");
 

@@ -5,6 +5,7 @@ import Navbar from "@/components/Navbar";
 import { toast } from "sonner";
 import { useState, useEffect } from "react";
 import { useMyProfile } from "@/shared/hooks/use-my-profile";
+import { createInitialsAvatar } from "@/shared/lib/avatar";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -68,6 +69,9 @@ const Dashboard = () => {
         </div>
         
         <div class="space-y-6">
+          <p class="rounded-lg border border-border bg-secondary/30 p-3 text-xs text-muted-foreground">
+            These comfort, safety and daily-budget preferences are saved on this device only. Account profile preferences are managed from Edit Profile.
+          </p>
           <!-- Preferred Vibes -->
           <div>
             <label class="text-sm font-semibold block mb-3" style="color: var(--foreground)">Preferred Vibes</label>
@@ -344,7 +348,7 @@ const Dashboard = () => {
               <Compass className="w-5 h-5 text-green-500" />
             </div>
             <h3 className="font-bold">Where to Go</h3>
-            <p className="text-xs text-muted-foreground mb-3">Generate AI-powered itineraries</p>
+            <p className="text-xs text-muted-foreground mb-3">Build an itinerary from real experiences</p>
             <span className="text-xs text-green-500 font-medium">Plan Itinerary →</span>
           </motion.div>
           
@@ -418,7 +422,7 @@ const Dashboard = () => {
                 {/* User Photo */}
                 <div className="relative">
                   <img 
-                    src={profile?.profileImageUrl || "https://images.pexels.com/photos/2379005/pexels-photo-2379005.jpeg?w=150&h=150&fit=crop"}
+                    src={profile?.profileImageUrl || createInitialsAvatar(displayName)}
                     alt={displayName}
                     className="w-14 h-14 rounded-full object-cover border-2 border-accent shadow-lg"
                   />

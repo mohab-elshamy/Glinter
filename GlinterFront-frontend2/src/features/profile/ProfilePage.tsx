@@ -27,10 +27,11 @@ import type {
   LocalBuddyProfileResponse,
 } from "@/shared/types/api";
 import type { LoadState } from "@/shared/types/async-state";
+import { createInitialsAvatar } from "@/shared/lib/avatar";
 
 const avatarFor = (profile: LocalBuddyProfileResponse) =>
   profile.profileImageUrl ||
-  `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(profile.displayName)}`;
+  createInitialsAvatar(profile.displayName);
 
 const ProfilePage = () => {
   const { id } = useParams();

@@ -20,6 +20,7 @@ using Glinter.Modules.Profiles.Application.Profiles.Queries;
 
 using Glinter.Modules.Profiles.Infrastructure.Services;
 using Glinter.Modules.Profiles.Application.Profiles.Services;
+using Glinter.Modules.Profiles.Infrastructure.Files;
 namespace Glinter.Modules.Profiles.Infrastructure.DependencyInjection;
 
 public static class ProfilesModule
@@ -53,6 +54,8 @@ public static class ProfilesModule
         services.AddScoped<UpdateLocalBuddyVerificationCommandHandler>();
         services.AddScoped<GetLocalBuddyVerificationHistoryHandler>();
         services.AddScoped<BuddyEngagementService>();
+        services.AddScoped<ExperienceFavoriteService>();
+        services.AddSingleton<ProfileImageStorage>();
 
         return services;
     }

@@ -49,6 +49,17 @@ export type MyProfileResponse =
   | LocalBuddyProfileResponse
   | BusinessProfileResponse;
 
+export interface ProfileImageUploadDto {
+  link: string;
+  fileName: string;
+  sizeBytes: number;
+}
+
+export interface ExperienceFavoriteStatus {
+  experienceId: number;
+  isFavorite: boolean;
+}
+
 const getAllLocalBuddies = async () => {
   const items: LocalBuddyListItemResponse[] = [];
   for (let page = 1; page <= 100; page += 1) {
@@ -97,6 +108,31 @@ export const profilesApi = {
       method: "PATCH",
       body: { profileImageUrl },
     }),
+
+  uploadProfileImage: (file: File) => {
+    const body = new FormData();
+    body.append("file", file);
+    return request<ProfileImageUploadDto>("/profiles/images", {
+      method: "POST",
+      body,
+    });
+  },
+
+  getExperienceFavoriteIds: () =>
+    request<number[]>("/profiles/experience-favorites"),
+
+  addExperienceFavorite: (experienceId: number) =>
+    request<ExperienceFavoriteStatus>(`/profiles/experience-favorites/${experienceId}`, {
+      method: "PUT",
+    }),
+
+  removeExperienceFavorite: (experienceId: number) =>
+    request<ExperienceFavoriteStatus>(`/profiles/experience-favorites/${experienceId}`, {
+      method: "DELETE",
+    }),
+
+  clearExperienceFavorites: () =>
+    request<void>("/profiles/experience-favorites", { method: "DELETE" }),
 
   getLocalBuddies: getAllLocalBuddies,
 

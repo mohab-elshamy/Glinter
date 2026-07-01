@@ -185,6 +185,7 @@ export interface ExperienceMapItemDto {
   longitude?: number;
   rating?: number;
   reviews?: number;
+  startingPricePerPerson?: number;
   primaryImage?: string;
   isOpenNow?: boolean;
   popularityPercentageNow?: number;
@@ -236,6 +237,7 @@ export interface ExperienceResponseDto {
   }>;
   phoneInternational?: string;
   priceRange?: string;
+  startingPricePerPerson?: number;
   reviews?: number;
   rating?: number;
   reviewsPerRating: Array<{ rating: number; reviewsCount: number }>;
@@ -316,6 +318,18 @@ export interface CreateExperienceBookingRequest {
   guestsCount: number;
 }
 
+export type ExperienceSortBy =
+  | "Recommended"
+  | "Price"
+  | "Rating"
+  | "Reviews"
+  | "Name"
+  | "Newest"
+  | "Popularity"
+  | "OpenNow"
+  | "Distance";
+export type SortDirection = "Asc" | "Desc";
+
 export interface GetExperiencesRequest {
   category?: ExperienceCategory;
   sourceType?: ExperienceSourceType;
@@ -325,6 +339,11 @@ export interface GetExperiencesRequest {
   adm2Gid?: number;
   adm3Gid?: number;
   minRating?: number;
+  isFree?: boolean;
+  sortBy?: ExperienceSortBy;
+  sortDirection?: SortDirection;
+  currentLatitude?: number;
+  currentLongitude?: number;
   page?: number;
   pageSize?: number;
 }
@@ -340,6 +359,7 @@ export interface CreateExperienceReviewRequest {
 
 export type StaySourceType = "ThirdParty" | "HotelOwner";
 export type StayBookingStatus = "Pending" | "Confirmed" | "Completed" | "Cancelled";
+export type StaySortBy = "Recommended" | "Price" | "Rating" | "Reviews" | "Name" | "Newest";
 
 export interface StayImageDto {
   id: number;
@@ -429,8 +449,8 @@ export interface GetStaysRequest {
   minPrice?: number;
   maxPrice?: number;
   minRating?: number;
-  sortBy?: "Recommended" | "Price" | "Rating" | "Reviews" | "Name" | "Newest";
-  sortDirection?: "Asc" | "Desc";
+  sortBy?: StaySortBy;
+  sortDirection?: SortDirection;
   page?: number;
   pageSize?: number;
 }

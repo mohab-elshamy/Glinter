@@ -20,6 +20,9 @@ export const adminApi = {
   getUsers: () =>
     request<AdminUserListItem[]>("/admin/users"),
 
+  getUserById: (userId: string) =>
+    request<AdminUserResponse>(`/admin/users/${userId}`),
+
   getRoles: () =>
     request<AdminRoleResponse[]>("/admin/users/roles"),
 
