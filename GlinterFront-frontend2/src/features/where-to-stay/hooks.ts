@@ -90,18 +90,24 @@ export function useWhereToStay() {
       sortBy,
       sortDirection,
     })
-      .then((response) => {
-        if (!active) return;
-        setApiHotels(response.items.map(toHotel));
-        setTotalCount(response.totalCount);
-        setStaysState({ status: "ready" });
-      })
-      .catch((error: unknown) => {
-        if (!active) return;
-        const message = error instanceof Error ? error.message : "Could not load stays.";
-        setStaysState({ status: "error", message });
-        toast.error(message);
-      });
+        .then((response) => {
+          if (!active) return;
+          setApiHotels(response.items.map(toHotel));
+          setTotalCount(response.totalCount);
+          setStaysState({ status: "ready" });
+        })
+        .catch((error: unknown) => {
+          if (!active) return;
+
+          console.error("Could not load stays.", error);
+          setApiHotels([]);
+          setTotalCount(0);
+          setStaysState({
+            status: "error",
+            message: "Could not load stays. Please try again.",
+          });
+          toast.error("Could not load stays.");
+        });
     return () => {
       active = false;
     };
@@ -122,14 +128,14 @@ export function useWhereToStay() {
     let active = true;
     setStatsState({ status: "loading" });
     const groupBy: StayRegionGroupBy = region.adm3Gid
-      ? "Adm3"
-      : region.adm2Gid
         ? "Adm3"
-        : region.adm1Gid
-          ? "Adm2"
-          : region.adm0Gid
-            ? "Adm1"
-            : "Adm0";
+        : region.adm2Gid
+            ? "Adm3"
+            : region.adm1Gid
+                ? "Adm2"
+                : region.adm0Gid
+                    ? "Adm1"
+                    : "Adm0";
     staysApi.getRegionStats({
       groupBy,
       adm0Gid: region.adm0Gid,
@@ -139,19 +145,21 @@ export function useWhereToStay() {
       maxPrice,
       minRating: minRating || undefined,
     })
-      .then((stats) => {
-        if (!active) return;
-        setRegionStats(stats);
-        setStatsState({ status: "ready" });
-      })
-      .catch((error: unknown) => {
-        if (!active) return;
-        setRegionStats([]);
-        setStatsState({
-          status: "error",
-          message: error instanceof Error ? error.message : "Could not load region statistics.",
+        .then((stats) => {
+          if (!active) return;
+          setRegionStats(stats);
+          setStatsState({ status: "ready" });
+        })
+        .catch((error: unknown) => {
+          if (!active) return;
+
+          console.error("Could not load region statistics.", error);
+          setRegionStats([]);
+          setStatsState({
+            status: "error",
+            message: "Could not load region statistics. Please try again.",
+          });
         });
-      });
     return () => {
       active = false;
     };
@@ -172,24 +180,25 @@ export function useWhereToStay() {
     try {
       detail = toHotel(await staysApi.getStayById(hotel.id));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not load stay details.");
+      console.error("Could not load stay details.", error);
+      toast.error("Could not load stay details.");
       return;
     }
 
     try {
       const names = await Promise.all([
         detail.adm0Gid
-          ? regionsApi.getCountry(detail.adm0Gid).then((item) => item.nameEn)
-          : undefined,
+            ? regionsApi.getCountry(detail.adm0Gid).then((item) => item.nameEn)
+            : undefined,
         detail.adm1Gid
-          ? regionsApi.getGovernorate(detail.adm1Gid).then((item) => item.nameEn)
-          : undefined,
+            ? regionsApi.getGovernorate(detail.adm1Gid).then((item) => item.nameEn)
+            : undefined,
         detail.adm2Gid
-          ? regionsApi.getDistrict(detail.adm2Gid).then((item) => item.nameEn)
-          : undefined,
+            ? regionsApi.getDistrict(detail.adm2Gid).then((item) => item.nameEn)
+            : undefined,
         detail.adm3Gid
-          ? regionsApi.getNeighbourhood(detail.adm3Gid).then((item) => item.nameEn ?? item.nameAr)
-          : undefined,
+            ? regionsApi.getNeighbourhood(detail.adm3Gid).then((item) => item.nameEn ?? item.nameAr)
+            : undefined,
       ]);
       setSelectedHotel({ ...detail, regionNames: names.filter((name): name is string => Boolean(name)) });
     } catch {
@@ -203,7 +212,8 @@ export function useWhereToStay() {
       setRegion(await regionsApi.getByPoint(lat, lng));
       setPage(1);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "No backend region contains this map point.");
+      console.error("Could not resolve the selected map point.", error);
+      toast.error("No backend region contains this map point.");
     } finally {
       setLocatingRegion(false);
     }
@@ -211,23 +221,23 @@ export function useWhereToStay() {
 
   const mapData = useMemo(() => ({
     markers: filteredHotels
-      .filter((hotel) => hotel.latitude != null && hotel.longitude != null)
-      .map((hotel) => ({
-        lat: hotel.latitude as number,
-        lng: hotel.longitude as number,
-        name: hotel.name,
-        cheapestPrice: hotel.price,
-        data: hotel,
-      })),
+        .filter((hotel) => hotel.latitude != null && hotel.longitude != null)
+        .map((hotel) => ({
+          lat: hotel.latitude as number,
+          lng: hotel.longitude as number,
+          name: hotel.name,
+          cheapestPrice: hotel.price,
+          data: hotel,
+        })),
     selectedMarker: previewHotel?.latitude != null && previewHotel.longitude != null
-      ? {
+        ? {
           lat: previewHotel.latitude,
           lng: previewHotel.longitude,
           name: previewHotel.name,
           cheapestPrice: previewHotel.price,
           data: previewHotel,
         }
-      : null,
+        : null,
     comparisonMarkers: [],
   }), [filteredHotels, previewHotel]);
 

@@ -32,6 +32,7 @@ using Glinter.Shared.Infrastructure.Cleanup;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Logging.ClearProviders();
+
 builder.Logging.Configure(options =>
 {
     options.ActivityTrackingOptions =
@@ -39,12 +40,14 @@ builder.Logging.Configure(options =>
         ActivityTrackingOptions.SpanId |
         ActivityTrackingOptions.ParentId;
 });
+
 // Hosting.Diagnostics logs the raw request URL before middleware can redact
 // SignalR's access_token query parameter. The safe request logger below
 // replaces those start/finish records.
 builder.Logging.AddFilter(
     "Microsoft.AspNetCore.Hosting.Diagnostics",
     LogLevel.Warning);
+
 if (builder.Environment.IsDevelopment())
 {
     builder.Logging.AddSimpleConsole(options =>
@@ -67,22 +70,35 @@ else
 
 const string CorsPolicyName = "GlinterFrontend";
 
-var maxRequestBodyBytes = builder.Configuration.GetValue<long?>("RequestLimits:MaxBodyBytes")
-                          ?? 50L * 1024 * 1024;
+var maxRequestBodyBytes =
+    builder.Configuration.GetValue<long?>("RequestLimits:MaxBodyBytes")
+    ?? 50L * 1024 * 1024;
 
 if (maxRequestBodyBytes <= 0)
-    throw new InvalidOperationException("RequestLimits:MaxBodyBytes must be greater than zero.");
+{
+    throw new InvalidOperationException(
+        "RequestLimits:MaxBodyBytes must be greater than zero.");
+}
 
 var rateLimitPermitLimit =
-    builder.Configuration.GetValue<int?>("RateLimiting:PermitLimit") ?? 120;
+    builder.Configuration.GetValue<int?>("RateLimiting:PermitLimit")
+    ?? 120;
+
 var rateLimitWindowMinutes =
-    builder.Configuration.GetValue<int?>("RateLimiting:WindowMinutes") ?? 1;
+    builder.Configuration.GetValue<int?>("RateLimiting:WindowMinutes")
+    ?? 1;
 
 if (rateLimitPermitLimit <= 0)
-    throw new InvalidOperationException("RateLimiting:PermitLimit must be greater than zero.");
+{
+    throw new InvalidOperationException(
+        "RateLimiting:PermitLimit must be greater than zero.");
+}
 
 if (rateLimitWindowMinutes <= 0)
-    throw new InvalidOperationException("RateLimiting:WindowMinutes must be greater than zero.");
+{
+    throw new InvalidOperationException(
+        "RateLimiting:WindowMinutes must be greater than zero.");
+}
 
 builder.WebHost.ConfigureKestrel(options =>
 {
@@ -95,7 +111,9 @@ builder.Services.Configure<FormOptions>(options =>
 });
 
 // Module 1: IdentityAccess
-builder.Services.AddIdentityAccessModule(builder.Configuration, builder.Environment);
+builder.Services.AddIdentityAccessModule(
+    builder.Configuration,
+    builder.Environment);
 
 // Module 2: Profiles
 builder.Services.AddProfilesModule(builder.Configuration);
@@ -106,7 +124,7 @@ builder.Services.AddStaysModule(builder.Configuration);
 // Module 5: Experiences
 builder.Services.AddExperiencesModule(builder.Configuration);
 
-// Module 6: Regions (Administrative Boundaries)
+// Module 6: Regions
 builder.Services.AddRegionsModule(builder.Configuration);
 
 // Module 7: Safety Index
@@ -115,30 +133,46 @@ builder.Services.AddSafetyIndexModule(builder.Configuration);
 // Module 9: Communication
 builder.Services.AddCommunicationModule(builder.Configuration);
 
-builder.Services.AddControllers()
+builder.Services
+    .AddControllers()
     .AddJsonOptions(options =>
     {
-        options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
-        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+        options.JsonSerializerOptions.ReferenceHandler =
+            ReferenceHandler.IgnoreCycles;
+
+        options.JsonSerializerOptions.Converters.Add(
+            new JsonStringEnumConverter());
     });
 
 builder.Services.AddSignalR(options =>
 {
-    options.EnableDetailedErrors = builder.Environment.IsDevelopment();
+    options.EnableDetailedErrors =
+        builder.Environment.IsDevelopment();
+
     options.MaximumReceiveMessageSize = 16 * 1024;
 });
 
-builder.Services.AddHealthChecks()
-    .AddCheck("self", () => HealthCheckResult.Healthy(), tags: ["live"])
-    .AddCheck<PostgresReadinessHealthCheck>("postgres", tags: ["ready"]);
+builder.Services
+    .AddHealthChecks()
+    .AddCheck(
+        "self",
+        () => HealthCheckResult.Healthy(),
+        tags: ["live"])
+    .AddCheck<PostgresReadinessHealthCheck>(
+        "postgres",
+        tags: ["ready"]);
+
 builder.Services.AddScoped<AdminAuditService>();
 builder.Services.AddScoped<AdminAuditDetailsContext>();
 builder.Services.AddSingleton<ApplicationMetrics>();
 
 var cleanupOptions = builder.Configuration
     .GetSection(DataCleanupOptions.SectionName)
-    .Get<DataCleanupOptions>() ?? new DataCleanupOptions();
-if (cleanupOptions.IntervalMinutes <= 0 ||
+    .Get<DataCleanupOptions>()
+    ?? new DataCleanupOptions();
+
+if (
+    cleanupOptions.IntervalMinutes <= 0 ||
     cleanupOptions.BatchSize is < 1 or > 10000 ||
     cleanupOptions.MaxBatchesPerRun is < 1 or > 1000 ||
     cleanupOptions.RevokedTokenRetentionDays < 0 ||
@@ -152,29 +186,45 @@ if (cleanupOptions.IntervalMinutes <= 0 ||
     throw new InvalidOperationException(
         "Cleanup configuration is invalid; interval, batch limits, and audit retention must be positive, batch size cannot exceed 10000, and unread notification retention must be at least the read retention.");
 }
+
 builder.Services.Configure<DataCleanupOptions>(
-    builder.Configuration.GetSection(DataCleanupOptions.SectionName));
+    builder.Configuration.GetSection(
+        DataCleanupOptions.SectionName));
+
 builder.Services.AddScoped<DataCleanupService>();
+
 if (cleanupOptions.Enabled)
+{
     builder.Services.AddHostedService<DataCleanupWorker>();
+}
 
 builder.Services.Configure<ApiBehaviorOptions>(options =>
 {
     options.InvalidModelStateResponseFactory = context =>
     {
-        var problemDetails = new ValidationProblemDetails(context.ModelState)
-        {
-            Status = StatusCodes.Status400BadRequest,
-            Title = "Validation failed.",
-            Detail = "One or more request values are invalid.",
-            Instance = context.HttpContext.Request.Path
-        };
+        var problemDetails =
+            new ValidationProblemDetails(context.ModelState)
+            {
+                Status = StatusCodes.Status400BadRequest,
+                Title = "Validation failed.",
+                Detail =
+                    "One or more request values are invalid.",
+                Instance =
+                    context.HttpContext.Request.Path
+            };
 
-        problemDetails.Extensions["errorCode"] = "validation_error";
-        problemDetails.Extensions["traceId"] = context.HttpContext.TraceIdentifier;
+        problemDetails.Extensions["errorCode"] =
+            "validation_error";
 
-        var result = new BadRequestObjectResult(problemDetails);
-        result.ContentTypes.Add("application/problem+json");
+        problemDetails.Extensions["traceId"] =
+            context.HttpContext.TraceIdentifier;
+
+        var result =
+            new BadRequestObjectResult(problemDetails);
+
+        result.ContentTypes.Add(
+            "application/problem+json");
+
         return result;
     };
 });
@@ -183,40 +233,61 @@ var configuredAllowedOrigins = builder.Configuration
     .GetSection("Cors:AllowedOrigins")
     .Get<string[]>();
 
-string[] developmentOrigins = builder.Environment.IsDevelopment()
-    ?
-    [
-        "http://localhost:3000",
-        "https://localhost:3000",
-        "http://localhost:5173",
-        "https://localhost:5173",
-        "http://localhost:8080",
-        "https://localhost:8080",
-        "http://127.0.0.1:5173",
-        "https://127.0.0.1:5173",
-        "http://127.0.0.1:8080",
-        "https://127.0.0.1:8080"
-    ]
-    : [];
+string[] developmentOrigins =
+    builder.Environment.IsDevelopment()
+        ?
+        [
+            "http://localhost:3000",
+            "https://localhost:3000",
 
-var allowedOrigins = (configuredAllowedOrigins ?? [])
+            "http://localhost:5173",
+            "https://localhost:5173",
+
+            "http://localhost:8080",
+            "https://localhost:8080",
+
+            "http://127.0.0.1:5173",
+            "https://127.0.0.1:5173",
+
+            "http://127.0.0.1:8080",
+            "https://127.0.0.1:8080"
+        ]
+        : [];
+
+var allowedOrigins =
+    (configuredAllowedOrigins ?? [])
     .Concat(developmentOrigins)
-    .Where(origin => !string.IsNullOrWhiteSpace(origin))
+    .Where(origin =>
+        !string.IsNullOrWhiteSpace(origin))
     .Select(origin => origin.Trim())
     .Distinct(StringComparer.OrdinalIgnoreCase)
     .ToArray();
 
 if (allowedOrigins.Any(origin => origin == "*"))
-    throw new InvalidOperationException("Cors:AllowedOrigins cannot contain a wildcard origin.");
+{
+    throw new InvalidOperationException(
+        "Cors:AllowedOrigins cannot contain a wildcard origin.");
+}
 
-if (!builder.Environment.IsDevelopment() && allowedOrigins.Length == 0)
+if (
+    !builder.Environment.IsDevelopment() &&
+    allowedOrigins.Length == 0)
+{
     throw new InvalidOperationException(
         "Cors:AllowedOrigins must contain at least one explicit origin outside Development.");
+}
 
 foreach (var origin in allowedOrigins)
 {
-    if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri) ||
-        (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps) ||
+    if (
+        !Uri.TryCreate(
+            origin,
+            UriKind.Absolute,
+            out var uri) ||
+        (
+            uri.Scheme != Uri.UriSchemeHttp &&
+            uri.Scheme != Uri.UriSchemeHttps
+        ) ||
         uri.AbsolutePath != "/" ||
         !string.IsNullOrEmpty(uri.Query) ||
         !string.IsNullOrEmpty(uri.Fragment))
@@ -228,104 +299,163 @@ foreach (var origin in allowedOrigins)
 
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy(CorsPolicyName, policy =>
-    {
-        if (allowedOrigins.Length > 0)
+    options.AddPolicy(
+        CorsPolicyName,
+        policy =>
         {
-            policy
-                .WithOrigins(allowedOrigins)
-                .AllowAnyHeader()
-                .AllowAnyMethod()
-                .AllowCredentials();
-        }
-    });
+            if (allowedOrigins.Length > 0)
+            {
+                policy
+                    .WithOrigins(allowedOrigins)
+                    .AllowAnyHeader()
+                    .AllowAnyMethod()
+                    .AllowCredentials();
+            }
+        });
 });
 
 builder.Services.AddRateLimiter(options =>
 {
-    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-    options.OnRejected = async (context, cancellationToken) =>
-    {
-        if (context.HttpContext.Response.HasStarted)
-        {
-            return;
-        }
+    options.RejectionStatusCode =
+        StatusCodes.Status429TooManyRequests;
 
-        var problemDetails = new ProblemDetails
+    options.OnRejected =
+        async (context, cancellationToken) =>
         {
-            Status = StatusCodes.Status429TooManyRequests,
-            Title = "Too many requests.",
-            Detail = "Too many requests were sent in a short period. Try again later.",
-            Instance = context.HttpContext.Request.Path
+            if (
+                context.HttpContext.Response.HasStarted)
+            {
+                return;
+            }
+
+            var problemDetails = new ProblemDetails
+            {
+                Status =
+                    StatusCodes.Status429TooManyRequests,
+
+                Title = "Too many requests.",
+
+                Detail =
+                    "Too many requests were sent in a short period. Try again later.",
+
+                Instance =
+                    context.HttpContext.Request.Path
+            };
+
+            problemDetails.Extensions["errorCode"] =
+                "rate_limit_exceeded";
+
+            problemDetails.Extensions["traceId"] =
+                context.HttpContext.TraceIdentifier;
+
+            context.HttpContext.Response.StatusCode =
+                StatusCodes.Status429TooManyRequests;
+
+            context.HttpContext.Response.ContentType =
+                "application/problem+json";
+
+            await context.HttpContext.Response
+                .WriteAsJsonAsync(
+                    problemDetails,
+                    options: null,
+                    contentType:
+                        "application/problem+json",
+                    cancellationToken:
+                        cancellationToken);
         };
 
-        problemDetails.Extensions["errorCode"] = "rate_limit_exceeded";
-        problemDetails.Extensions["traceId"] = context.HttpContext.TraceIdentifier;
-
-        context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
-        context.HttpContext.Response.ContentType = "application/problem+json";
-
-        await context.HttpContext.Response.WriteAsJsonAsync(
-            problemDetails,
-            options: null,
-            contentType: "application/problem+json",
-            cancellationToken: cancellationToken);
-    };
-    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
-    {
-        var userId = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
-        var partitionKey = !string.IsNullOrWhiteSpace(userId)
-            ? $"user:{userId}"
-            : $"ip:{httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown"}";
-
-        return RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey,
-            _ => new FixedWindowRateLimiterOptions
+    options.GlobalLimiter =
+        PartitionedRateLimiter.Create<
+            HttpContext,
+            string>(
+            httpContext =>
             {
-                PermitLimit = rateLimitPermitLimit,
-                Window = TimeSpan.FromMinutes(rateLimitWindowMinutes),
-                QueueLimit = 0,
-                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-                AutoReplenishment = true
+                var userId =
+                    httpContext.User.FindFirstValue(
+                        ClaimTypes.NameIdentifier);
+
+                var partitionKey =
+                    !string.IsNullOrWhiteSpace(userId)
+                        ? $"user:{userId}"
+                        : $"ip:{httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown"}";
+
+                return RateLimitPartition
+                    .GetFixedWindowLimiter(
+                        partitionKey,
+                        _ =>
+                            new FixedWindowRateLimiterOptions
+                            {
+                                PermitLimit =
+                                    rateLimitPermitLimit,
+
+                                Window =
+                                    TimeSpan.FromMinutes(
+                                        rateLimitWindowMinutes),
+
+                                QueueLimit = 0,
+
+                                QueueProcessingOrder =
+                                    QueueProcessingOrder
+                                        .OldestFirst,
+
+                                AutoReplenishment = true
+                            });
             });
-    });
 });
 
 #region Swagger Configurations
+
 builder.Services.AddEndpointsApiExplorer();
+
 builder.Services.AddSwaggerGen(options =>
 {
-    options.SwaggerDoc("v1", new OpenApiInfo
-    {
-        Title = "Glinter API",
-        Version = "v1"
-    });
-
-    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
-    {
-        Description = "JWT Authorization header using the Bearer scheme. Example: \"Bearer {token}\"",
-        Name = "Authorization",
-        In = ParameterLocation.Header,
-        Type = SecuritySchemeType.Http,
-        Scheme = "bearer",
-        BearerFormat = "JWT"
-    });
-
-    options.AddSecurityRequirement(new OpenApiSecurityRequirement
-    {
+    options.SwaggerDoc(
+        "v1",
+        new OpenApiInfo
         {
-            new OpenApiSecurityScheme
+            Title = "Glinter API",
+            Version = "v1"
+        });
+
+    options.AddSecurityDefinition(
+        "Bearer",
+        new OpenApiSecurityScheme
+        {
+            Description =
+                "JWT Authorization header using the Bearer scheme. Example: \"Bearer {token}\"",
+
+            Name = "Authorization",
+
+            In = ParameterLocation.Header,
+
+            Type = SecuritySchemeType.Http,
+
+            Scheme = "bearer",
+
+            BearerFormat = "JWT"
+        });
+
+    options.AddSecurityRequirement(
+        new OpenApiSecurityRequirement
+        {
             {
-                Reference = new OpenApiReference
+                new OpenApiSecurityScheme
                 {
-                    Type = ReferenceType.SecurityScheme,
-                    Id = "Bearer"
-                }
-            },
-            new string[] { }
-        }
-    });
+                    Reference =
+                        new OpenApiReference
+                        {
+                            Type =
+                                ReferenceType
+                                    .SecurityScheme,
+
+                            Id = "Bearer"
+                        }
+                },
+                Array.Empty<string>()
+            }
+        });
 });
+
 #endregion
 
 var app = builder.Build();
@@ -333,48 +463,89 @@ var app = builder.Build();
 app.UseMiddleware<RequestCorrelationMiddleware>();
 app.UseMiddleware<RequestLoggingMiddleware>();
 app.UseMiddleware<ApiExceptionHandlingMiddleware>();
-app.UseStatusCodePages(async (Microsoft.AspNetCore.Diagnostics.StatusCodeContext statusCodeContext) =>
-{
-    var response = statusCodeContext.HttpContext.Response;
-    var problemDetails = new ProblemDetails
+
+app.UseStatusCodePages(
+    async (
+        Microsoft.AspNetCore.Diagnostics
+            .StatusCodeContext statusCodeContext) =>
     {
-        Status = response.StatusCode,
-        Title = response.StatusCode == StatusCodes.Status404NotFound
-            ? "Resource not found"
-            : "Request failed",
-        Detail = response.StatusCode == StatusCodes.Status404NotFound
-            ? "The requested resource was not found."
-            : "The request could not be completed.",
-        Instance = statusCodeContext.HttpContext.Request.Path
-    };
-    problemDetails.Extensions["errorCode"] =
-        response.StatusCode == StatusCodes.Status404NotFound
-            ? "not_found"
-            : "request_failed";
-    problemDetails.Extensions["traceId"] =
-        statusCodeContext.HttpContext.TraceIdentifier;
+        var response =
+            statusCodeContext.HttpContext.Response;
 
-    response.ContentType = "application/problem+json";
-    await response.WriteAsJsonAsync(
-        problemDetails,
-        options: null,
-        contentType: "application/problem+json",
-        cancellationToken: statusCodeContext.HttpContext.RequestAborted);
-});
+        var problemDetails = new ProblemDetails
+        {
+            Status = response.StatusCode,
 
+            Title =
+                response.StatusCode ==
+                StatusCodes.Status404NotFound
+                    ? "Resource not found"
+                    : "Request failed",
+
+            Detail =
+                response.StatusCode ==
+                StatusCodes.Status404NotFound
+                    ? "The requested resource was not found."
+                    : "The request could not be completed.",
+
+            Instance =
+                statusCodeContext
+                    .HttpContext
+                    .Request
+                    .Path
+        };
+
+        problemDetails.Extensions["errorCode"] =
+            response.StatusCode ==
+            StatusCodes.Status404NotFound
+                ? "not_found"
+                : "request_failed";
+
+        problemDetails.Extensions["traceId"] =
+            statusCodeContext
+                .HttpContext
+                .TraceIdentifier;
+
+        response.ContentType =
+            "application/problem+json";
+
+        await response.WriteAsJsonAsync(
+            problemDetails,
+            options: null,
+            contentType:
+                "application/problem+json",
+            cancellationToken:
+                statusCodeContext
+                    .HttpContext
+                    .RequestAborted);
+    });
+
+/*
+ * Development currently runs over:
+ * http://localhost:5160
+ *
+ * Do not attempt to redirect to HTTPS in Development,
+ * because the HTTP launch profile has no HTTPS port.
+ *
+ * In staging and production, HSTS and HTTPS redirection
+ * remain enabled.
+ */
 if (!app.Environment.IsDevelopment())
 {
     app.UseHsts();
+    app.UseHttpsRedirection();
 }
-
-app.UseHttpsRedirection();
 
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
+
     app.UseSwaggerUI(options =>
     {
-        options.SwaggerEndpoint("/swagger/v1/swagger.json", "Glinter API v1");
+        options.SwaggerEndpoint(
+            "/swagger/v1/swagger.json",
+            "Glinter API v1");
+
         options.RoutePrefix = "swagger";
     });
 }
@@ -384,54 +555,105 @@ app.UseCors(CorsPolicyName);
 app.UseAuthentication();
 app.UseRateLimiter();
 app.UseAuthorization();
+
 app.UseMiddleware<AdminAuditMiddleware>();
 
 if (app.Environment.IsDevelopment())
 {
-    app.MapGet("/", () => Results.Redirect("/swagger"));
+    app.MapGet(
+        "/",
+        () => Results.Redirect("/swagger"));
 }
 else
 {
-    app.MapGet("/", () => Results.Ok(new
-    {
-        name = "Glinter API",
-        status = "OK"
-    }));
+    app.MapGet(
+        "/",
+        () => Results.Ok(
+            new
+            {
+                name = "Glinter API",
+                status = "OK"
+            }));
 }
 
 app.MapControllers();
-app.MapHub<ChatHub>("/hubs/chat", options =>
-{
-    options.CloseOnAuthenticationExpiration = true;
-});
-app.MapHealthChecks("/health/live", new HealthCheckOptions
-{
-    Predicate = registration => registration.Tags.Contains("live")
-}).DisableRateLimiting();
-app.MapHealthChecks("/health/ready", new HealthCheckOptions
-{
-    Predicate = registration => registration.Tags.Contains("ready")
-}).DisableRateLimiting();
+
+app.MapHub<ChatHub>(
+    "/hubs/chat",
+    options =>
+    {
+        options.CloseOnAuthenticationExpiration =
+            true;
+    });
+
+app.MapHealthChecks(
+        "/health/live",
+        new HealthCheckOptions
+        {
+            Predicate =
+                registration =>
+                    registration.Tags.Contains(
+                        "live")
+        })
+    .DisableRateLimiting();
+
+app.MapHealthChecks(
+        "/health/ready",
+        new HealthCheckOptions
+        {
+            Predicate =
+                registration =>
+                    registration.Tags.Contains(
+                        "ready")
+        })
+    .DisableRateLimiting();
 
 using (var scope = app.Services.CreateScope())
 {
-    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<ApplicationRole>>();
-    var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+    var roleManager =
+        scope.ServiceProvider
+            .GetRequiredService<
+                RoleManager<ApplicationRole>>();
 
-    var adminSeedOptions = new AdminSeedOptions
-    {
-        Email = builder.Configuration["AdminSeed:Email"] ?? string.Empty,
-        Password = builder.Configuration["AdminSeed:Password"] ?? string.Empty,
-        FullName = builder.Configuration["AdminSeed:FullName"] ?? "System Admin"
-    };
+    var userManager =
+        scope.ServiceProvider
+            .GetRequiredService<
+                UserManager<ApplicationUser>>();
 
-    await IdentitySeeder.SeedAsync(roleManager, userManager, adminSeedOptions);
+    var adminSeedOptions =
+        new AdminSeedOptions
+        {
+            Email =
+                builder.Configuration[
+                    "AdminSeed:Email"]
+                ?? string.Empty,
+
+            Password =
+                builder.Configuration[
+                    "AdminSeed:Password"]
+                ?? string.Empty,
+
+            FullName =
+                builder.Configuration[
+                    "AdminSeed:FullName"]
+                ?? "System Admin"
+        };
+
+    await IdentitySeeder.SeedAsync(
+        roleManager,
+        userManager,
+        adminSeedOptions);
 }
 
 using (var scope = app.Services.CreateScope())
 {
-    var profilesDbContext = scope.ServiceProvider.GetRequiredService<ProfilesDbContext>();
-    await ProfilesSeeder.SeedAsync(profilesDbContext);
+    var profilesDbContext =
+        scope.ServiceProvider
+            .GetRequiredService<
+                ProfilesDbContext>();
+
+    await ProfilesSeeder.SeedAsync(
+        profilesDbContext);
 }
 
 app.Run();
