@@ -2,10 +2,10 @@ using System.Text.Json;
 using Glinter.Modules.IdentityAccess.Domain.Constants;
 using Glinter.Modules.Stays.Application.Dtos;
 using Glinter.Modules.Stays.Application.Services;
+using Glinter.Modules.Stays.Infrastructure.Files;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Glinter.Modules.Stays.Infrastructure.Files;
 
 namespace Glinter.Modules.Stays.Presentation.Controllers;
 
@@ -14,11 +14,16 @@ namespace Glinter.Modules.Stays.Presentation.Controllers;
 public class StaysController : ControllerBase
 {
     private readonly StayService _stayService;
+    private readonly HotelRecommendationService _recommendationService;
     private readonly StayImageStorage _imageStorage;
 
-    public StaysController(StayService stayService, StayImageStorage imageStorage)
+    public StaysController(
+        StayService stayService,
+        HotelRecommendationService recommendationService,
+        StayImageStorage imageStorage)
     {
         _stayService = stayService;
+        _recommendationService = recommendationService;
         _imageStorage = imageStorage;
     }
 
@@ -91,6 +96,38 @@ public class StaysController : ControllerBase
         }
 
         return Ok(result);
+    }
+
+    [HttpPost("recommendations")]
+    public async Task<IActionResult> Recommend(
+        [FromBody] HotelRecommendationRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _recommendationService.RecommendAsync(request, cancellationToken);
+            return Ok(result);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpPost("recommendations/natural-language")]
+    public async Task<IActionResult> RecommendFromNaturalLanguage(
+        [FromBody] NaturalLanguageHotelRecommendationRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _recommendationService.RecommendFromTextAsync(request, cancellationToken);
+            return Ok(result);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     [Authorize(

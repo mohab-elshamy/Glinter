@@ -12,11 +12,13 @@ public class StayAmenityConfiguration : IEntityTypeConfiguration<StayAmenity>
 
         builder.HasKey(x => x.Id);
 
-        builder.Property(x => x.Name)
-            .IsRequired()
+        builder.Property(x => x.NameAr)
+            .HasMaxLength(250);
+
+        builder.Property(x => x.NameEn)
             .HasMaxLength(250);
 
         builder.HasIndex(x => x.StayId);
-        builder.HasIndex(x => new { x.StayId, x.Name }).IsUnique();
+        builder.HasIndex(x => new { x.StayId, x.NameAr, x.NameEn }).IsUnique();
     }
 }
