@@ -595,8 +595,10 @@ public class StayService
                 .Select(x => new StayImageResponse { Id = x.Id, Link = x.Link })
                 .ToList(),
             Amenities = stay.Amenities
-                .OrderBy(x => x.Name)
-                .Select(x => x.Name)
+                .Select(GetAmenityDisplayName)
+                .Where(x => x is not null)
+                .Select(x => x!)
+                .OrderBy(x => x)
                 .ToList(),
             ReviewsPerRating = stay.ReviewsPerRatings
                 .OrderBy(x => x.Rating)
@@ -710,8 +712,27 @@ public class StayService
     {
         foreach (var name in names.Select(CleanText).Where(x => x is not null).Distinct())
         {
-            stay.Amenities.Add(new StayAmenity { Name = name! });
+            stay.Amenities.Add(CreateAmenity(name!));
         }
+    }
+
+    private static StayAmenity CreateAmenity(string name)
+    {
+        return ContainsArabic(name)
+            ? new StayAmenity { NameAr = name }
+            : new StayAmenity { NameEn = name };
+    }
+
+    private static string? GetAmenityDisplayName(StayAmenity amenity)
+    {
+        return !string.IsNullOrWhiteSpace(amenity.NameEn)
+            ? amenity.NameEn
+            : amenity.NameAr;
+    }
+
+    private static bool ContainsArabic(string value)
+    {
+        return value.Any(c => c is >= '\u0600' and <= '\u06FF');
     }
 
     private static void AddReviewsPerRating(Stay stay, JsonElement item)
