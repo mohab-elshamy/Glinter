@@ -27,10 +27,15 @@ public sealed class DataCleanupService
     {
         await using var lockConnection = new NpgsqlConnection(
             _identity.Database.GetConnectionString());
+
         await lockConnection.OpenAsync(cancellationToken);
 
-        if (!await TryAcquireLockAsync(lockConnection, cancellationToken))
+        if (!await TryAcquireLockAsync(
+                lockConnection,
+                cancellationToken))
+        {
             return DataCleanupResult.Skipped;
+        }
 
         try
         {
@@ -53,49 +58,70 @@ public sealed class DataCleanupService
             cancellationToken)
             ? await DeleteInBatchesAsync(
                 _identity,
-                () => _identity.RevokedTokens.Where(
-                    x => x.ExpiresAtUtc <
-                         now.AddDays(-_options.RevokedTokenRetentionDays)),
+                () => _identity.RevokedTokens
+                    .Where(x =>
+                        x.ExpiresAtUtc <
+                        now.AddDays(
+                            -_options.RevokedTokenRetentionDays))
+                    .OrderBy(x => x.Id),
                 cancellationToken)
             : 0;
+
         var refreshTokens = await TableExistsAsync(
             _identity,
             "refresh_tokens",
             cancellationToken)
             ? await DeleteInBatchesAsync(
                 _identity,
-                () => _identity.RefreshTokens.Where(x =>
-                    x.ExpiresAtUtc <
-                    now.AddDays(-_options.RefreshTokenRetentionDays) ||
-                    (x.RevokedAtUtc != null &&
-                     x.RevokedAtUtc <
-                     now.AddDays(-_options.RefreshTokenRetentionDays))),
+                () => _identity.RefreshTokens
+                    .Where(x =>
+                        x.ExpiresAtUtc <
+                        now.AddDays(
+                            -_options.RefreshTokenRetentionDays) ||
+                        (
+                            x.RevokedAtUtc != null &&
+                            x.RevokedAtUtc <
+                            now.AddDays(
+                                -_options.RefreshTokenRetentionDays)
+                        ))
+                    .OrderBy(x => x.Id),
                 cancellationToken)
             : 0;
+
         var mfaChallenges = await TableExistsAsync(
             _identity,
             "mfa_challenges",
             cancellationToken)
             ? await DeleteInBatchesAsync(
                 _identity,
-                () => _identity.MfaChallenges.Where(x =>
-                    x.ExpiresAtUtc <
-                    now.AddDays(-_options.MfaChallengeRetentionDays) ||
-                    (x.ConsumedAtUtc != null &&
-                     x.ConsumedAtUtc <
-                     now.AddDays(-_options.MfaChallengeRetentionDays))),
+                () => _identity.MfaChallenges
+                    .Where(x =>
+                        x.ExpiresAtUtc <
+                        now.AddDays(
+                            -_options.MfaChallengeRetentionDays) ||
+                        (
+                            x.ConsumedAtUtc != null &&
+                            x.ConsumedAtUtc <
+                            now.AddDays(
+                                -_options.MfaChallengeRetentionDays)
+                        ))
+                    .OrderBy(x => x.Id),
                 cancellationToken)
             : 0;
+
         var adminAuditEvents = await TableExistsAsync(
             _identity,
             "admin_audit_events",
             cancellationToken)
             ? await DeleteInBatchesAsync(
                 _identity,
-                () => _identity.AdminAuditEvents.Where(
-                    x => x.CompletedAtUtc != null &&
-                         x.CreatedAtUtc <
-                         now.AddDays(-_options.AdminAuditRetentionDays)),
+                () => _identity.AdminAuditEvents
+                    .Where(x =>
+                        x.CompletedAtUtc != null &&
+                        x.CreatedAtUtc <
+                        now.AddDays(
+                            -_options.AdminAuditRetentionDays))
+                    .OrderBy(x => x.Id),
                 cancellationToken)
             : 0;
 
@@ -103,22 +129,30 @@ public sealed class DataCleanupService
             _communication,
             "notifications",
             cancellationToken);
+
         var readNotifications = notificationsExist
             ? await DeleteInBatchesAsync(
                 _communication,
-                () => _communication.Notifications.Where(
-                    x => x.ReadAtUtc != null &&
-                         x.ReadAtUtc <
-                         now.AddDays(-_options.ReadNotificationRetentionDays)),
+                () => _communication.Notifications
+                    .Where(x =>
+                        x.ReadAtUtc != null &&
+                        x.ReadAtUtc <
+                        now.AddDays(
+                            -_options.ReadNotificationRetentionDays))
+                    .OrderBy(x => x.Id),
                 cancellationToken)
             : 0;
+
         var unreadNotifications = notificationsExist
             ? await DeleteInBatchesAsync(
                 _communication,
-                () => _communication.Notifications.Where(
-                    x => x.ReadAtUtc == null &&
-                         x.CreatedAtUtc <
-                         now.AddDays(-_options.UnreadNotificationRetentionDays)),
+                () => _communication.Notifications
+                    .Where(x =>
+                        x.ReadAtUtc == null &&
+                        x.CreatedAtUtc <
+                        now.AddDays(
+                            -_options.UnreadNotificationRetentionDays))
+                    .OrderBy(x => x.Id),
                 cancellationToken)
             : 0;
 
@@ -139,18 +173,27 @@ public sealed class DataCleanupService
     {
         var totalDeleted = 0;
 
-        for (var batch = 0; batch < _options.MaxBatchesPerRun; batch++)
+        for (
+            var batch = 0;
+            batch < _options.MaxBatchesPerRun;
+            batch++)
         {
             await using var transaction =
-                await dbContext.Database.BeginTransactionAsync(cancellationToken);
+                await dbContext.Database.BeginTransactionAsync(
+                    cancellationToken);
+
             var deleted = await queryFactory()
                 .Take(_options.BatchSize)
                 .ExecuteDeleteAsync(cancellationToken);
+
             await transaction.CommitAsync(cancellationToken);
 
             totalDeleted += deleted;
+
             if (deleted < _options.BatchSize)
+            {
                 break;
+            }
         }
 
         return totalDeleted;
@@ -161,23 +204,31 @@ public sealed class DataCleanupService
         CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
+
         command.CommandText =
             """
             SELECT pg_try_advisory_lock(
                 hashtextextended('glinter:data-cleanup', 0))
             """;
-        return (bool)(await command.ExecuteScalarAsync(cancellationToken) ?? false);
+
+        return (bool)(
+            await command.ExecuteScalarAsync(cancellationToken)
+            ?? false);
     }
 
-    private static async Task ReleaseLockAsync(NpgsqlConnection connection)
+    private static async Task ReleaseLockAsync(
+        NpgsqlConnection connection)
     {
         await using var command = connection.CreateCommand();
+
         command.CommandText =
             """
             SELECT pg_advisory_unlock(
                 hashtextextended('glinter:data-cleanup', 0))
             """;
-        await command.ExecuteScalarAsync(CancellationToken.None);
+
+        await command.ExecuteScalarAsync(
+            CancellationToken.None);
     }
 
     private static async Task<bool> TableExistsAsync(
@@ -186,6 +237,7 @@ public sealed class DataCleanupService
         CancellationToken cancellationToken)
     {
         var qualifiedTableName = $"public.{tableName}";
+
         return await dbContext.Database
             .SqlQuery<bool>(
                 $"SELECT to_regclass({qualifiedTableName}) IS NOT NULL AS \"Value\"")
@@ -201,10 +253,11 @@ public sealed record DataCleanupResult(
     int UnreadNotifications,
     int AdminAuditEvents)
 {
-    public static DataCleanupResult Skipped { get; } = new(0, 0, 0, 0, 0, 0)
-    {
-        SkippedDueToLock = true
-    };
+    public static DataCleanupResult Skipped { get; } =
+        new(0, 0, 0, 0, 0, 0)
+        {
+            SkippedDueToLock = true
+        };
 
     public bool SkippedDueToLock { get; init; }
 
