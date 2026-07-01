@@ -277,6 +277,66 @@ public sealed class RegionsAndProfilesTests : ApiTestBase
     }
 
     [Fact]
+    public async Task Profile_image_upload_and_experience_favorites_are_persisted()
+    {
+        var traveler = await CreateUserAsync("Traveler", "profile-media-favorites");
+        await UpsertTravelerAsync(traveler);
+
+        var pngBytes = new byte[]
+        {
+            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+            0x00, 0x00, 0x00, 0x00
+        };
+        using var content = new MultipartFormDataContent();
+        var imageContent = new ByteArrayContent(pngBytes);
+        imageContent.Headers.ContentType =
+            new System.Net.Http.Headers.MediaTypeHeaderValue("image/png");
+        content.Add(imageContent, "file", "profile.png");
+        using var uploadRequest = new HttpRequestMessage(HttpMethod.Post, "/api/profiles/images");
+        uploadRequest.Headers.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", traveler.Token);
+        uploadRequest.Content = content;
+
+        var upload = await Client.SendAsync(uploadRequest);
+        upload.EnsureSuccessStatusCode();
+        using var uploadJson = await ReadJsonAsync(upload);
+        var imageLink = uploadJson.RootElement.GetProperty("link").GetString();
+        Assert.False(string.IsNullOrWhiteSpace(imageLink));
+        var image = await Client.GetAsync(imageLink);
+        image.EnsureSuccessStatusCode();
+        Assert.Equal(pngBytes, await image.Content.ReadAsByteArrayAsync());
+
+        var saveImage = await SendAsync(
+            HttpMethod.Patch,
+            "/api/profiles/image",
+            traveler.Token,
+            new { profileImageUrl = imageLink });
+        saveImage.EnsureSuccessStatusCode();
+
+        var addFavorite = await SendAsync(
+            HttpMethod.Put,
+            "/api/profiles/experience-favorites/42",
+            traveler.Token);
+        addFavorite.EnsureSuccessStatusCode();
+
+        var favorites = await SendAsync(
+            HttpMethod.Get,
+            "/api/profiles/experience-favorites",
+            traveler.Token);
+        favorites.EnsureSuccessStatusCode();
+        using var favoritesJson = await ReadJsonAsync(favorites);
+        Assert.Contains(
+            favoritesJson.RootElement.EnumerateArray(),
+            item => item.GetInt32() == 42);
+
+        var removeFavorite = await SendAsync(
+            HttpMethod.Delete,
+            "/api/profiles/experience-favorites/42",
+            traveler.Token);
+        removeFavorite.EnsureSuccessStatusCode();
+    }
+
+    [Fact]
     public async Task Buddy_availability_request_completion_and_review_flow_is_enforced()
     {
         var buddy = await CreateUserAsync("LocalBuddy", "buddy-flow");

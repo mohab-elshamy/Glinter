@@ -804,16 +804,16 @@ public class StayService
         return request.SortBy switch
         {
             StaySortBy.Price => descending
-                ? query.OrderByDescending(x => x.Price).ThenByDescending(x => x.Rating).ThenBy(x => x.Name)
-                : query.OrderBy(x => x.Price).ThenByDescending(x => x.Rating).ThenBy(x => x.Name),
+                ? query.OrderBy(x => x.Price == null).ThenByDescending(x => x.Price).ThenByDescending(x => x.Rating).ThenBy(x => x.Name)
+                : query.OrderBy(x => x.Price == null).ThenBy(x => x.Price).ThenByDescending(x => x.Rating).ThenBy(x => x.Name),
 
             StaySortBy.Rating => descending
-                ? query.OrderByDescending(x => x.Rating).ThenByDescending(x => x.Reviews).ThenBy(x => x.Price)
-                : query.OrderBy(x => x.Rating).ThenByDescending(x => x.Reviews).ThenBy(x => x.Price),
+                ? query.OrderBy(x => x.Rating == null).ThenByDescending(x => x.Rating).ThenByDescending(x => x.Reviews).ThenBy(x => x.Price)
+                : query.OrderBy(x => x.Rating == null).ThenBy(x => x.Rating).ThenByDescending(x => x.Reviews).ThenBy(x => x.Price),
 
             StaySortBy.Reviews => descending
-                ? query.OrderByDescending(x => x.Reviews).ThenByDescending(x => x.Rating).ThenBy(x => x.Price)
-                : query.OrderBy(x => x.Reviews).ThenByDescending(x => x.Rating).ThenBy(x => x.Price),
+                ? query.OrderBy(x => x.Reviews == null).ThenByDescending(x => x.Reviews).ThenByDescending(x => x.Rating).ThenBy(x => x.Price)
+                : query.OrderBy(x => x.Reviews == null).ThenBy(x => x.Reviews).ThenByDescending(x => x.Rating).ThenBy(x => x.Price),
 
             StaySortBy.Name => descending
                 ? query.OrderByDescending(x => x.Name)
@@ -824,7 +824,8 @@ public class StayService
                 : query.OrderBy(x => x.CreatedAtUtc),
 
             _ => query
-                .OrderByDescending(x => x.Rating)
+                .OrderBy(x => x.Rating == null)
+                .ThenByDescending(x => x.Rating)
                 .ThenByDescending(x => x.Reviews)
                 .ThenBy(x => x.Price)
                 .ThenBy(x => x.Name)

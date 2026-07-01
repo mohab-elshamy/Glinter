@@ -100,7 +100,7 @@ const Navbar = ({ solid }: { solid?: boolean }) => {
             <span className="text-xl font-bold tracking-wide">Glinter</span>
           </Link>
 
-          <div className="hidden md:flex items-center gap-6 text-sm font-medium">
+          <div className="hidden xl:flex items-center gap-6 text-sm font-medium">
             {navItems.map((item) => {
               const isActive = location.pathname === item.path;
               return (
@@ -138,7 +138,7 @@ const Navbar = ({ solid }: { solid?: boolean }) => {
                 </Link>
                 <button
                   onClick={() => { handleLogout(); }}
-                  className="hidden md:flex items-center gap-2 px-3 py-2 text-sm font-medium text-brand-gold hover:opacity-80 transition-opacity"
+                  className="hidden xl:flex items-center gap-2 px-3 py-2 text-sm font-medium text-brand-gold hover:opacity-80 transition-opacity"
                 >
                   <LogIn className="w-4 h-4" />
                   Logout
@@ -147,7 +147,7 @@ const Navbar = ({ solid }: { solid?: boolean }) => {
             ) : (
               <Link
                 to="/auth"
-                className="hidden md:flex items-center gap-2 px-3 py-2 text-sm font-medium text-brand-gold hover:opacity-80 transition-opacity"
+                className="hidden xl:flex items-center gap-2 px-3 py-2 text-sm font-medium text-brand-gold hover:opacity-80 transition-opacity"
               >
                 <LogIn className="w-4 h-4" />
                 Login
@@ -155,7 +155,7 @@ const Navbar = ({ solid }: { solid?: boolean }) => {
             )}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden p-2 rounded-lg hover:bg-white/5 transition-colors"
+              className="xl:hidden p-2 rounded-lg hover:bg-white/5 transition-colors"
             >
               {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
@@ -169,7 +169,7 @@ const Navbar = ({ solid }: { solid?: boolean }) => {
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="md:hidden container mx-auto max-w-7xl px-4 mt-2"
+            className="xl:hidden container mx-auto max-w-7xl px-4 mt-2"
           >
             <div className="liquid-glass rounded-2xl p-4 space-y-2">
               {navItems.map((item) => {

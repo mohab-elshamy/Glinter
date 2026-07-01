@@ -37,7 +37,15 @@ const MessagesPage = () => {
   const currentUserId = authStorage.getUser()?.userId ?? "";
   const [activeTab, setActiveTab] = useState<"notifications" | "messages">("notifications");
   const [threads, setThreads] = useState<ChatThreadDto[]>([]);
+  const [threadPage, setThreadPage] = useState(1);
+  const [hasMoreThreads, setHasMoreThreads] = useState(false);
+  const [loadingMoreThreads, setLoadingMoreThreads] = useState(false);
+  const threadPageSize = 20;
   const [messagesByThread, setMessagesByThread] = useState<Record<string, ChatMessageDto[]>>({});
+  const [messagePageByThread, setMessagePageByThread] = useState<Record<string, number>>({});
+  const [hasMoreMessagesByThread, setHasMoreMessagesByThread] = useState<Record<string, boolean>>({});
+  const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
+  const messagePageSize = 50;
   const [selectedThreadId, setSelectedThreadId] = useState<string>();
   const selectedThreadIdRef = useRef<string>();
   const [messageInput, setMessageInput] = useState("");
@@ -116,11 +124,13 @@ const MessagesPage = () => {
   const loadCommunication = useCallback(async () => {
     try {
       const [loadedThreads, notificationPage, loadedPreferences] = await Promise.all([
-        chatApi.getThreads(),
+        chatApi.getThreads(1, threadPageSize),
         notificationsApi.getNotifications(1, notificationPageSize),
         notificationsApi.getPreferences(),
       ]);
       setThreads(loadedThreads);
+      setThreadPage(1);
+      setHasMoreThreads(loadedThreads.length === threadPageSize);
       setNotifications(notificationPage.items);
       setNotificationUnreadCount(notificationPage.unreadCount);
       setNotificationTotalCount(notificationPage.totalCount);
@@ -170,8 +180,10 @@ const MessagesPage = () => {
 
     void chatApi.createDirectThread(buddy.userId)
       .then(async (created) => {
-        const refreshed = await chatApi.getThreads();
+        const refreshed = await chatApi.getThreads(1, threadPageSize);
         setThreads(refreshed);
+        setThreadPage(1);
+        setHasMoreThreads(refreshed.length === threadPageSize);
         await realtimeRef.current?.joinThread(created.id);
         await openThread(created.id);
         setActiveTab("messages");
@@ -183,8 +195,13 @@ const MessagesPage = () => {
 
   const openThread = async (threadId: string) => {
     try {
-      const loadedMessages = await chatApi.getMessages(threadId);
+      const loadedMessages = await chatApi.getMessages(threadId, 1, messagePageSize);
       setMessagesByThread((current) => ({ ...current, [threadId]: loadedMessages }));
+      setMessagePageByThread((current) => ({ ...current, [threadId]: 1 }));
+      setHasMoreMessagesByThread((current) => ({
+        ...current,
+        [threadId]: loadedMessages.length === messagePageSize,
+      }));
       setSelectedThreadId(threadId);
       selectedThreadIdRef.current = threadId;
       setThreads((current) =>
@@ -196,6 +213,57 @@ const MessagesPage = () => {
       await chatApi.markThreadAsRead(threadId);
     } catch (error) {
       toast.error(errorMessage(error));
+    }
+  };
+
+  const loadMoreThreads = async () => {
+    if (loadingMoreThreads || !hasMoreThreads) return;
+    const nextPage = threadPage + 1;
+    setLoadingMoreThreads(true);
+    try {
+      const loaded = await chatApi.getThreads(nextPage, threadPageSize);
+      setThreads((current) => {
+        const known = new Set(current.map((thread) => thread.id));
+        return [...current, ...loaded.filter((thread) => !known.has(thread.id))];
+      });
+      setThreadPage(nextPage);
+      setHasMoreThreads(loaded.length === threadPageSize);
+    } catch (error) {
+      toast.error(errorMessage(error));
+    } finally {
+      setLoadingMoreThreads(false);
+    }
+  };
+
+  const loadOlderMessages = async () => {
+    if (
+      !selectedThreadId ||
+      loadingOlderMessages ||
+      !hasMoreMessagesByThread[selectedThreadId]
+    ) return;
+
+    const nextPage = (messagePageByThread[selectedThreadId] ?? 1) + 1;
+    setLoadingOlderMessages(true);
+    try {
+      const loaded = await chatApi.getMessages(selectedThreadId, nextPage, messagePageSize);
+      setMessagesByThread((current) => {
+        const existing = current[selectedThreadId] ?? [];
+        const known = new Set(existing.map((message) => message.id));
+        return {
+          ...current,
+          [selectedThreadId]: [...loaded.filter((message) => !known.has(message.id)), ...existing]
+            .sort((left, right) => Date.parse(left.sentAtUtc) - Date.parse(right.sentAtUtc)),
+        };
+      });
+      setMessagePageByThread((current) => ({ ...current, [selectedThreadId]: nextPage }));
+      setHasMoreMessagesByThread((current) => ({
+        ...current,
+        [selectedThreadId]: loaded.length === messagePageSize,
+      }));
+    } catch (error) {
+      toast.error(errorMessage(error));
+    } finally {
+      setLoadingOlderMessages(false);
     }
   };
 
@@ -359,8 +427,6 @@ const MessagesPage = () => {
             <div className="grid gap-3 sm:grid-cols-2">
               {([
                 ["inAppEnabled", "In-app notifications"],
-                ["emailEnabled", "Email notifications"],
-                ["pushEnabled", "Push notifications"],
                 ["chatMessageNotificationsEnabled", "Chat messages"],
                 ["systemNotificationsEnabled", "System updates"],
               ] as const).map(([key, label]) => (
@@ -369,6 +435,14 @@ const MessagesPage = () => {
                   <input type="checkbox" checked={preferences[key]} onChange={() => void updatePreference(key)} />
                 </label>
               ))}
+              <div className="rounded-lg border border-border bg-secondary/20 p-3 text-sm">
+                <p className="font-medium">Email notifications</p>
+                <p className="mt-1 text-xs text-muted-foreground">Unavailable until an email delivery provider is configured.</p>
+              </div>
+              <div className="rounded-lg border border-border bg-secondary/20 p-3 text-sm">
+                <p className="font-medium">Push notifications</p>
+                <p className="mt-1 text-xs text-muted-foreground">Unavailable until browser/device push delivery is configured.</p>
+              </div>
             </div>
           </section>
         )}
@@ -403,7 +477,7 @@ const MessagesPage = () => {
               {notifications.length === 0 && <p className="py-8 text-center text-sm text-muted-foreground">No notifications yet.</p>}
               {notifications.map((notification) => (
                 <button key={notification.id} onClick={() => void markNotificationRead(notification)} className={`w-full rounded-lg p-4 text-left ${notification.isRead ? "bg-secondary/20" : "border-l-4 border-accent bg-secondary/50"}`}>
-                  <div className="flex justify-between gap-3">
+                  <div className="flex flex-col justify-between gap-2 sm:flex-row sm:gap-3">
                     <div><p className="text-sm font-semibold">{notification.title}</p><p className="mt-1 text-xs text-muted-foreground">{notification.body}</p></div>
                     <span className="shrink-0 text-[10px] text-muted-foreground">{new Date(notification.createdAtUtc).toLocaleString()}</span>
                   </div>
@@ -441,6 +515,18 @@ const MessagesPage = () => {
               <div><h2 className="font-semibold">{otherParticipant(selectedThread)}</h2><p className="text-xs text-muted-foreground">Realtime chat</p></div>
             </header>
             <div className="flex-1 space-y-3 overflow-y-auto p-4">
+              {hasMoreMessagesByThread[selectedThread.id] && (
+                <div className="text-center">
+                  <button
+                    type="button"
+                    disabled={loadingOlderMessages}
+                    onClick={() => void loadOlderMessages()}
+                    className="rounded-lg border border-border px-3 py-2 text-xs disabled:opacity-50"
+                  >
+                    {loadingOlderMessages ? "Loading…" : "Load older messages"}
+                  </button>
+                </div>
+              )}
               {selectedMessages.length === 0 && <p className="py-10 text-center text-sm text-muted-foreground">No messages yet. Say hello.</p>}
               {selectedMessages.map((message) => (
                 <div key={message.id} className={`flex ${message.isMine ? "justify-end" : "justify-start"}`}>
@@ -470,6 +556,18 @@ const MessagesPage = () => {
                 </div>
               </button>
             ))}
+            {hasMoreThreads && (
+              <div className="border-t border-border p-4 text-center">
+                <button
+                  type="button"
+                  disabled={loadingMoreThreads}
+                  onClick={() => void loadMoreThreads()}
+                  className="rounded-lg border border-border px-4 py-2 text-xs disabled:opacity-50"
+                >
+                  {loadingMoreThreads ? "Loading…" : "Load more conversations"}
+                </button>
+              </div>
+            )}
           </section>
         )}
       </main>

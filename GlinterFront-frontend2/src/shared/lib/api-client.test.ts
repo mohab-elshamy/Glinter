@@ -16,12 +16,14 @@ const problemResponse = (
 describe("API client", () => {
   beforeEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
     vi.stubGlobal("fetch", vi.fn());
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
     localStorage.clear();
+    sessionStorage.clear();
   });
 
   it("parses backend Problem Details", async () => {

@@ -10,6 +10,7 @@ import type {
   GovernorateDto,
   NeighbourhoodDto,
   RegionHierarchyGids,
+  RegionSelection,
   RegionLevel,
   RegionListQuery,
   UpdateCountryRequest,
@@ -73,6 +74,25 @@ export const regionsApi = {
 
   getByPoint: (lat: number, lon: number) =>
     request<RegionHierarchyGids>(`/regions/by-point?lat=${lat}&lon=${lon}`),
+
+  getSelectionByPoint: async (lat: number, lon: number): Promise<RegionSelection> => {
+    const gids = await request<RegionHierarchyGids>(`/regions/by-point?lat=${lat}&lon=${lon}`);
+    const [country, governorate, district, neighbourhood] = await Promise.all([
+      gids.adm0Gid
+        ? request<CountryDto>(`/regions/countries/${gids.adm0Gid}?geometryAccuracy=0`)
+        : undefined,
+      gids.adm1Gid
+        ? request<GovernorateDto>(`/regions/governorates/${gids.adm1Gid}?geometryAccuracy=0`)
+        : undefined,
+      gids.adm2Gid
+        ? request<DistrictDto>(`/regions/districts/${gids.adm2Gid}?geometryAccuracy=0`)
+        : undefined,
+      gids.adm3Gid
+        ? request<NeighbourhoodDto>(`/regions/neighbourhoods/${gids.adm3Gid}?geometryAccuracy=0`)
+        : undefined,
+    ]);
+    return { ...gids, country, governorate, district, neighbourhood };
+  },
 
   createCountry: (data: CreateCountryRequest) =>
     request<CountryDto>("/regions/countries", { method: "POST", body: data }),

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Building2, Edit, Eye, EyeOff, ImagePlus, MapPin, Plus, Save, X } from "lucide-react";
 import { toast } from "sonner";
 import { staysApi } from "@/shared/services/api-stays";
+import { formatUsdPrice } from "@/shared/lib/price";
 import type {
   CreateStayRequest,
   StayBookingResponseDto,
@@ -238,7 +239,9 @@ const MyHotelsTab = () => {
                   <p className="flex items-center gap-1 text-xs text-muted-foreground">
                     <MapPin className="h-3 w-3" /> {hotel.locationSummaryDescription || "No location description"}
                   </p>
-                  <p className="mt-2 font-bold text-accent">${hotel.price ?? "—"}/night</p>
+                  <p className="mt-2 font-bold text-accent">
+                    {formatUsdPrice(hotel.price)}{hotel.price != null && hotel.price > 0 ? "/night" : ""}
+                  </p>
                   <div className="mt-3 flex flex-wrap gap-1">
                     {hotel.amenities.map((item) => <span key={item} className="rounded-full bg-secondary px-2 py-1 text-[10px]">{item}</span>)}
                   </div>
@@ -263,7 +266,7 @@ const MyHotelsTab = () => {
                         <p className="text-muted-foreground">{booking.checkInDate} → {booking.checkOutDate} · {booking.guestCount} guest(s)</p>
                       </div>
                       <div className="text-right">
-                        <p className="font-bold text-accent">${booking.totalPrice}</p>
+                        <p className="font-bold text-accent">{formatUsdPrice(booking.totalPrice)}</p>
                         <p>{booking.status}</p>
                       </div>
                       {booking.status === "Pending" && (

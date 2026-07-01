@@ -12,6 +12,8 @@ using Glinter.Modules.Profiles.Application.Profiles.Queries.GetFollowStatus;
 using Glinter.Modules.Profiles.Application.Profiles.Commands.UpsertHotelOwnerProfile;
 using Glinter.Modules.Profiles.Application.Profiles.Commands.UpsertExperienceProviderProfile;
 using Glinter.Modules.Profiles.Application.Profiles.Commands.UpdateProfileImage;
+using Glinter.Modules.Profiles.Application.Profiles.Services;
+using Glinter.Modules.Profiles.Infrastructure.Files;
 
 namespace Glinter.Modules.Profiles.Presentation.Controllers;
 
@@ -29,6 +31,8 @@ public class ProfilesController : ControllerBase
     private readonly UpsertHotelOwnerProfileCommandHandler _upsertHotelOwnerProfileCommandHandler;
     private readonly UpsertExperienceProviderProfileCommandHandler _upsertExperienceProviderProfileCommandHandler;
     private readonly UpdateProfileImageCommandHandler _updateProfileImageCommandHandler;
+    private readonly ProfileImageStorage _profileImageStorage;
+    private readonly ExperienceFavoriteService _experienceFavoriteService;
 
     public ProfilesController(
         UpsertTravelerProfileCommandHandler upsertTravelerProfileCommandHandler,
@@ -39,7 +43,9 @@ public class ProfilesController : ControllerBase
         FollowUserCommandHandler followUserCommandHandler,
         UnfollowUserCommandHandler unfollowUserCommandHandler,
         GetFollowStatusQueryHandler getFollowStatusQueryHandler,
-        UpdateProfileImageCommandHandler updateProfileImageCommandHandler)
+        UpdateProfileImageCommandHandler updateProfileImageCommandHandler,
+        ProfileImageStorage profileImageStorage,
+        ExperienceFavoriteService experienceFavoriteService)
     {
         _upsertTravelerProfileCommandHandler = upsertTravelerProfileCommandHandler;
         _upsertLocalBuddyProfileCommandHandler = upsertLocalBuddyProfileCommandHandler;
@@ -50,6 +56,8 @@ public class ProfilesController : ControllerBase
         _unfollowUserCommandHandler = unfollowUserCommandHandler;
         _getFollowStatusQueryHandler = getFollowStatusQueryHandler;
         _updateProfileImageCommandHandler = updateProfileImageCommandHandler;
+        _profileImageStorage = profileImageStorage;
+        _experienceFavoriteService = experienceFavoriteService;
     }
 
     [HttpGet("me")]
@@ -205,4 +213,68 @@ public class ProfilesController : ControllerBase
 
         return Ok(result);
     }
+
+    [HttpPost("images")]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(ProfileImageStorage.MaxImageBytes)]
+    [RequestFormLimits(MultipartBodyLengthLimit = ProfileImageStorage.MaxImageBytes)]
+    public async Task<IActionResult> UploadProfileImage(
+        [FromForm] UploadProfileImageRequest request,
+        CancellationToken cancellationToken)
+    {
+        var stored = await _profileImageStorage.SaveAsync(request.File, cancellationToken);
+        return Ok(new ProfileImageUploadResponse
+        {
+            FileName = stored.FileName,
+            SizeBytes = stored.SizeBytes,
+            Link = Url.ActionLink(
+                nameof(GetProfileImage),
+                values: new { fileName = stored.FileName })!
+        });
+    }
+
+    [AllowAnonymous]
+    [HttpGet("images/{fileName}")]
+    public IActionResult GetProfileImage(string fileName)
+    {
+        var stored = _profileImageStorage.Find(fileName);
+        return stored is null
+            ? NotFound()
+            : PhysicalFile(stored.Value.Path, stored.Value.ContentType);
+    }
+
+    [HttpGet("experience-favorites")]
+    public async Task<IActionResult> GetExperienceFavorites(CancellationToken cancellationToken) =>
+        Ok(await _experienceFavoriteService.GetIdsAsync(cancellationToken));
+
+    [HttpPut("experience-favorites/{experienceId:int}")]
+    public async Task<IActionResult> AddExperienceFavorite(
+        int experienceId,
+        CancellationToken cancellationToken) =>
+        Ok(await _experienceFavoriteService.AddAsync(experienceId, cancellationToken));
+
+    [HttpDelete("experience-favorites/{experienceId:int}")]
+    public async Task<IActionResult> RemoveExperienceFavorite(
+        int experienceId,
+        CancellationToken cancellationToken) =>
+        Ok(await _experienceFavoriteService.RemoveAsync(experienceId, cancellationToken));
+
+    [HttpDelete("experience-favorites")]
+    public async Task<IActionResult> ClearExperienceFavorites(CancellationToken cancellationToken)
+    {
+        await _experienceFavoriteService.ClearAsync(cancellationToken);
+        return NoContent();
+    }
+}
+
+public sealed class UploadProfileImageRequest
+{
+    public IFormFile? File { get; set; }
+}
+
+public sealed class ProfileImageUploadResponse
+{
+    public string Link { get; set; } = string.Empty;
+    public string FileName { get; set; } = string.Empty;
+    public long SizeBytes { get; set; }
 }

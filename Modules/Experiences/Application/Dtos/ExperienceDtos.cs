@@ -136,6 +136,11 @@ public class ExperienceListRequest
     public int? Adm2Gid { get; set; }
     public int? Adm3Gid { get; set; }
     public decimal? MinRating { get; set; }
+    public bool? IsFree { get; set; }
+    public ExperienceSortBy SortBy { get; set; } = ExperienceSortBy.Recommended;
+    public ExperienceSortDirection SortDirection { get; set; } = ExperienceSortDirection.Desc;
+    public double? CurrentLatitude { get; set; }
+    public double? CurrentLongitude { get; set; }
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 20;
 }
@@ -163,6 +168,7 @@ public class ExperienceResponse
     public List<ExperiencePopularTimeResponse> PopularTimes { get; set; } = [];
     public string? PhoneInternational { get; set; }
     public string? PriceRange { get; set; }
+    public decimal? StartingPricePerPerson { get; set; }
     public int? Reviews { get; set; }
     public decimal? Rating { get; set; }
     public List<ExperienceReviewsPerRatingResponse> ReviewsPerRating { get; set; } = [];
@@ -222,6 +228,7 @@ public class ExperienceMapItemResponse
     public double? Longitude { get; set; }
     public decimal? Rating { get; set; }
     public int? Reviews { get; set; }
+    public decimal? StartingPricePerPerson { get; set; }
     public string? PrimaryImage { get; set; }
     public bool? IsOpenNow { get; set; }
     public int? PopularityPercentageNow { get; set; }

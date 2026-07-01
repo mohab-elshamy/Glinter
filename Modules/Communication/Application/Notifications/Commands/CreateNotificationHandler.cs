@@ -12,17 +12,20 @@ public class CreateNotificationHandler
     private readonly IIdentityUserReadService _identityUserReadService;
     private readonly INotificationPreferenceRepository _preferenceRepository;
     private readonly INotificationRealtimeNotifier _realtimeNotifier;
+    private readonly ILogger<CreateNotificationHandler> _logger;
 
     public CreateNotificationHandler(
         INotificationRepository notificationRepository,
         IIdentityUserReadService identityUserReadService,
         INotificationPreferenceRepository preferenceRepository,
-        INotificationRealtimeNotifier realtimeNotifier)
+        INotificationRealtimeNotifier realtimeNotifier,
+        ILogger<CreateNotificationHandler> logger)
     {
         _notificationRepository = notificationRepository;
         _identityUserReadService = identityUserReadService;
         _preferenceRepository = preferenceRepository;
         _realtimeNotifier = realtimeNotifier;
+        _logger = logger;
     }
 
     public async Task<NotificationResponseDto?> HandleAsync(
@@ -32,9 +35,21 @@ public class CreateNotificationHandler
         if (command.UserId == Guid.Empty)
             throw new ValidationException("UserId is required.");
 
-        var userExists = await _identityUserReadService.IsActiveUserAsync(
-            command.UserId,
-            cancellationToken);
+        bool userExists;
+        try
+        {
+            userExists = await _identityUserReadService.IsActiveUserAsync(
+                command.UserId,
+                cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            _logger.LogError(
+                exception,
+                "Could not validate notification recipient {UserId}.",
+                command.UserId);
+            return null;
+        }
 
         if (!userExists)
             return null;
@@ -56,10 +71,23 @@ public class CreateNotificationHandler
         if (!Enum.IsDefined(command.Type))
             throw new ValidationException("Notification type is invalid.");
 
-        if (!await _preferenceRepository.IsInAppEnabledAsync(
+        bool inAppEnabled;
+        try
+        {
+            inAppEnabled = await _preferenceRepository.IsInAppEnabledAsync(
                 command.UserId,
                 command.Type,
-                cancellationToken))
+                cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            _logger.LogError(
+                exception,
+                "Could not read notification preferences for user {UserId}.",
+                command.UserId);
+            return null;
+        }
+        if (!inAppEnabled)
         {
             return null;
         }
@@ -88,15 +116,43 @@ public class CreateNotificationHandler
             CreatedAtUtc = DateTime.UtcNow
         };
 
-        var createdNotification = await _notificationRepository.AddAsync(
-            notification,
-            cancellationToken);
+        Notification createdNotification;
+        try
+        {
+            createdNotification = await _notificationRepository.AddAsync(
+                notification,
+                cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // Business operations call notifications after committing their own
+            // transaction. A notification-store outage must not turn a committed
+            // booking/message/moderation action into a false client failure.
+            _logger.LogError(
+                exception,
+                "Could not persist {NotificationType} notification for user {UserId}.",
+                command.Type,
+                command.UserId);
+            return null;
+        }
 
         var response = CommunicationMappings.ToNotificationResponseDto(createdNotification);
-        await _realtimeNotifier.NotificationCreatedAsync(
-            command.UserId,
-            response,
-            cancellationToken);
+        try
+        {
+            await _realtimeNotifier.NotificationCreatedAsync(
+                command.UserId,
+                response,
+                cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // The persisted notification remains available for polling even when
+            // the transient realtime delivery path is unavailable.
+            _logger.LogWarning(
+                exception,
+                "Notification {NotificationId} was persisted but realtime delivery failed.",
+                createdNotification.Id);
+        }
         return response;
     }
 

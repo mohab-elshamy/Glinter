@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { staysApi } from "@/shared/services/api-stays";
 import { experiencesApi } from "@/shared/services/api-experiences";
+import { formatUsdPrice } from "@/shared/lib/price";
 import type { LoadState } from "@/shared/types/async-state";
 
 interface BookingView {
@@ -120,7 +121,7 @@ const MyBookingsTab = () => {
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="font-bold text-accent">${booking.totalPrice}</p>
+                  <p className="font-bold text-accent">{formatUsdPrice(booking.totalPrice)}</p>
                   <span className={`text-[10px] px-2 py-0.5 rounded-full ${getStatusColor(booking.status)}`}>
                     {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
                   </span>

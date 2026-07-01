@@ -28,6 +28,8 @@ const RegionsAdminPanel = () => {
   const [level, setLevel] = useState<RegionLevel>("adm0");
   const [selection, setSelection] = useState<RegionHierarchyGids>({});
   const [items, setItems] = useState<RegionItem[]>([]);
+  const [page, setPage] = useState(1);
+  const pageSize = 50;
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<RegionItem>();
   const [showForm, setShowForm] = useState(false);
@@ -50,6 +52,7 @@ const RegionsAdminPanel = () => {
             ? await regionsApi.getDistricts(selection.adm1Gid)
             : await regionsApi.getNeighbourhoods(selection.adm2Gid);
       setItems(loaded);
+      setPage(1);
     } catch (error) {
       toast.error(message(error));
     } finally {
@@ -164,6 +167,8 @@ const RegionsAdminPanel = () => {
       setImporting(false);
     }
   };
+  const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
+  const visibleItems = items.slice((page - 1) * pageSize, page * pageSize);
 
   return (
     <div className="space-y-5">
@@ -236,7 +241,7 @@ const RegionsAdminPanel = () => {
           <p className="p-8 text-center text-sm text-muted-foreground">No regions found for this level and parent.</p>
         ) : (
           <div className="max-h-[32rem] divide-y divide-border overflow-y-auto">
-            {items.map((item) => (
+            {visibleItems.map((item) => (
               <div key={item.gid} className="flex items-center justify-between gap-3 p-4">
                 <div>
                   <p className="text-sm font-medium">{item.nameEn || item.nameAr || "Unnamed region"}</p>
@@ -249,6 +254,13 @@ const RegionsAdminPanel = () => {
               </div>
             ))}
           </div>
+        )}
+        {totalPages > 1 && (
+          <nav aria-label="Region pages" className="flex items-center justify-center gap-3 border-t border-border p-3">
+            <button type="button" disabled={page <= 1} onClick={() => setPage((value) => value - 1)} className="rounded border border-border px-3 py-2 text-xs disabled:opacity-40">Previous</button>
+            <span className="text-xs text-muted-foreground">Page {page} of {totalPages}</span>
+            <button type="button" disabled={page >= totalPages} onClick={() => setPage((value) => value + 1)} className="rounded border border-border px-3 py-2 text-xs disabled:opacity-40">Next</button>
+          </nav>
         )}
       </div>
     </div>

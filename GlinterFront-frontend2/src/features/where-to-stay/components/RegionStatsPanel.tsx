@@ -3,6 +3,7 @@ import { BarChart3 } from "lucide-react";
 import { regionsApi } from "@/shared/services/api-regions";
 import type { LoadState } from "@/shared/types/async-state";
 import type { RegionHierarchyGids } from "@/shared/types/regions";
+import { formatUsdPrice } from "@/shared/lib/price";
 import type { StayRegionStatsDto } from "@/shared/types/api";
 
 interface RegionStatsPanelProps {
@@ -80,7 +81,7 @@ const RegionStatsPanel = ({
                 <span className="text-[10px] text-muted-foreground">{stat.hotelsCount} stays</span>
               </div>
               <p className="mt-2 text-sm font-bold text-accent">
-                {stat.averagePrice == null ? "No price" : `$${Math.round(stat.averagePrice)} avg.`}
+                {stat.averagePrice == null ? "No price" : `${formatUsdPrice(stat.averagePrice)} avg.`}
               </p>
               <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-background/70">
                 <div

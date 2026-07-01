@@ -31,8 +31,8 @@ public sealed class GetNotificationPreferencesHandler
             : new NotificationPreferenceResponseDto
             {
                 InAppEnabled = preference.InAppEnabled,
-                EmailEnabled = preference.EmailEnabled,
-                PushEnabled = preference.PushEnabled,
+                EmailEnabled = false,
+                PushEnabled = false,
                 ChatMessageNotificationsEnabled =
                     preference.ChatMessageNotificationsEnabled,
                 SystemNotificationsEnabled = preference.SystemNotificationsEnabled,

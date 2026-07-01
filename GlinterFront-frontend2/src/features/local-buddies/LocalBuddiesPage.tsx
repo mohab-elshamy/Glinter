@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Search, Filter, Star, MapPin, MessageSquare, Heart, Languages, Trash2, Clock, Calendar, X, Users } from "lucide-react";
+import { Search, Filter, Star, MapPin, MessageSquare, Heart, Languages, Trash2, Clock, Calendar, Images, Users } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import Navbar from "@/components/Navbar";
@@ -12,17 +12,25 @@ import type {
   ExperienceAvailabilityDto,
   ExperienceMapItemDto,
   ExperienceReviewDto,
+  ExperienceResponseDto,
+  ExperienceSortBy,
   ExperienceSummaryDto,
   ExperienceVisitInsightDto,
   LocalBuddyListItemResponse,
+  SortDirection,
 } from "@/shared/types/api";
 import type { LoadState } from "@/shared/types/async-state";
 import type { RegionHierarchyGids } from "@/shared/types/regions";
 import RegionCascadeSelect from "@/components/RegionCascadeSelect";
 import LeafletMap, { type MapMarker } from "@/components/LeafletMap";
+import { formatExperiencePrice, isFreeExperience } from "@/shared/lib/price";
+import ExperienceDetailsModal from "./ExperienceDetailsModal";
+import cairoImage from "@/assets/cairo.jpg";
+import { createInitialsAvatar } from "@/shared/lib/avatar";
 
 const buddyFilters = ["All", "Following", "Free", "Verified", "Top Rated", "Available Now"];
 const experienceFilters = ["All", "Favorites", "Free", "Top Rated"];
+type ExperienceSortSelection = `${ExperienceSortBy}:${SortDirection}`;
 
 interface DisplayExperience {
   id: number;
@@ -30,12 +38,16 @@ interface DisplayExperience {
   location: string;
   rating: number;
   reviews: number;
-  price: string;
+  startingPricePerPerson?: number;
+  priceRange?: string;
   openStatus: string;
   image: string;
   category: string;
   description: string;
   highlights: string[];
+  imageCount: number;
+  crowdLevel?: string;
+  popularityPercentage?: number;
 }
 
 interface DisplayBuddy {
@@ -60,9 +72,11 @@ const formatOpenStatus = (insight?: ExperienceVisitInsightDto) => {
   return insight.openStatus === "open" ? "Open now" : "Closed now";
 };
 
-const toLocalDateTimeInput = (value = new Date()) => {
-  const offset = value.getTimezoneOffset() * 60_000;
-  return new Date(value.getTime() - offset).toISOString().slice(0, 16);
+const minimumSlotPrice = (slots: ExperienceAvailabilityDto[]) => {
+  const prices = slots
+    .filter((slot) => slot.isActive)
+    .map((slot) => slot.pricePerPerson);
+  return prices.length > 0 ? Math.min(...prices) : undefined;
 };
 
 const LocalBuddies = () => {
@@ -71,17 +85,11 @@ const LocalBuddies = () => {
   const [activeTab, setActiveTab] = useState<"buddies" | "experiences">("buddies");
   const [likedExperiences, setLikedExperiences] = useState<number[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedExperience, setSelectedExperience] = useState<DisplayExperience | null>(null);
+  const [selectedExperience, setSelectedExperience] = useState<ExperienceResponseDto | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [availability, setAvailability] = useState<ExperienceAvailabilityDto[]>([]);
-  const [selectedAvailabilityId, setSelectedAvailabilityId] = useState("");
-  const [guestsCount, setGuestsCount] = useState(1);
   const [experienceReviews, setExperienceReviews] = useState<ExperienceReviewDto[]>([]);
-  const [reviewRating, setReviewRating] = useState(5);
-  const [reviewText, setReviewText] = useState("");
-  const [visitAt, setVisitAt] = useState("");
   const [visitInsight, setVisitInsight] = useState<ExperienceVisitInsightDto>();
-  const [insightLoading, setInsightLoading] = useState(false);
 
   const [apiExperiences, setApiExperiences] = useState<ExperienceSummaryDto[]>([]);
   const [mapExperiences, setMapExperiences] = useState<ExperienceMapItemDto[]>([]);
@@ -92,13 +100,23 @@ const LocalBuddies = () => {
   const [experiencePage, setExperiencePage] = useState(1);
   const [experienceTotal, setExperienceTotal] = useState(0);
   const [appliedExperienceSearch, setAppliedExperienceSearch] = useState("");
+  const [experienceSortBy, setExperienceSortBy] = useState<ExperienceSortBy>("Recommended");
+  const [experienceSortDirection, setExperienceSortDirection] = useState<SortDirection>("Desc");
+  const [sortPosition, setSortPosition] = useState<{ latitude: number; longitude: number }>();
+  const [locatingForSort, setLocatingForSort] = useState(false);
   const experiencePageSize = 12;
   const loadState = activeTab === "buddies" ? buddyLoadState : experienceLoadState;
 
-  // Experience favorites do not have a backend contract yet.
   useEffect(() => {
-    const savedExperiences = localStorage.getItem("likedExperiences");
-    if (savedExperiences) setLikedExperiences(JSON.parse(savedExperiences));
+    if (!authStorage.isAuthenticated()) {
+      setLikedExperiences([]);
+      return;
+    }
+    profilesApi.getExperienceFavoriteIds()
+      .then(setLikedExperiences)
+      .catch((error: unknown) => {
+        toast.error(error instanceof Error ? error.message : "Could not load experience favorites.");
+      });
   }, []);
 
   useEffect(() => {
@@ -131,11 +149,104 @@ const LocalBuddies = () => {
       pageSize: experiencePageSize,
       search: appliedExperienceSearch || undefined,
       minRating: activeFilter === "Top Rated" ? 4.8 : undefined,
+      isFree: activeFilter === "Free" ? true : undefined,
       adm0Gid: region.adm0Gid,
       adm1Gid: region.adm1Gid,
       adm2Gid: region.adm2Gid,
       adm3Gid: region.adm3Gid,
+      sortBy: experienceSortBy,
+      sortDirection: experienceSortDirection,
+      currentLatitude: experienceSortBy === "Distance" ? sortPosition?.latitude : undefined,
+      currentLongitude: experienceSortBy === "Distance" ? sortPosition?.longitude : undefined,
     };
+
+    if (activeFilter === "Favorites") {
+      Promise.all(likedExperiences.map((id) =>
+        experiencesApi.getExperienceById(id).catch(() => undefined)))
+        .then((results) => {
+          const search = appliedExperienceSearch.toLowerCase();
+          const filtered = results
+            .filter((item): item is ExperienceResponseDto => item != null && item.isActive)
+            .filter((item) =>
+              (!search ||
+                item.name.toLowerCase().includes(search) ||
+                (item.address ?? "").toLowerCase().includes(search) ||
+                item.category.toLowerCase().includes(search)) &&
+              (!region.adm0Gid || item.adm0Gid === region.adm0Gid) &&
+              (!region.adm1Gid || item.adm1Gid === region.adm1Gid) &&
+              (!region.adm2Gid || item.adm2Gid === region.adm2Gid) &&
+              (!region.adm3Gid || item.adm3Gid === region.adm3Gid));
+          const direction = experienceSortDirection === "Asc" ? 1 : -1;
+          const distance = (item: ExperienceResponseDto) => {
+            if (!sortPosition || item.latitude == null || item.longitude == null) {
+              return Number.POSITIVE_INFINITY;
+            }
+            return Math.hypot(
+              item.latitude - sortPosition.latitude,
+              item.longitude - sortPosition.longitude,
+            );
+          };
+          const value = (item: ExperienceResponseDto): number | string => {
+            switch (experienceSortBy) {
+              case "Price":
+                return item.startingPricePerPerson
+                  ?? (experienceSortDirection === "Asc"
+                    ? Number.POSITIVE_INFINITY
+                    : Number.NEGATIVE_INFINITY);
+              case "Rating": return item.rating ?? -1;
+              case "Reviews": return item.reviews ?? 0;
+              case "Name": return item.name.toLowerCase();
+              case "Newest": return Date.parse(item.createdAtUtc);
+              case "Popularity": return item.currentInsight?.popularityPercentage ?? -1;
+              case "OpenNow": return item.currentInsight?.isOpen ? 1 : 0;
+              case "Distance": return distance(item);
+              default: return 0;
+            }
+          };
+          filtered.sort((left, right) => {
+            const leftValue = value(left);
+            const rightValue = value(right);
+            if (typeof leftValue === "string" && typeof rightValue === "string") {
+              return leftValue.localeCompare(rightValue) * direction;
+            }
+            return ((leftValue as number) - (rightValue as number)) * direction;
+          });
+          const start = (experiencePage - 1) * experiencePageSize;
+          setApiExperiences(filtered.slice(start, start + experiencePageSize));
+          setMapExperiences(filtered.flatMap((item) =>
+            item.latitude == null || item.longitude == null
+              ? []
+              : [{
+                  id: item.id,
+                  category: item.category,
+                  sourceType: item.sourceType,
+                  name: item.name,
+                  address: item.address,
+                  adm0Gid: item.adm0Gid,
+                  adm1Gid: item.adm1Gid,
+                  adm2Gid: item.adm2Gid,
+                  adm3Gid: item.adm3Gid,
+                  latitude: item.latitude,
+                  longitude: item.longitude,
+                  rating: item.rating,
+                  reviews: item.reviews,
+                  startingPricePerPerson: item.startingPricePerPerson,
+                  primaryImage: item.featuredImages[0]?.link,
+                  isOpenNow: item.currentInsight?.isOpen,
+                  popularityPercentageNow: item.currentInsight?.popularityPercentage,
+                }]));
+          setExperienceTotal(filtered.length);
+          const totalPages = Math.max(1, Math.ceil(filtered.length / experiencePageSize));
+          if (experiencePage > totalPages) setExperiencePage(totalPages);
+          setExperienceLoadState({ status: "ready" });
+        })
+        .catch((error: unknown) => {
+          const errorText = error instanceof Error ? error.message : "Could not load favorite experiences.";
+          setExperienceLoadState({ status: "error", message: errorText });
+        });
+      return;
+    }
+
     Promise.all([
       experiencesApi.getExperiences(filters),
       experiencesApi.getMapExperiences(filters),
@@ -154,17 +265,57 @@ const LocalBuddies = () => {
   }, [
     activeTab,
     activeFilter,
+    likedExperiences,
     appliedExperienceSearch,
     experiencePage,
+    experienceSortBy,
+    experienceSortDirection,
+    sortPosition,
     region.adm0Gid,
     region.adm1Gid,
     region.adm2Gid,
     region.adm3Gid,
   ]);
 
-  useEffect(() => {
-    localStorage.setItem("likedExperiences", JSON.stringify(likedExperiences));
-  }, [likedExperiences]);
+  const changeExperienceSorting = (selection: ExperienceSortSelection) => {
+    const [nextSortBy, nextDirection] = selection.split(":") as [
+      ExperienceSortBy,
+      SortDirection,
+    ];
+
+    const apply = (position = sortPosition) => {
+      setExperienceSortBy(nextSortBy);
+      setExperienceSortDirection(nextDirection);
+      if (position) setSortPosition(position);
+      setExperiencePage(1);
+    };
+
+    if (nextSortBy !== "Distance" || sortPosition) {
+      apply();
+      return;
+    }
+
+    if (!navigator.geolocation) {
+      toast.error("Distance sorting is not supported by this browser.");
+      return;
+    }
+
+    setLocatingForSort(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        apply({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        });
+        setLocatingForSort(false);
+      },
+      () => {
+        setLocatingForSort(false);
+        toast.error("Allow location access to sort experiences by distance.");
+      },
+      { enableHighAccuracy: true, timeout: 10_000, maximumAge: 300_000 },
+    );
+  };
 
   const handleBuddyFollow = async (userId: string, name: string) => {
     if (!authStorage.isAuthenticated()) {
@@ -188,10 +339,26 @@ const LocalBuddies = () => {
     }
   };
 
-  const handleExperienceLike = (id: number, name: string) => {
+  const handleExperienceLike = async (id: number, name: string) => {
+    if (!authStorage.isAuthenticated()) {
+      toast.error("Sign in to save experience favorites.");
+      navigate("/auth");
+      return;
+    }
     const isLiked = likedExperiences.includes(id);
-    setLikedExperiences(prev => isLiked ? prev.filter(i => i !== id) : [...prev, id]);
-    toast.success(isLiked ? `Removed ${name} from favorites` : `Added ${name} to favorites ❤️`);
+    try {
+      const status = isLiked
+        ? await profilesApi.removeExperienceFavorite(id)
+        : await profilesApi.addExperienceFavorite(id);
+      setLikedExperiences((current) => status.isFavorite
+        ? [...new Set([...current, id])]
+        : current.filter((item) => item !== id));
+      toast.success(status.isFavorite
+        ? `Added ${name} to favorites.`
+        : `Removed ${name} from favorites.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not update experience favorites.");
+    }
   };
 
   const handleRemoveAllFavorites = async () => {
@@ -206,8 +373,13 @@ const LocalBuddies = () => {
         toast.error(error instanceof Error ? error.message : "Could not unfollow every buddy.");
       }
     } else {
-      setLikedExperiences([]);
-      toast.success("All experiences removed from favorites");
+      try {
+        await profilesApi.clearExperienceFavorites();
+        setLikedExperiences([]);
+        toast.success("All experience favorites removed.");
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Could not clear experience favorites.");
+      }
     }
   };
 
@@ -237,46 +409,19 @@ const LocalBuddies = () => {
       const [detail, slots, reviews, insight] = await Promise.all([
         experiencesApi.getExperienceById(exp.id),
         experiencesApi.getAvailability(exp.id),
-        experiencesApi.getReviews(exp.id),
+        experiencesApi.getReviews(exp.id, 1, 5),
         experiencesApi.getVisitInsights(exp.id),
       ]);
       setSelectedExperience({
-        id: detail.id,
-        name: detail.name,
-        location: detail.address || "Egypt",
-        rating: detail.rating ?? 0,
-        reviews: detail.reviews ?? reviews.length,
-        price: detail.priceRange || "See available dates",
-        openStatus: formatOpenStatus(insight),
-        image: detail.featuredImages[0]?.link || "",
-        category: detail.category,
-        description: detail.description || "",
-        highlights: detail.amenities,
+        ...detail,
+        startingPricePerPerson: minimumSlotPrice(slots) ?? detail.startingPricePerPerson,
       });
       setAvailability(slots);
-      setSelectedAvailabilityId(slots[0]?.id || "");
       setExperienceReviews(reviews);
       setVisitInsight(insight);
-      setVisitAt(toLocalDateTimeInput(new Date(insight.requestedAt)));
       setShowDetailsModal(true);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not load experience details.");
-    }
-  };
-
-  const loadVisitInsight = async () => {
-    if (!selectedExperience || !visitAt) return;
-    setInsightLoading(true);
-    try {
-      const insight = await experiencesApi.getVisitInsights(
-        selectedExperience.id,
-        new Date(visitAt).toISOString(),
-      );
-      setVisitInsight(insight);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not load visit insights.");
-    } finally {
-      setInsightLoading(false);
     }
   };
 
@@ -290,12 +435,18 @@ const LocalBuddies = () => {
           location: listedDto.address || "Egypt",
           rating: listedDto.rating ?? 0,
           reviews: listedDto.reviews ?? listedDto.featuredReviews.length,
-          price: listedDto.priceRange || "See dates",
+          startingPricePerPerson: listedDto.startingPricePerPerson,
+          priceRange: listedDto.priceRange,
           openStatus: formatOpenStatus(listedDto.currentInsight),
           image: listedDto.featuredImages[0]?.link || "",
           category: listedDto.category,
           description: listedDto.description || "",
           highlights: listedDto.amenities,
+          imageCount: listedDto.featuredImages.length,
+          crowdLevel: listedDto.currentInsight?.crowdLevel === "unknown"
+            ? undefined
+            : listedDto.currentInsight?.crowdLevel,
+          popularityPercentage: listedDto.currentInsight?.popularityPercentage,
         }
       : undefined;
     if (listed) {
@@ -310,60 +461,26 @@ const LocalBuddies = () => {
         location: detail.address || "Egypt",
         rating: detail.rating ?? 0,
         reviews: detail.reviews ?? 0,
-        price: detail.priceRange || "See available dates",
+        startingPricePerPerson: detail.startingPricePerPerson,
+        priceRange: detail.priceRange,
         openStatus: formatOpenStatus(detail.currentInsight),
         image: detail.featuredImages[0]?.link || "",
         category: detail.category,
         description: detail.description || "",
         highlights: detail.amenities,
+        imageCount: detail.featuredImages.length,
+        crowdLevel: detail.currentInsight?.crowdLevel === "unknown"
+          ? undefined
+          : detail.currentInsight?.crowdLevel,
+        popularityPercentage: detail.currentInsight?.popularityPercentage,
       });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not load the mapped experience.");
     }
   };
 
-  const handleBookExperience = async (exp: DisplayExperience) => {
-    if (!authStorage.isAuthenticated()) {
-      toast.error("Sign in as a traveler to book this experience.");
-      return;
-    }
-    if (!showDetailsModal || selectedExperience?.id !== exp.id) {
-      await handleViewDetails(exp);
-      return;
-    }
-    if (!selectedAvailabilityId) {
-      toast.error("Select an available date first.");
-      return;
-    }
-    try {
-      await experiencesApi.createBooking(exp.id, {
-        availabilityId: selectedAvailabilityId,
-        guestsCount,
-      });
-      toast.success(`"${exp.name}" booking requested.`);
-      setShowDetailsModal(false);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not create booking.");
-    }
-  };
-
-  const submitExperienceReview = async () => {
-    if (!selectedExperience || !reviewText.trim()) return;
-    try {
-      const created = await experiencesApi.createReview(selectedExperience.id, {
-        rating: reviewRating,
-        reviewText,
-      });
-      setExperienceReviews((current) => [created, ...current]);
-      setReviewText("");
-      toast.success("Review submitted.");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not submit review.");
-    }
-  };
-
   // Fallback sand image (only if other images fail)
-  const FALLBACK_SAND_IMAGE = "https://cdn.pixabay.com/photo/2013/07/18/20/26/sand-164878_640.jpg";
+  const FALLBACK_SAND_IMAGE = cairoImage;
 
   const handleImageError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
     e.currentTarget.src = FALLBACK_SAND_IMAGE;
@@ -381,7 +498,7 @@ const LocalBuddies = () => {
     languages: buddy.languages || "Not specified",
     interests: buddy.interests.map((interest) => interest.name),
     verified: buddy.verificationStatus === "Approved",
-    photo: buddy.profileImageUrl || `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(buddy.displayName)}`,
+    photo: buddy.profileImageUrl || createInitialsAvatar(buddy.displayName),
     bio: buddy.bio || "",
     followersCount: buddy.followersCount,
     isFollowing: buddy.isFollowing,
@@ -413,12 +530,18 @@ const LocalBuddies = () => {
     location: exp.address || "Egypt",
     rating: exp.rating ?? 0,
     reviews: exp.reviews ?? exp.featuredReviews.length,
-    price: exp.priceRange || "See dates",
+    startingPricePerPerson: exp.startingPricePerPerson,
+    priceRange: exp.priceRange,
     openStatus: formatOpenStatus(exp.currentInsight),
     image: exp.featuredImages[0]?.link || "",
     category: exp.category,
     description: exp.description || "",
     highlights: exp.amenities,
+    imageCount: exp.featuredImages.length,
+    crowdLevel: exp.currentInsight?.crowdLevel === "unknown"
+      ? undefined
+      : exp.currentInsight?.crowdLevel,
+    popularityPercentage: exp.currentInsight?.popularityPercentage,
   }));
 
   const getFilteredExperiences = () => {
@@ -432,7 +555,10 @@ const LocalBuddies = () => {
     }
     switch (activeFilter) {
       case "Favorites": filtered = filtered.filter(exp => likedExperiences.includes(exp.id)); break;
-      case "Free": filtered = filtered.filter(exp => exp.price === "Free" || exp.price === "$0"); break;
+      case "Free":
+        filtered = filtered.filter((exp) =>
+          isFreeExperience(exp.startingPricePerPerson, exp.priceRange));
+        break;
       case "Top Rated": filtered = filtered.filter(exp => exp.rating >= 4.8); break;
       default: break;
     }
@@ -449,6 +575,7 @@ const LocalBuddies = () => {
           lat: experience.latitude,
           lng: experience.longitude,
           name: experience.name,
+          cheapestPrice: experience.startingPricePerPerson,
           data: {
             rating: experience.rating ?? 0,
             area: `${experience.isOpenNow === true ? "Open" : experience.isOpenNow === false ? "Closed" : "Hours unknown"}${experience.popularityPercentageNow == null ? "" : ` · ${experience.popularityPercentageNow}% busy`}`,
@@ -544,6 +671,34 @@ const LocalBuddies = () => {
 
         {activeTab === "experiences" && (
           <div className="card-glass mb-6 p-4">
+            <div className="mb-4 flex items-center justify-end">
+              <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span>Sort experiences</span>
+                <select
+                  value={`${experienceSortBy}:${experienceSortDirection}`}
+                  disabled={locatingForSort}
+                  onChange={(event) =>
+                    changeExperienceSorting(event.target.value as ExperienceSortSelection)}
+                  className="rounded-lg border border-border bg-background px-3 py-2 text-xs text-foreground disabled:opacity-50"
+                >
+                  <option value="Recommended:Desc">Recommended</option>
+                  <option value="Price:Asc">Price: low to high</option>
+                  <option value="Price:Desc">Price: high to low</option>
+                  <option value="Rating:Desc">Highest rated</option>
+                  <option value="Reviews:Desc">Most reviewed</option>
+                  <option value="Name:Asc">Name: A–Z</option>
+                  <option value="Name:Desc">Name: Z–A</option>
+                  <option value="Newest:Desc">Newest first</option>
+                  <option value="Newest:Asc">Oldest first</option>
+                  <option value="Popularity:Desc">Most popular now</option>
+                  <option value="OpenNow:Desc">Open now first</option>
+                  <option value="Distance:Asc">Nearest to me</option>
+                </select>
+              </label>
+              {locatingForSort && (
+                <span className="ml-2 text-xs text-muted-foreground">Finding your location…</span>
+              )}
+            </div>
             <RegionCascadeSelect
               value={region}
               onChange={(selection) => {
@@ -778,6 +933,11 @@ const LocalBuddies = () => {
                     <div className="absolute bottom-2 left-2 bg-black/60 text-white text-xs px-2 py-0.5 rounded-full">
                       {exp.category}
                     </div>
+                    {exp.imageCount > 1 && (
+                      <div className="absolute bottom-2 right-2 flex items-center gap-1 rounded-full bg-black/60 px-2 py-1 text-[10px] text-white">
+                        <Images className="h-3 w-3" /> {exp.imageCount}
+                      </div>
+                    )}
                   </div>
                   
                   <div className="p-5">
@@ -795,8 +955,18 @@ const LocalBuddies = () => {
                       <span className="flex items-center gap-1 text-gold text-xs">
                         <Star className="w-3 h-3 fill-current" /> {exp.rating} ({exp.reviews})
                       </span>
-                      <span className="text-accent font-bold">{exp.price}</span>
+                      <span className="text-accent font-bold">
+                        {formatExperiencePrice(exp.startingPricePerPerson, exp.priceRange)}
+                      </span>
                     </div>
+
+                    {(exp.crowdLevel || exp.popularityPercentage != null) && (
+                      <div className="mb-3 flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <Users className="h-3.5 w-3.5" />
+                        <span className="capitalize">{exp.crowdLevel || "Crowd insight"}</span>
+                        {exp.popularityPercentage != null && <span>· {exp.popularityPercentage}% busy</span>}
+                      </div>
+                    )}
 
                     <p className="text-xs text-muted-foreground line-clamp-2 mb-3">
                       {exp.description}
@@ -817,7 +987,7 @@ const LocalBuddies = () => {
 
                     <div className="flex gap-2">
                       <button 
-                        onClick={() => handleBookExperience(exp)}
+                        onClick={() => void handleViewDetails(exp)}
                         className="flex-1 btn-accent text-xs py-2 rounded-lg flex items-center justify-center gap-1.5"
                       >
                         <Calendar className="w-3.5 h-3.5" /> Book Now
@@ -870,150 +1040,15 @@ const LocalBuddies = () => {
 
       </div>
 
-      {/* Details Modal for Experiences */}
       {showDetailsModal && selectedExperience && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowDetailsModal(false)}>
-          <div className="bg-background border border-border rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="relative">
-              <img 
-                src={selectedExperience.image} 
-                alt={selectedExperience.name}
-                className="w-full h-48 object-cover rounded-t-2xl"
-                onError={handleImageError}
-              />
-              <button 
-                onClick={() => setShowDetailsModal(false)}
-                className="absolute top-2 right-2 p-1.5 bg-black/50 rounded-full text-white hover:bg-black/70 transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-              <div className="absolute bottom-2 left-2 bg-black/60 text-white text-xs px-2 py-0.5 rounded-full">
-                {selectedExperience.category}
-              </div>
-            </div>
-            <div className="p-5">
-              <h2 className="text-xl font-bold mb-2">{selectedExperience.name}</h2>
-              <div className="flex items-center gap-3 mb-3 text-sm">
-                <div className="flex items-center gap-1 text-gold">
-                  <Star className="w-4 h-4 fill-current" /> {selectedExperience.rating} ({selectedExperience.reviews})
-                </div>
-                <span className="text-accent font-bold">{selectedExperience.price}</span>
-              </div>
-              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
-                <MapPin className="w-3 h-3" /> {selectedExperience.location}
-                <span className="mx-1">•</span>
-                <Clock className="w-3 h-3" /> {selectedExperience.openStatus}
-              </div>
-              <p className="text-sm text-foreground mb-4">{selectedExperience.description}</p>
-              <div className="mb-4 rounded-xl border border-border bg-secondary/30 p-3">
-                <div className="flex items-center justify-between gap-3">
-                  <h3 className="text-sm font-semibold">Visit insights</h3>
-                  <span className={`rounded-full px-2 py-1 text-[10px] ${
-                    visitInsight?.openStatus === "open"
-                      ? "bg-green-500/15 text-green-300"
-                      : visitInsight?.openStatus === "closed"
-                        ? "bg-red-500/15 text-red-300"
-                        : "bg-slate-500/15 text-slate-300"
-                  }`}>
-                    {formatOpenStatus(visitInsight)}
-                  </span>
-                </div>
-                <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
-                  <input
-                    type="datetime-local"
-                    value={visitAt}
-                    onChange={(event) => setVisitAt(event.target.value)}
-                    className="rounded-lg border border-border bg-background px-2 py-2 text-xs"
-                    aria-label="Visit date and time"
-                  />
-                  <button
-                    type="button"
-                    disabled={!visitAt || insightLoading}
-                    onClick={() => void loadVisitInsight()}
-                    className="rounded-lg border border-border px-3 py-2 text-xs disabled:opacity-40"
-                  >
-                    {insightLoading ? "Checking…" : "Check"}
-                  </button>
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
-                  <span className="flex items-center gap-1"><Users className="h-3 w-3" /> Crowd: {visitInsight?.crowdLevel || "unknown"}</span>
-                  {visitInsight?.popularityPercentage != null && <span>{visitInsight.popularityPercentage}% busy</span>}
-                  {visitInsight?.bestKnownOpenWindow && <span>Open window: {visitInsight.bestKnownOpenWindow}</span>}
-                </div>
-              </div>
-              <div className="mb-4">
-                <h3 className="font-semibold text-sm mb-2">Highlights</h3>
-                <ul className="space-y-1">
-                  {selectedExperience.highlights.map((highlight: string, idx: number) => (
-                    <li key={idx} className="text-xs text-muted-foreground flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-accent"></span>
-                      {highlight}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              <div className="mb-4">
-                <h3 className="mb-2 text-sm font-semibold">Available dates</h3>
-                {availability.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">No bookable dates are currently available.</p>
-                ) : (
-                  <div className="grid grid-cols-[1fr_auto] gap-2">
-                    <select
-                      value={selectedAvailabilityId}
-                      onChange={(event) => setSelectedAvailabilityId(event.target.value)}
-                      className="rounded-lg border border-border bg-secondary px-2 py-2 text-xs"
-                    >
-                      {availability.map((slot) => (
-                        <option key={slot.id} value={slot.id}>
-                          {new Date(slot.startTimeUtc).toLocaleString()} · ${slot.pricePerPerson} · {slot.remainingCapacity} left
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      type="number"
-                      min="1"
-                      max={availability.find((slot) => slot.id === selectedAvailabilityId)?.remainingCapacity ?? 1}
-                      value={guestsCount}
-                      onChange={(event) => setGuestsCount(Number(event.target.value))}
-                      className="w-20 rounded-lg border border-border bg-secondary px-2 text-xs"
-                      aria-label="Guests"
-                    />
-                  </div>
-                )}
-              </div>
-
-              <div className="mb-4 border-t border-border pt-4">
-                <h3 className="mb-2 text-sm font-semibold">Traveler reviews</h3>
-                <div className="max-h-28 space-y-2 overflow-y-auto">
-                  {experienceReviews.length === 0 && <p className="text-xs text-muted-foreground">No reviews yet.</p>}
-                  {experienceReviews.map((review) => (
-                    <div key={review.id} className="rounded-lg bg-secondary/40 p-2 text-xs">
-                      <p className="font-medium">{review.reviewerName || "Traveler"} · {review.rating ?? "—"}/5</p>
-                      <p className="text-muted-foreground">{review.reviewText}</p>
-                    </div>
-                  ))}
-                </div>
-                {authStorage.hasAnyRole(["Traveler"]) && (
-                  <div className="mt-2 flex gap-2">
-                    <select value={reviewRating} onChange={(event) => setReviewRating(Number(event.target.value))} className="rounded bg-secondary px-2 text-xs">
-                      {[5, 4, 3, 2, 1].map((value) => <option key={value} value={value}>{value}/5</option>)}
-                    </select>
-                    <input value={reviewText} onChange={(event) => setReviewText(event.target.value)} className="input-glass min-w-0 flex-1" placeholder="Write a review" />
-                    <button onClick={() => void submitExperienceReview()} className="rounded bg-secondary px-3 text-xs">Post</button>
-                  </div>
-                )}
-              </div>
-              <button 
-                onClick={() => void handleBookExperience(selectedExperience)}
-                disabled={!selectedAvailabilityId}
-                className="w-full btn-accent py-2 rounded-lg flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <Calendar className="w-4 h-4" /> Book Now
-              </button>
-            </div>
-          </div>
-        </div>
+        <ExperienceDetailsModal
+          experience={selectedExperience}
+          availability={availability}
+          initialReviews={experienceReviews}
+          initialInsight={visitInsight}
+          fallbackImage={FALLBACK_SAND_IMAGE}
+          onClose={() => setShowDetailsModal(false)}
+        />
       )}
 
       <Footer />

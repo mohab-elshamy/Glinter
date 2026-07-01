@@ -9,7 +9,7 @@ import type {
 } from "@/shared/types/api";
 
 export const chatApi = {
-  getThreads: (page = 1, pageSize = 100) =>
+  getThreads: (page = 1, pageSize = 20) =>
     request<ChatThreadDto[]>(`/chat/threads?page=${page}&pageSize=${pageSize}`),
 
   createDirectThread: (otherUserId: string) =>
@@ -18,7 +18,7 @@ export const chatApi = {
       body: { otherUserId },
     }),
 
-  getMessages: (threadId: string, page = 1, pageSize = 100) =>
+  getMessages: (threadId: string, page = 1, pageSize = 50) =>
     request<ChatMessageDto[]>(
       `/chat/threads/${threadId}/messages?page=${page}&pageSize=${pageSize}`,
     ),

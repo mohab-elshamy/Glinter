@@ -20,6 +20,7 @@ import type {
   AdminLocalBuddy,
   AdminRoleResponse,
   AdminUserListItem,
+  AdminUserResponse,
   ExperienceModerationStatus,
   ExperienceResponseDto,
   BuddyVerificationEvent,
@@ -57,6 +58,12 @@ const AdminPage = () => {
   const [analytics, setAnalytics] = useState<AdminAnalytics>();
   const [auditEvents, setAuditEvents] = useState<AdminAuditEvent[]>([]);
   const [auditTotal, setAuditTotal] = useState(0);
+  const [auditPage, setAuditPage] = useState(1);
+  const auditPageSize = 25;
+  const [listPage, setListPage] = useState(1);
+  const listPageSize = 20;
+  const [selectedUser, setSelectedUser] = useState<AdminUserResponse>();
+  const [userDetailsLoading, setUserDetailsLoading] = useState(false);
   const [buddyHistory, setBuddyHistory] = useState<Record<string, BuddyVerificationEvent[]>>({});
   const [historyLoadingUserId, setHistoryLoadingUserId] = useState("");
   const [search, setSearch] = useState("");
@@ -81,7 +88,7 @@ const AdminPage = () => {
         adminApi.getExperiences(),
         adminApi.getDashboard(),
         adminApi.getAnalytics(),
-        adminApi.getAuditEvents({ page: 1, pageSize: 100 }),
+        adminApi.getAuditEvents({ page: 1, pageSize: auditPageSize }),
       ]);
       setUsers(loadedUsers);
       setRoles(loadedRoles);
@@ -91,6 +98,7 @@ const AdminPage = () => {
       setAnalytics(loadedAnalytics);
       setAuditEvents(auditPage.items);
       setAuditTotal(auditPage.totalCount);
+      setAuditPage(auditPage.page);
       setLoadState({ status: "ready" });
     } catch (error) {
       const message = errorMessage(error);
@@ -100,6 +108,46 @@ const AdminPage = () => {
       setRefreshing(false);
     }
   }, []);
+
+  useEffect(() => {
+    setListPage(1);
+  }, [search, section]);
+
+  useEffect(() => {
+    if (section !== "Audit Events" || loadState.status !== "ready") return;
+    const timer = window.setTimeout(() => {
+      void loadAuditPage(1, search);
+    }, 300);
+    return () => window.clearTimeout(timer);
+    // Search and section changes intentionally restart server pagination.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, section]);
+
+  const loadAuditPage = async (page: number, action = search) => {
+    try {
+      const result = await adminApi.getAuditEvents({
+        action: action.trim() || undefined,
+        page,
+        pageSize: auditPageSize,
+      });
+      setAuditEvents(result.items);
+      setAuditTotal(result.totalCount);
+      setAuditPage(result.page);
+    } catch (error) {
+      toast.error(errorMessage(error));
+    }
+  };
+
+  const showUserDetails = async (userId: string) => {
+    setUserDetailsLoading(true);
+    try {
+      setSelectedUser(await adminApi.getUserById(userId));
+    } catch (error) {
+      toast.error(errorMessage(error));
+    } finally {
+      setUserDetailsLoading(false);
+    }
+  };
 
   useEffect(() => {
     void loadAdministration();
@@ -214,6 +262,18 @@ const AdminPage = () => {
     !normalizedSearch ||
     experience.name.toLowerCase().includes(normalizedSearch) ||
     (experience.address ?? "").toLowerCase().includes(normalizedSearch));
+  const pagedUsers = filteredUsers.slice(
+    (listPage - 1) * listPageSize,
+    listPage * listPageSize,
+  );
+  const pagedBuddies = filteredBuddies.slice(
+    (listPage - 1) * listPageSize,
+    listPage * listPageSize,
+  );
+  const pagedExperiences = filteredExperiences.slice(
+    (listPage - 1) * listPageSize,
+    listPage * listPageSize,
+  );
 
   return (
     <div className="min-h-screen bg-background">
@@ -245,17 +305,30 @@ const AdminPage = () => {
         </aside>
 
         <main className="min-w-0 flex-1 p-4 md:p-6">
+          <label className="mb-4 block text-xs font-medium md:hidden">
+            Administration section
+            <select
+              value={section}
+              onChange={(event) => {
+                setSection(event.target.value as Section);
+                setSearch("");
+              }}
+              className="mt-1 w-full rounded-lg border border-border bg-secondary px-3 py-2 text-sm"
+            >
+              {sections.map((item) => <option key={item}>{item}</option>)}
+            </select>
+          </label>
           <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
             <div>
               <h1 className="text-2xl font-bold">{section}</h1>
               <p className="text-xs text-muted-foreground">Live administration data from the backend</p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex w-full flex-wrap gap-2 sm:w-auto">
               {section !== "Overview" && section !== "Analytics" && (
                 <input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  className="input-glass"
+                  className="input-glass min-w-0 flex-1 sm:flex-none"
                   placeholder="Search"
                 />
               )}
@@ -304,31 +377,38 @@ const AdminPage = () => {
               )}
 
               {section === "Users & Roles" && (
-                <TableShell empty={filteredUsers.length === 0}>
-                  <thead><tr><th>User</th><th>Role</th><th>Status</th><th>Actions</th></tr></thead>
-                  <tbody>
-                    {filteredUsers.map((user) => (
-                      <tr key={user.userId}>
-                        <td><p className="font-medium">{user.fullName}</p><p className="text-xs text-muted-foreground">{user.email}</p></td>
-                        <td>
-                          <select value={user.role} onChange={(event) => void assignRole(user, event.target.value)} className="rounded bg-secondary px-2 py-1 text-xs">
-                            {!roles.some((role) => role.name === user.role) && <option>{user.role}</option>}
-                            {roles.map((role) => <option key={role.name} value={role.name}>{role.name}</option>)}
-                          </select>
-                        </td>
-                        <td><StatusBadge value={user.isActive ? "Active" : "Inactive"} /></td>
-                        <td><button onClick={() => void changeUserStatus(user)} className="text-xs text-accent">{user.isActive ? "Deactivate" : "Activate"}</button></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </TableShell>
+                <div className="space-y-3">
+                  <TableShell empty={filteredUsers.length === 0}>
+                    <thead><tr><th>User</th><th>Role</th><th>Status</th><th>Actions</th></tr></thead>
+                    <tbody>
+                      {pagedUsers.map((user) => (
+                        <tr key={user.userId}>
+                          <td><p className="font-medium">{user.fullName}</p><p className="text-xs text-muted-foreground">{user.email}</p></td>
+                          <td>
+                            <select value={user.role} onChange={(event) => void assignRole(user, event.target.value)} className="rounded bg-secondary px-2 py-1 text-xs">
+                              {!roles.some((role) => role.name === user.role) && <option>{user.role}</option>}
+                              {roles.map((role) => <option key={role.name} value={role.name}>{role.name}</option>)}
+                            </select>
+                          </td>
+                          <td><StatusBadge value={user.isActive ? "Active" : "Inactive"} /></td>
+                          <td className="space-x-3">
+                            <button disabled={userDetailsLoading} onClick={() => void showUserDetails(user.userId)} className="text-xs text-accent disabled:opacity-40">Details</button>
+                            <button onClick={() => void changeUserStatus(user)} className="text-xs text-accent">{user.isActive ? "Deactivate" : "Activate"}</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </TableShell>
+                  <ListPagination page={listPage} pageSize={listPageSize} totalCount={filteredUsers.length} onPage={setListPage} />
+                </div>
               )}
 
               {section === "Buddy Verification" && (
+                <div className="space-y-3">
                 <TableShell empty={filteredBuddies.length === 0}>
                   <thead><tr><th>Buddy</th><th>Location</th><th>Rating</th><th>Status</th><th>Moderate</th></tr></thead>
                   <tbody>
-                    {filteredBuddies.map((buddy) => (
+                    {pagedBuddies.map((buddy) => (
                       <tr key={buddy.userId}>
                         <td>{buddy.displayName}</td>
                         <td>{buddy.city}</td>
@@ -363,13 +443,16 @@ const AdminPage = () => {
                     ))}
                   </tbody>
                 </TableShell>
+                <ListPagination page={listPage} pageSize={listPageSize} totalCount={filteredBuddies.length} onPage={setListPage} />
+                </div>
               )}
 
               {section === "Experience Moderation" && (
+                <div className="space-y-3">
                 <TableShell empty={filteredExperiences.length === 0}>
                   <thead><tr><th>Experience</th><th>Category</th><th>Status</th><th>Active</th><th>Moderate</th></tr></thead>
                   <tbody>
-                    {filteredExperiences.map((experience) => (
+                    {pagedExperiences.map((experience) => (
                       <tr key={experience.id}>
                         <td><p className="font-medium">{experience.name}</p><p className="text-xs text-muted-foreground">{experience.address}</p></td>
                         <td>{experience.category}</td>
@@ -383,6 +466,8 @@ const AdminPage = () => {
                     ))}
                   </tbody>
                 </TableShell>
+                <ListPagination page={listPage} pageSize={listPageSize} totalCount={filteredExperiences.length} onPage={setListPage} />
+                </div>
               )}
 
               {section === "Analytics" && analytics && (
@@ -410,9 +495,7 @@ const AdminPage = () => {
                   <TableShell empty={auditEvents.length === 0}>
                     <thead><tr><th>Time</th><th>Action</th><th>Target</th><th>Result</th><th>Correlation</th></tr></thead>
                     <tbody>
-                      {auditEvents
-                        .filter((event) => !normalizedSearch || event.action.toLowerCase().includes(normalizedSearch))
-                        .map((event) => (
+                      {auditEvents.map((event) => (
                           <tr key={event.id}>
                             <td className="text-xs">{new Date(event.createdAtUtc).toLocaleString()}</td>
                             <td><p className="font-medium">{event.action}</p><p className="text-xs text-muted-foreground">{event.httpMethod} {event.path}</p></td>
@@ -420,15 +503,51 @@ const AdminPage = () => {
                             <td>{event.succeeded ? <span className="text-green-400">Succeeded</span> : <span className="text-red-400">Failed ({event.statusCode})</span>}</td>
                             <td className="max-w-32 truncate text-xs" title={event.correlationId}>{event.correlationId}</td>
                           </tr>
-                        ))}
+                      ))}
                     </tbody>
                   </TableShell>
+                  <ListPagination
+                    page={auditPage}
+                    pageSize={auditPageSize}
+                    totalCount={auditTotal}
+                    onPage={(page) => void loadAuditPage(page)}
+                  />
                 </div>
               )}
             </>
           )}
         </main>
       </div>
+      {selectedUser && (
+        <div
+          className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="admin-user-title"
+          onClick={() => setSelectedUser(undefined)}
+        >
+          <section
+            className="w-full max-w-lg rounded-2xl border border-border bg-background p-6 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 id="admin-user-title" className="text-xl font-bold">{selectedUser.fullName}</h2>
+                <p className="text-sm text-muted-foreground">{selectedUser.email}</p>
+              </div>
+              <button type="button" onClick={() => setSelectedUser(undefined)} aria-label="Close user details">
+                <XCircle className="h-5 w-5" />
+              </button>
+            </div>
+            <dl className="mt-5 grid gap-4 sm:grid-cols-2">
+              <div><dt className="text-xs text-muted-foreground">User ID</dt><dd className="mt-1 break-all text-sm">{selectedUser.userId}</dd></div>
+              <div><dt className="text-xs text-muted-foreground">Status</dt><dd className="mt-1"><StatusBadge value={selectedUser.isActive ? "Active" : "Inactive"} /></dd></div>
+              <div><dt className="text-xs text-muted-foreground">Created</dt><dd className="mt-1 text-sm">{new Date(selectedUser.createdAtUtc).toLocaleString()}</dd></div>
+              <div><dt className="text-xs text-muted-foreground">Roles</dt><dd className="mt-1 flex flex-wrap gap-1">{selectedUser.roles.map((role) => <span key={role} className="rounded-full bg-secondary px-2 py-1 text-xs">{role}</span>)}</dd></div>
+            </dl>
+          </section>
+        </div>
+      )}
     </div>
   );
 };
@@ -450,6 +569,42 @@ const TableShell = ({
     )}
   </div>
 );
+
+const ListPagination = ({
+  page,
+  pageSize,
+  totalCount,
+  onPage,
+}: {
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  onPage: (page: number) => void;
+}) => {
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  if (totalPages <= 1) return null;
+  return (
+    <nav aria-label="Administration pages" className="flex items-center justify-center gap-3">
+      <button
+        type="button"
+        disabled={page <= 1}
+        onClick={() => onPage(page - 1)}
+        className="rounded-lg border border-border px-3 py-2 text-xs disabled:opacity-40"
+      >
+        Previous
+      </button>
+      <span className="text-xs text-muted-foreground">Page {page} of {totalPages}</span>
+      <button
+        type="button"
+        disabled={page >= totalPages}
+        onClick={() => onPage(page + 1)}
+        className="rounded-lg border border-border px-3 py-2 text-xs disabled:opacity-40"
+      >
+        Next
+      </button>
+    </nav>
+  );
+};
 
 const StatusBadge = ({ value }: { value: string }) => {
   const good = value === "Active" || value === "Approved";

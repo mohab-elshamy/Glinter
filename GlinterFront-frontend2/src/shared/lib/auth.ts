@@ -12,17 +12,41 @@ const REFRESH_TOKEN_KEY = "refreshToken";
 const REFRESH_TOKEN_EXPIRES_AT_KEY = "refreshTokenExpiresAtUtc";
 const USER_KEY = "user";
 
+const readSessionValue = (key: string) => {
+  const current = sessionStorage.getItem(key);
+  if (current != null) return current;
+
+  // One-time migration from the older persistent storage. Tokens should not
+  // survive a complete browser session or remain available to other tabs.
+  const legacy = localStorage.getItem(key);
+  if (legacy != null) {
+    sessionStorage.setItem(key, legacy);
+    localStorage.removeItem(key);
+  }
+  return legacy;
+};
+
+const writeSessionValue = (key: string, value: string) => {
+  sessionStorage.setItem(key, value);
+  localStorage.removeItem(key);
+};
+
+const removeSessionValue = (key: string) => {
+  sessionStorage.removeItem(key);
+  localStorage.removeItem(key);
+};
+
 export const authStorage = {
   getToken: (): string | null => {
-    return localStorage.getItem(TOKEN_KEY);
+    return readSessionValue(TOKEN_KEY);
   },
 
   setToken: (token: string): void => {
-    localStorage.setItem(TOKEN_KEY, token);
+    writeSessionValue(TOKEN_KEY, token);
   },
 
   getRefreshToken: (): string | null => {
-    return localStorage.getItem(REFRESH_TOKEN_KEY);
+    return readSessionValue(REFRESH_TOKEN_KEY);
   },
 
   setTokens: (
@@ -30,25 +54,25 @@ export const authStorage = {
     refreshToken: string,
     refreshTokenExpiresAtUtc: string,
   ): void => {
-    localStorage.setItem(TOKEN_KEY, token);
-    localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
-    localStorage.setItem(REFRESH_TOKEN_EXPIRES_AT_KEY, refreshTokenExpiresAtUtc);
+    writeSessionValue(TOKEN_KEY, token);
+    writeSessionValue(REFRESH_TOKEN_KEY, refreshToken);
+    writeSessionValue(REFRESH_TOKEN_EXPIRES_AT_KEY, refreshTokenExpiresAtUtc);
   },
 
   removeToken: (): void => {
-    localStorage.removeItem(TOKEN_KEY);
+    removeSessionValue(TOKEN_KEY);
   },
 
   isAuthenticated: (): boolean => {
-    return !!localStorage.getItem(TOKEN_KEY);
+    return !!readSessionValue(TOKEN_KEY);
   },
 
   setUser: (user: CurrentUserResponse): void => {
-    localStorage.setItem(USER_KEY, JSON.stringify(user));
+    writeSessionValue(USER_KEY, JSON.stringify(user));
   },
 
   getUser: (): CurrentUserResponse | null => {
-    const user = localStorage.getItem(USER_KEY);
+    const user = readSessionValue(USER_KEY);
     if (!user) return null;
 
     try {
@@ -59,7 +83,7 @@ export const authStorage = {
   },
 
   clearUser: (): void => {
-    localStorage.removeItem(USER_KEY);
+    removeSessionValue(USER_KEY);
   },
 
   isAdmin: (): boolean => {
@@ -72,9 +96,9 @@ export const authStorage = {
   },
 
   clearAll: (): void => {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(REFRESH_TOKEN_KEY);
-    localStorage.removeItem(REFRESH_TOKEN_EXPIRES_AT_KEY);
-    localStorage.removeItem(USER_KEY);
+    removeSessionValue(TOKEN_KEY);
+    removeSessionValue(REFRESH_TOKEN_KEY);
+    removeSessionValue(REFRESH_TOKEN_EXPIRES_AT_KEY);
+    removeSessionValue(USER_KEY);
   },
 };

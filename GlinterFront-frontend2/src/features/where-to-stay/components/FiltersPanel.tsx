@@ -1,8 +1,8 @@
 import { DollarSign } from "lucide-react";
 
 interface FiltersPanelProps {
-  maxPrice: number;
-  onMaxPriceChange: (value: number) => void;
+  maxPrice?: number;
+  onMaxPriceChange: (value?: number) => void;
   minRating: number;
   onMinRatingChange: (value: number) => void;
 }
@@ -21,9 +21,22 @@ const FiltersPanel = ({
     <div className="rounded-xl border border-brand-glassBorder bg-brand-dark/50 p-2.5">
       <div className="mb-1 flex items-center justify-between">
         <span className="flex items-center gap-2 text-xs font-medium"><DollarSign className="h-3.5 w-3.5" /> Max price</span>
-        <span className="text-[10px] font-medium text-brand-gold">${maxPrice}/night</span>
+        <span className="text-[10px] font-medium text-brand-gold">
+          {maxPrice == null ? "Any price" : `$${maxPrice}/night`}
+        </span>
       </div>
-      <input type="range" min={20} max={200} value={maxPrice} onChange={(event) => onMaxPriceChange(Number(event.target.value))} className="w-full" />
+      <input
+        type="range"
+        min={0}
+        max={5000}
+        step={50}
+        value={maxPrice ?? 5000}
+        onChange={(event) => {
+          const value = Number(event.target.value);
+          onMaxPriceChange(value >= 5000 ? undefined : value);
+        }}
+        className="w-full"
+      />
     </div>
     <div>
       <p className="mb-1.5 text-[10px] text-gray-400">Minimum rating</p>

@@ -13,8 +13,15 @@ describe("stays API", () => {
 
   it("uses the backend paged listing and owner routes", async () => {
     vi.mocked(request).mockResolvedValueOnce({ page: 1, pageSize: 20, totalCount: 0, items: [] });
-    await staysApi.getStays({ search: "Nile", pageSize: 20 });
-    expect(request).toHaveBeenCalledWith("/stays?search=Nile&pageSize=20");
+    await staysApi.getStays({
+      search: "Nile",
+      sortBy: "Price",
+      sortDirection: "Asc",
+      pageSize: 20,
+    });
+    expect(request).toHaveBeenCalledWith(
+      "/stays?search=Nile&sortBy=Price&sortDirection=Asc&pageSize=20",
+    );
 
     await staysApi.getMyStays();
     expect(request).toHaveBeenLastCalledWith("/stays/mine");
@@ -61,6 +68,9 @@ describe("stays API", () => {
       method: "POST",
       body: { rating: 5, reviewText: "Great" },
     });
+
+    await staysApi.getReviews(12, 3, 5);
+    expect(request).toHaveBeenLastCalledWith("/stays/12/reviews?page=3&pageSize=5");
   });
 
   it("wires region statistics and multipart image/import uploads", async () => {
