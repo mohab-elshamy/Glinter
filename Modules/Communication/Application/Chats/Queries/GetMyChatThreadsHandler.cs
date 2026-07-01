@@ -9,13 +9,16 @@ public class GetMyChatThreadsHandler
 {
     private readonly IChatThreadRepository _threadRepository;
     private readonly ICurrentUserService _currentUserService;
+    private readonly IIdentityUserReadService _identityUserReadService;
 
     public GetMyChatThreadsHandler(
         IChatThreadRepository threadRepository,
-        ICurrentUserService currentUserService)
+        ICurrentUserService currentUserService,
+        IIdentityUserReadService identityUserReadService)
     {
         _threadRepository = threadRepository;
         _currentUserService = currentUserService;
+        _identityUserReadService = identityUserReadService;
     }
 
     public async Task<List<ChatThreadSummaryDto>> HandleAsync(
@@ -30,11 +33,22 @@ public class GetMyChatThreadsHandler
         if (query.PageSize < 1 || query.PageSize > 100)
             throw new ValidationException("PageSize must be between 1 and 100.");
 
-        return await _threadRepository.GetThreadSummariesForUserAsync(
+        var threads = await _threadRepository.GetThreadSummariesForUserAsync(
             currentUserId,
             query.Page,
             query.PageSize,
             cancellationToken);
+        var names = await _identityUserReadService.GetDisplayNamesAsync(
+            threads.SelectMany(x => x.ParticipantUserIds),
+            cancellationToken);
+        foreach (var thread in threads)
+        {
+            thread.ParticipantDisplayNames = thread.ParticipantUserIds
+                .Where(names.ContainsKey)
+                .ToDictionary(x => x, x => names[x]);
+        }
+
+        return threads;
     }
 
     private Guid GetCurrentUserId()

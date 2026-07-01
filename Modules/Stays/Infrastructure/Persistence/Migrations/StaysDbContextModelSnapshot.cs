@@ -64,6 +64,9 @@ namespace Glinter.Modules.Stays.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("HotelOwnerProfileId")
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
                     b.Property<double?>("Latitude")
                         .HasColumnType("double precision");
 
@@ -121,6 +124,8 @@ namespace Glinter.Modules.Stays.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("HotelOwnerProfileId");
 
+                    b.HasIndex("IsActive");
+
                     b.HasIndex("Price");
 
                     b.HasIndex("Rating");
@@ -159,6 +164,63 @@ namespace Glinter.Modules.Stays.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("stay_amenities", "stays");
+                });
+
+            modelBuilder.Entity("Glinter.Modules.Stays.Domain.Entities.StayBooking", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("CheckInDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly>("CheckOutDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("GuestCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("GuestName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<int>("StayId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("TotalPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<Guid>("TravelerProfileId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("StayId");
+
+                    b.HasIndex("TravelerProfileId");
+
+                    b.HasIndex("StayId", "CheckInDate", "CheckOutDate");
+
+                    b.ToTable("stay_bookings", "stays");
                 });
 
             modelBuilder.Entity("Glinter.Modules.Stays.Domain.Entities.StayBookingPlatform", b =>
@@ -314,6 +376,17 @@ namespace Glinter.Modules.Stays.Infrastructure.Persistence.Migrations
                     b.Navigation("Stay");
                 });
 
+            modelBuilder.Entity("Glinter.Modules.Stays.Domain.Entities.StayBooking", b =>
+                {
+                    b.HasOne("Glinter.Modules.Stays.Domain.Entities.Stay", "Stay")
+                        .WithMany("Bookings")
+                        .HasForeignKey("StayId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Stay");
+                });
+
             modelBuilder.Entity("Glinter.Modules.Stays.Domain.Entities.StayBookingPlatform", b =>
                 {
                     b.HasOne("Glinter.Modules.Stays.Domain.Entities.Stay", "Stay")
@@ -363,6 +436,8 @@ namespace Glinter.Modules.Stays.Infrastructure.Persistence.Migrations
                     b.Navigation("Amenities");
 
                     b.Navigation("BookingPlatforms");
+
+                    b.Navigation("Bookings");
 
                     b.Navigation("Images");
 

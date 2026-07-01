@@ -2,6 +2,7 @@ using Glinter.Modules.Stays.Application.Abstractions;
 using Glinter.Modules.Stays.Application.Options;
 using Glinter.Modules.Stays.Application.Services;
 using Glinter.Modules.Stays.Infrastructure.External.Groq;
+using Glinter.Modules.Stays.Infrastructure.Files;
 using Glinter.Modules.Stays.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -39,6 +40,7 @@ public static class StaysModule
 
         services.AddScoped<StayService>();
         services.AddScoped<HotelRecommendationService>();
+        services.AddSingleton<StayImageStorage>();
 
         services.AddHttpClient<IHotelRecommendationGroqClient, GroqHotelRecommendationClient>((serviceProvider, client) =>
         {

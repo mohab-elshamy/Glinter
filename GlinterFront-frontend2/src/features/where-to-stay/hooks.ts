@@ -1,220 +1,217 @@
-import { useState, useMemo, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import type { HeatmapLayer, Neighborhood, Hotel } from "./types";
-import { neighborhoods, allHotels } from "./data";
+import { toast } from "sonner";
 import { staysApi } from "@/shared/services/api-stays";
-import { authStorage } from "@/shared/lib/auth";
+import type { LoadState } from "@/shared/types/async-state";
+import type { Hotel } from "./types";
+import { regionsApi } from "@/shared/services/api-regions";
+import type { RegionHierarchyGids } from "@/shared/types/regions";
+import type {
+  StayRegionGroupBy,
+  StayRegionStatsDto,
+  StayResponseDto,
+} from "@/shared/types/api";
+
+const toHotel = (stay: StayResponseDto): Hotel => ({
+  id: stay.id,
+  name: stay.name,
+  area: stay.locationSummaryDescription || "Egypt",
+  rating: stay.rating ?? 0,
+  reviews: stay.reviews ?? stay.featuredReviews.length,
+  price: Math.round(stay.price ?? 0),
+  amenities: stay.amenities,
+  image: stay.images[0]?.link,
+  description: stay.description,
+  latitude: stay.latitude,
+  longitude: stay.longitude,
+});
 
 export function useWhereToStay() {
   const [searchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedNeighborhood, setSelectedNeighborhood] = useState<Neighborhood | null>(null);
+  const [appliedSearch, setAppliedSearch] = useState("");
   const [maxPrice, setMaxPrice] = useState(200);
-  const [minSafety, setMinSafety] = useState(0);
-  const [minComfort, setMinComfort] = useState(0);
   const [minRating, setMinRating] = useState(0);
-  const [backgroundLayer, setBackgroundLayer] = useState<HeatmapLayer | "none">("none");
   const [checkin, setCheckin] = useState("");
   const [checkout, setCheckout] = useState("");
   const [guests, setGuests] = useState(1);
-  const [hasSearched, setHasSearched] = useState(false);
-  const [isComparing, setIsComparing] = useState(false);
-  const [comparisonNeighborhoods, setComparisonNeighborhoods] = useState<Neighborhood[]>([]);
   const [selectedHotel, setSelectedHotel] = useState<Hotel | null>(null);
+  const [region, setRegion] = useState<RegionHierarchyGids>({});
+  const [locatingRegion, setLocatingRegion] = useState(false);
   const [apiHotels, setApiHotels] = useState<Hotel[]>([]);
+  const [staysState, setStaysState] = useState<LoadState>({ status: "loading" });
+  const [statsState, setStatsState] = useState<LoadState>({ status: "loading" });
+  const [regionStats, setRegionStats] = useState<StayRegionStatsDto[]>([]);
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const pageSize = 12;
 
   useEffect(() => {
     const city = searchParams.get("city");
     if (city) {
       setSearchQuery(city);
-      const matched = neighborhoods.find(n => n.name.toLowerCase() === city.toLowerCase());
-      if (matched) {
-        setSelectedNeighborhood(matched);
-      }
+      setAppliedSearch(city);
     }
   }, [searchParams]);
 
   useEffect(() => {
-    if (!authStorage.isAuthenticated()) return;
-
-    staysApi.getStays()
-      .then(stays => {
-        const mapped: Hotel[] = stays.map(s => ({
-          name: s.name,
-          area: s.address?.split(",").pop()?.trim() || "Unknown",
-          rating: 4.0,
-          reviews: 0,
-          price: Math.round(s.pricePerNight),
-          comfort: 50,
-          safety: 50,
-          amenities: s.amenities?.length > 0 ? s.amenities : [],
-        }));
-        setApiHotels(mapped);
+    let active = true;
+    setStaysState({ status: "loading" });
+    staysApi.getStays({
+      page,
+      pageSize,
+      search: appliedSearch || undefined,
+      adm0Gid: region.adm0Gid,
+      adm1Gid: region.adm1Gid,
+      adm2Gid: region.adm2Gid,
+      adm3Gid: region.adm3Gid,
+      maxPrice,
+      minRating: minRating || undefined,
+      sortBy: "Recommended",
+      sortDirection: "Desc",
+    })
+      .then((response) => {
+        if (!active) return;
+        setApiHotels(response.items.map(toHotel));
+        setTotalCount(response.totalCount);
+        setStaysState({ status: "ready" });
       })
-      .catch(() => {});
-  }, []);
-
-  const filteredHotels = useMemo(() => {
-    let hotels = [...allHotels, ...apiHotels];
-
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      hotels = hotels.filter(
-        (h) =>
-          h.name.toLowerCase().includes(q) ||
-          h.area.toLowerCase().includes(q)
-      );
-    }
-
-    if (selectedNeighborhood) {
-      hotels = hotels.filter(
-        (h) => h.area.toLowerCase() === selectedNeighborhood.name.toLowerCase()
-      );
-    }
-
-    hotels = hotels.filter((h) => h.price <= maxPrice && h.rating >= minRating && h.safety >= minSafety && h.comfort >= minComfort);
-
-    if (backgroundLayer !== "none") {
-      if (backgroundLayer === "safety") {
-        hotels.sort((a, b) => b.safety - a.safety);
-      } else if (backgroundLayer === "comfort") {
-        hotels.sort((a, b) => b.comfort - a.comfort);
-      } else {
-        hotels.sort((a, b) => a.price - b.price);
-      }
-    }
-
-    return hotels;
-  }, [searchQuery, selectedNeighborhood, maxPrice, minRating, minSafety, minComfort, backgroundLayer]);
-
-  const topRecommendations = useMemo(() => {
-    const sorted = [...filteredHotels];
-    if (backgroundLayer !== "none" && backgroundLayer !== "price") {
-      sorted.sort((a, b) => b[backgroundLayer] - a[backgroundLayer]);
-    }
-    return sorted.slice(0, 2);
-  }, [filteredHotels, backgroundLayer]);
-
-  const handleSearch = () => {
-    setHasSearched(true);
-    setSelectedNeighborhood(null);
-  };
-
-  const toggleComparisonMode = () => {
-    setIsComparing(!isComparing);
-    if (!isComparing) {
-      setComparisonNeighborhoods([]);
-      setSelectedNeighborhood(null);
-    }
-  };
-
-  const toggleNeighborhoodForComparison = (neighborhood: Neighborhood) => {
-    if (!isComparing) return;
-
-    setComparisonNeighborhoods((prev) => {
-      const exists = prev.find((n) => n.name === neighborhood.name);
-      if (exists) {
-        return prev.filter((n) => n.name !== neighborhood.name);
-      } else if (prev.length < 4) {
-        return [...prev, neighborhood];
-      } else {
-        return prev;
-      }
-    });
-  };
-
-  const removeFromComparison = (name: string) => {
-    setComparisonNeighborhoods((prev) => prev.filter((n) => n.name !== name));
-  };
-
-  const mapData = useMemo(() => {
-    let filteredNeighborhoods = neighborhoods;
-
-    // Strict AND filters: remove any dot that fails ANY active filter
-    if (maxPrice < 200) {
-      filteredNeighborhoods = filteredNeighborhoods.filter(n => n.price <= maxPrice);
-    }
-    if (minSafety > 0) {
-      filteredNeighborhoods = filteredNeighborhoods.filter(n => n.safety >= minSafety);
-    }
-    if (minComfort > 0) {
-      filteredNeighborhoods = filteredNeighborhoods.filter(n => n.comfort >= minComfort);
-    }
-
-    if (filteredNeighborhoods.length === 0) {
-      return {
-        heatmapPoints: [],
-        markers: [],
-        selectedMarker: null,
-        comparisonMarkers: [],
-        isFilteredOut: true,
-      };
-    }
-
-    // For each neighborhood, find the cheapest hotel price in that area
-    const getCheapestPrice = (areaName: string, fallbackIndex: number): number => {
-      const hotelsInArea = allHotels.filter((h) => h.area === areaName);
-      if (hotelsInArea.length > 0) {
-        return Math.min(...hotelsInArea.map((h) => h.price));
-      }
-      // Fallback: convert 0-100 index to dollar estimate
-      return Math.round(fallbackIndex * 2);
+      .catch((error: unknown) => {
+        if (!active) return;
+        const message = error instanceof Error ? error.message : "Could not load stays.";
+        setStaysState({ status: "error", message });
+        toast.error(message);
+      });
+    return () => {
+      active = false;
     };
+  }, [
+    appliedSearch,
+    maxPrice,
+    minRating,
+    page,
+    region.adm0Gid,
+    region.adm1Gid,
+    region.adm2Gid,
+    region.adm3Gid,
+  ]);
 
-    // Markers: solid color, no per-dot logic needed
-    const neighborhoodMarkers = filteredNeighborhoods.map((n) => ({
-      lat: n.lat,
-      lng: n.lng,
-      name: n.name,
-      cheapestPrice: getCheapestPrice(n.name, n.price),
-      data: n,
-    }));
+  useEffect(() => {
+    let active = true;
+    setStatsState({ status: "loading" });
+    const groupBy: StayRegionGroupBy = region.adm3Gid
+      ? "Adm3"
+      : region.adm2Gid
+        ? "Adm3"
+        : region.adm1Gid
+          ? "Adm2"
+          : region.adm0Gid
+            ? "Adm1"
+            : "Adm0";
+    staysApi.getRegionStats({
+      groupBy,
+      adm0Gid: region.adm0Gid,
+      adm1Gid: region.adm1Gid,
+      adm2Gid: region.adm2Gid,
+      adm3Gid: region.adm3Gid,
+      maxPrice,
+      minRating: minRating || undefined,
+    })
+      .then((stats) => {
+        if (!active) return;
+        setRegionStats(stats);
+        setStatsState({ status: "ready" });
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        setRegionStats([]);
+        setStatsState({
+          status: "error",
+          message: error instanceof Error ? error.message : "Could not load region statistics.",
+        });
+      });
+    return () => {
+      active = false;
+    };
+  }, [
+    maxPrice,
+    minRating,
+    region.adm0Gid,
+    region.adm1Gid,
+    region.adm2Gid,
+    region.adm3Gid,
+  ]);
 
-    const selectedMarker = selectedNeighborhood
+  const filteredHotels = apiHotels;
+
+  const selectHotel = async (hotel: Hotel) => {
+    if (!hotel.id) return;
+    try {
+      setSelectedHotel(toHotel(await staysApi.getStayById(hotel.id)));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not load stay details.");
+    }
+  };
+
+  const resolveRegionByPoint = async (lat: number, lng: number) => {
+    setLocatingRegion(true);
+    try {
+      setRegion(await regionsApi.getByPoint(lat, lng));
+      setPage(1);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No backend region contains this map point.");
+    } finally {
+      setLocatingRegion(false);
+    }
+  };
+
+  const mapData = useMemo(() => ({
+    markers: filteredHotels
+      .filter((hotel) => hotel.latitude != null && hotel.longitude != null)
+      .map((hotel) => ({
+        lat: hotel.latitude as number,
+        lng: hotel.longitude as number,
+        name: hotel.name,
+        cheapestPrice: hotel.price,
+        data: hotel,
+      })),
+    selectedMarker: selectedHotel?.latitude != null && selectedHotel.longitude != null
       ? {
-          lat: selectedNeighborhood.lat,
-          lng: selectedNeighborhood.lng,
-          name: selectedNeighborhood.name,
-          cheapestPrice: getCheapestPrice(selectedNeighborhood.name, selectedNeighborhood.price),
-          data: selectedNeighborhood,
+          lat: selectedHotel.latitude,
+          lng: selectedHotel.longitude,
+          name: selectedHotel.name,
+          cheapestPrice: selectedHotel.price,
+          data: selectedHotel,
         }
-      : null;
-
-    const comparisonMarkersList = comparisonNeighborhoods.map((n) => ({
-      lat: n.lat,
-      lng: n.lng,
-      name: n.name,
-      cheapestPrice: getCheapestPrice(n.name, n.price),
-      data: n,
-    }));
-
-    return {
-      markers: neighborhoodMarkers,
-      selectedMarker,
-      comparisonMarkers: comparisonMarkersList,
-      isFilteredOut: false,
-    };
-  }, [maxPrice, minSafety, minComfort, selectedNeighborhood, comparisonNeighborhoods, isComparing, backgroundLayer]);
+      : null,
+    comparisonMarkers: [],
+  }), [filteredHotels, selectedHotel]);
 
   return {
     searchQuery, setSearchQuery,
     checkin, setCheckin,
     checkout, setCheckout,
     guests, setGuests,
-    hasSearched,
-    selectedNeighborhood, setSelectedNeighborhood,
-    maxPrice, setMaxPrice,
-    minSafety, setMinSafety,
-    minComfort, setMinComfort,
-    minRating, setMinRating,
-    backgroundLayer, setBackgroundLayer,
-    isComparing, toggleComparisonMode,
-    comparisonNeighborhoods, toggleNeighborhoodForComparison, removeFromComparison,
+    maxPrice, setMaxPrice: (value: number) => { setMaxPrice(value); setPage(1); },
+    minRating, setMinRating: (value: number) => { setMinRating(value); setPage(1); },
     selectedHotel, setSelectedHotel,
-    handleSearch,
+    region,
+    setRegion: (value: RegionHierarchyGids) => { setRegion(value); setPage(1); },
+    locatingRegion,
+    resolveRegionByPoint,
+    selectHotel,
+    staysState,
+    isLoadingStays: staysState.status === "loading",
+    handleSearch: () => { setAppliedSearch(searchQuery.trim()); setPage(1); },
     filteredHotels,
-    topRecommendations,
+    page,
+    pageSize,
+    totalCount,
+    totalPages: Math.max(1, Math.ceil(totalCount / pageSize)),
+    setPage,
+    regionStats,
+    statsState,
     mapData,
-    isMapEmpty: mapData.isFilteredOut,
+    isMapEmpty: staysState.status === "ready" && mapData.markers.length === 0,
   };
 }

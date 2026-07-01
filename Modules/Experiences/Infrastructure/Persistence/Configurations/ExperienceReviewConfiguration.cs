@@ -27,5 +27,6 @@ public class ExperienceReviewConfiguration : IEntityTypeConfiguration<Experience
             .IsUnique();
         builder.HasIndex(x => x.PublishedAtDate);
         builder.HasIndex(x => x.Rating);
+        builder.HasIndex(x => x.CreatedByUserId);
     }
 }

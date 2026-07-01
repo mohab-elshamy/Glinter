@@ -10,6 +10,8 @@ public class ExperienceReview
     public string? ReviewText { get; set; }
     public DateTime? PublishedAtDate { get; set; }
     public string SourceList { get; set; } = "featured_reviews";
+    public Guid? CreatedByUserId { get; set; }
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 
     public Experience Experience { get; set; } = null!;
 }

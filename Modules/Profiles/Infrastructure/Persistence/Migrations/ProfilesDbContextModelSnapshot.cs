@@ -22,6 +22,88 @@ namespace Glinter.Modules.Profiles.Infrastructure.Persistence.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("Glinter.Modules.Profiles.Domain.Entities.BuddyAvailability", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("EndTimeUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("LocalBuddyUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Price")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<DateTime>("StartTimeUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LocalBuddyUserId", "StartTimeUtc", "EndTimeUtc");
+
+                    b.ToTable("buddy_availability", (string)null);
+                });
+
+            modelBuilder.Entity("Glinter.Modules.Profiles.Domain.Entities.BuddyBooking", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AvailabilityId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("LocalBuddyUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<decimal>("TotalPrice")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<Guid>("TravelerUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AvailabilityId")
+                        .IsUnique()
+                        .HasFilter("\"Status\" IN ('Pending', 'Accepted')");
+
+                    b.HasIndex("LocalBuddyUserId", "Status");
+
+                    b.HasIndex("TravelerUserId", "Status");
+
+                    b.ToTable("buddy_bookings", (string)null);
+                });
+
             modelBuilder.Entity("Glinter.Modules.Profiles.Domain.Entities.BuddyInterest", b =>
                 {
                     b.Property<Guid>("LocalBuddyProfileId")
@@ -35,6 +117,42 @@ namespace Glinter.Modules.Profiles.Infrastructure.Persistence.Migrations
                     b.HasIndex("InterestId");
 
                     b.ToTable("buddy_interests", (string)null);
+                });
+
+            modelBuilder.Entity("Glinter.Modules.Profiles.Domain.Entities.BuddyReview", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("BookingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("LocalBuddyUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Rating")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ReviewText")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<Guid>("TravelerUserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BookingId")
+                        .IsUnique();
+
+                    b.HasIndex("LocalBuddyUserId", "CreatedAtUtc");
+
+                    b.ToTable("buddy_reviews", (string)null);
                 });
 
             modelBuilder.Entity("Glinter.Modules.Profiles.Domain.Entities.ExperienceProviderProfile", b =>
@@ -330,6 +448,17 @@ namespace Glinter.Modules.Profiles.Infrastructure.Persistence.Migrations
                     b.ToTable("user_follows", (string)null);
                 });
 
+            modelBuilder.Entity("Glinter.Modules.Profiles.Domain.Entities.BuddyBooking", b =>
+                {
+                    b.HasOne("Glinter.Modules.Profiles.Domain.Entities.BuddyAvailability", "Availability")
+                        .WithMany("Bookings")
+                        .HasForeignKey("AvailabilityId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Availability");
+                });
+
             modelBuilder.Entity("Glinter.Modules.Profiles.Domain.Entities.BuddyInterest", b =>
                 {
                     b.HasOne("Glinter.Modules.Profiles.Domain.Entities.Interest", "Interest")
@@ -349,6 +478,17 @@ namespace Glinter.Modules.Profiles.Infrastructure.Persistence.Migrations
                     b.Navigation("LocalBuddyProfile");
                 });
 
+            modelBuilder.Entity("Glinter.Modules.Profiles.Domain.Entities.BuddyReview", b =>
+                {
+                    b.HasOne("Glinter.Modules.Profiles.Domain.Entities.BuddyBooking", "Booking")
+                        .WithOne("Review")
+                        .HasForeignKey("Glinter.Modules.Profiles.Domain.Entities.BuddyReview", "BookingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Booking");
+                });
+
             modelBuilder.Entity("Glinter.Modules.Profiles.Domain.Entities.TravelerInterest", b =>
                 {
                     b.HasOne("Glinter.Modules.Profiles.Domain.Entities.Interest", "Interest")
@@ -366,6 +506,16 @@ namespace Glinter.Modules.Profiles.Infrastructure.Persistence.Migrations
                     b.Navigation("Interest");
 
                     b.Navigation("TravelerProfile");
+                });
+
+            modelBuilder.Entity("Glinter.Modules.Profiles.Domain.Entities.BuddyAvailability", b =>
+                {
+                    b.Navigation("Bookings");
+                });
+
+            modelBuilder.Entity("Glinter.Modules.Profiles.Domain.Entities.BuddyBooking", b =>
+                {
+                    b.Navigation("Review");
                 });
 
             modelBuilder.Entity("Glinter.Modules.Profiles.Domain.Entities.Interest", b =>

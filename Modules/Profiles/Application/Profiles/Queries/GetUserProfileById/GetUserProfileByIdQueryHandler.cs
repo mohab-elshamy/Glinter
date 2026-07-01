@@ -2,6 +2,7 @@ using Glinter.Modules.Profiles.Application.Abstractions;
 using Glinter.Modules.Profiles.Application.Common.Mapping;
 using Glinter.Modules.Profiles.Application.Common.Services;
 using Microsoft.EntityFrameworkCore;
+using Glinter.Modules.IdentityAccess.Application.Abstractions;
 
 namespace Glinter.Modules.Profiles.Application.Profiles.Queries.GetUserProfileById;
 
@@ -9,13 +10,16 @@ public class GetUserProfileByIdQueryHandler
 {
     private readonly IProfilesDbContext _profilesDbContext;
     private readonly ProfileFollowStatsService _profileFollowStatsService;
+    private readonly ICurrentUserService _currentUserService;
 
     public GetUserProfileByIdQueryHandler(
         IProfilesDbContext profilesDbContext,
-        ProfileFollowStatsService profileFollowStatsService)
+        ProfileFollowStatsService profileFollowStatsService,
+        ICurrentUserService currentUserService)
     {
         _profilesDbContext = profilesDbContext;
         _profileFollowStatsService = profileFollowStatsService;
+        _currentUserService = currentUserService;
     }
 
     public async Task<object> HandleAsync(
@@ -49,10 +53,16 @@ public class GetUserProfileByIdQueryHandler
 
         if (localBuddyProfile is not null)
         {
+            var isFollowing = _currentUserService.UserId is { } currentUserId &&
+                              await _profilesDbContext.UserFollows.AnyAsync(
+                                  x => x.FollowerUserId == currentUserId &&
+                                       x.FollowedUserId == query.UserId,
+                                  cancellationToken);
             return ProfilesMappings.ToLocalBuddyProfileResponse(
                 localBuddyProfile,
                 stats.FollowersCount,
-                stats.FollowingCount);
+                stats.FollowingCount,
+                isFollowing);
         }
 
         var hotelOwnerProfile = await _profilesDbContext.HotelOwnerProfiles

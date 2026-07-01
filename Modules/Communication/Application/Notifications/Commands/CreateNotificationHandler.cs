@@ -11,15 +11,18 @@ public class CreateNotificationHandler
     private readonly INotificationRepository _notificationRepository;
     private readonly IIdentityUserReadService _identityUserReadService;
     private readonly INotificationPreferenceRepository _preferenceRepository;
+    private readonly INotificationRealtimeNotifier _realtimeNotifier;
 
     public CreateNotificationHandler(
         INotificationRepository notificationRepository,
         IIdentityUserReadService identityUserReadService,
-        INotificationPreferenceRepository preferenceRepository)
+        INotificationPreferenceRepository preferenceRepository,
+        INotificationRealtimeNotifier realtimeNotifier)
     {
         _notificationRepository = notificationRepository;
         _identityUserReadService = identityUserReadService;
         _preferenceRepository = preferenceRepository;
+        _realtimeNotifier = realtimeNotifier;
     }
 
     public async Task<NotificationResponseDto?> HandleAsync(
@@ -34,7 +37,7 @@ public class CreateNotificationHandler
             cancellationToken);
 
         if (!userExists)
-            throw new NotFoundException("User was not found or is inactive.");
+            return null;
 
         var title = command.Title?.Trim();
         if (string.IsNullOrWhiteSpace(title))
@@ -89,7 +92,12 @@ public class CreateNotificationHandler
             notification,
             cancellationToken);
 
-        return CommunicationMappings.ToNotificationResponseDto(createdNotification);
+        var response = CommunicationMappings.ToNotificationResponseDto(createdNotification);
+        await _realtimeNotifier.NotificationCreatedAsync(
+            command.UserId,
+            response,
+            cancellationToken);
+        return response;
     }
 
     private static string? ValidateAndNormalizeLink(string? value)
@@ -130,7 +138,61 @@ public class CreateNotificationHandler
                 "Notification link must be a safe application-relative path.");
         }
 
+        ValidateApplicationDestination(link);
         return link;
+    }
+
+    private static void ValidateApplicationDestination(string link)
+    {
+        if (link.Contains('#'))
+            throw new ValidationException("Notification links cannot contain fragments.");
+
+        var separator = link.IndexOf('?');
+        var path = separator < 0 ? link : link[..separator];
+        var query = separator < 0 ? string.Empty : link[(separator + 1)..];
+        var parameters = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(query);
+
+        var simplePaths = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "/explore",
+            "/local-buddies",
+            "/where-to-stay",
+            "/where-to-go"
+        };
+        if (simplePaths.Contains(path))
+        {
+            if (parameters.Count != 0)
+                throw new ValidationException("Notification link contains unsupported parameters.");
+            return;
+        }
+
+        if (path == "/messages")
+        {
+            if (parameters.Keys.Any(x => x != "thread") ||
+                parameters.TryGetValue("thread", out var threadValues) &&
+                (threadValues.Count != 1 || !Guid.TryParse(threadValues[0], out _)))
+            {
+                throw new ValidationException("Notification message link is invalid.");
+            }
+            return;
+        }
+
+        if (path == "/profile/me")
+        {
+            var allowedTabs = new HashSet<string>(StringComparer.Ordinal)
+            {
+                "bookings", "hotels", "experiences", "buddy-schedule"
+            };
+            if (parameters.Keys.Any(x => x != "tab") ||
+                parameters.TryGetValue("tab", out var tabValues) &&
+                (tabValues.Count != 1 || !allowedTabs.Contains(tabValues[0]!)))
+            {
+                throw new ValidationException("Notification profile link is invalid.");
+            }
+            return;
+        }
+
+        throw new ValidationException("Notification link does not target a supported application page.");
     }
 
     private static string? NormalizeOptionalValue(

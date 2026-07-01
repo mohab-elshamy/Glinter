@@ -1,566 +1,388 @@
-import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
-import { Building2, Plus, Edit, Trash2, MapPin, DollarSign, Users, Tag, X, Save, Eye } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Building2, Edit, Eye, EyeOff, ImagePlus, MapPin, Plus, Save, X } from "lucide-react";
 import { toast } from "sonner";
 import { staysApi } from "@/shared/services/api-stays";
-import { authStorage } from "@/shared/lib/auth";
-import type { StayResponseDto } from "@/shared/types/api";
+import type {
+  CreateStayRequest,
+  StayBookingResponseDto,
+  StayBookingStatus,
+  StayResponseDto,
+} from "@/shared/types/api";
+import type { LoadState } from "@/shared/types/async-state";
+import RegionCascadeSelect from "@/components/RegionCascadeSelect";
+import LeafletMap from "@/components/LeafletMap";
+import { regionsApi } from "@/shared/services/api-regions";
 
-interface HotelListing {
-  id: string;
-  name: string;
-  description: string;
-  address: string;
-  pricePerNight: number;
-  currency: string;
-  maxGuests: number;
-  tags: string[];
-  images: string[];
-  latitude: number;
-  longitude: number;
-  isActive: boolean;
+const emptyForm: CreateStayRequest = {
+  name: "",
+  price: 0,
+  description: "",
+  googleMapsLink: "",
+  website: "",
+  phoneInternational: "",
+  locationSummaryDescription: "",
+  latitude: undefined,
+  longitude: undefined,
+  imageLinks: [],
+  amenities: [],
+  bookingPlatforms: [],
+};
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Something went wrong.";
 }
-
-interface HotelBooking {
-  id: string;
-  hotelId: string;
-  hotelName: string;
-  guestName: string;
-  checkIn: string;
-  checkOut: string;
-  guestCount: number;
-  totalPrice: number;
-  status: "pending" | "confirmed" | "completed" | "cancelled";
-}
-
-const defaultTags = ["wifi", "parking", "restaurant", "pool", "spa", "airport-shuttle", "breakfast", "ac", "seaview", "pet-friendly"];
 
 const MyHotelsTab = () => {
-  const [hotels, setHotels] = useState<HotelListing[]>(() => {
-    const saved = localStorage.getItem("my_hotels");
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [hotels, setHotels] = useState<StayResponseDto[]>([]);
+  const [bookings, setBookings] = useState<Record<number, StayBookingResponseDto[]>>({});
+  const [expandedId, setExpandedId] = useState<number>();
+  const [editing, setEditing] = useState<StayResponseDto>();
+  const [form, setForm] = useState<CreateStayRequest>(emptyForm);
+  const [imageUrl, setImageUrl] = useState("");
+  const [amenity, setAmenity] = useState("");
+  const [showForm, setShowForm] = useState(false);
+  const [loadState, setLoadState] = useState<LoadState>({ status: "loading" });
+  const [saving, setSaving] = useState(false);
+  const [uploadingImages, setUploadingImages] = useState(false);
+  const [locatingRegion, setLocatingRegion] = useState(false);
 
-  const [bookings, setBookings] = useState<HotelBooking[]>(() => {
-    const saved = localStorage.getItem("my_hotel_bookings");
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [editingHotel, setEditingHotel] = useState<HotelListing | null>(null);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [expandedHotel, setExpandedHotel] = useState<string | null>(null);
-
-  const [formData, setFormData] = useState({
-    name: "",
-    description: "",
-    address: "",
-    pricePerNight: 0,
-    currency: "EGP",
-    maxGuests: 2,
-    tags: [] as string[],
-    images: [] as string[],
-    latitude: 30.0444,
-    longitude: 31.2357,
-  });
-
-  const [newImageUrl, setNewImageUrl] = useState("");
-  const [newTag, setNewTag] = useState("");
+  const loadHotels = async () => {
+    try {
+      setHotels(await staysApi.getMyStays());
+      setLoadState({ status: "ready" });
+    } catch (error) {
+      const message = errorMessage(error);
+      setLoadState({ status: "error", message });
+      toast.error(message);
+    }
+  };
 
   useEffect(() => {
-    localStorage.setItem("my_hotels", JSON.stringify(hotels));
-  }, [hotels]);
-
-  useEffect(() => {
-    localStorage.setItem("my_hotel_bookings", JSON.stringify(bookings));
-  }, [bookings]);
-
-  useEffect(() => {
-    if (!authStorage.isAuthenticated()) return;
-
-    staysApi.getStays()
-      .then(apiStays => {
-        const mapped: HotelListing[] = apiStays.map(s => ({
-          id: s.id,
-          name: s.name,
-          description: (s as StayResponseDto).description || "",
-          address: s.address,
-          pricePerNight: s.pricePerNight,
-          currency: s.currency,
-          maxGuests: s.maxGuests,
-          tags: s.amenities || [],
-          images: s.images || [],
-          latitude: (s as StayResponseDto).latitude || 30.0444,
-          longitude: (s as StayResponseDto).longitude || 31.2357,
-          isActive: s.isActive,
-        }));
-        setHotels(prev => {
-          const existing = new Set(prev.map(h => h.id));
-          const newOnes = mapped.filter(h => !existing.has(h.id));
-          return [...newOnes, ...prev];
-        });
-      })
-      .catch(() => {});
+    void loadHotels();
   }, []);
 
-  const resetForm = () => {
-    setFormData({
-      name: "",
-      description: "",
-      address: "",
-      pricePerNight: 0,
-      currency: "EGP",
-      maxGuests: 2,
-      tags: [],
-      images: [],
-      latitude: 30.0444,
-      longitude: 31.2357,
-    });
-    setNewImageUrl("");
-    setNewTag("");
+  const openCreate = () => {
+    setEditing(undefined);
+    setForm({ ...emptyForm, imageLinks: [], amenities: [], bookingPlatforms: [] });
+    setShowForm(true);
   };
 
-  const handleAddImage = () => {
-    if (newImageUrl && !formData.images.includes(newImageUrl)) {
-      setFormData({ ...formData, images: [...formData.images, newImageUrl] });
-      setNewImageUrl("");
-    }
-  };
-
-  const handleAddTag = () => {
-    if (newTag && !formData.tags.includes(newTag)) {
-      setFormData({ ...formData, tags: [...formData.tags, newTag] });
-      setNewTag("");
-    }
-  };
-
-  const handleCreate = async () => {
-    if (!formData.name || !formData.address || formData.pricePerNight <= 0) {
-      toast.error("Name, address, and price are required");
-      return;
-    }
-    const newHotel: HotelListing = {
-      id: `hotel-${Date.now()}`,
-      ...formData,
-      isActive: true,
-    };
-
-    if (authStorage.isAuthenticated()) {
-      try {
-        const created = await staysApi.createStay({
-          areaId: "00000000-0000-0000-0000-000000000000",
-          name: formData.name,
-          description: formData.description,
-          address: formData.address,
-          pricePerNight: formData.pricePerNight,
-          currency: formData.currency,
-          maxGuests: formData.maxGuests,
-          latitude: formData.latitude,
-          longitude: formData.longitude,
-          tags: formData.tags,
-          amenities: formData.tags,
-          images: formData.images,
-        });
-        newHotel.id = created.id;
-      } catch { }
-    }
-
-    setHotels([newHotel, ...hotels]);
-    setShowAddModal(false);
-    resetForm();
-    toast.success(`"${newHotel.name}" created successfully! 🎉`);
-  };
-
-  const handleEdit = (hotel: HotelListing) => {
-    setEditingHotel(hotel);
-    setFormData({
+  const openEdit = (hotel: StayResponseDto) => {
+    setEditing(hotel);
+    setForm({
       name: hotel.name,
-      description: hotel.description,
-      address: hotel.address,
-      pricePerNight: hotel.pricePerNight,
-      currency: hotel.currency,
-      maxGuests: hotel.maxGuests,
-      tags: hotel.tags,
-      images: hotel.images,
+      price: hotel.price ?? 0,
+      description: hotel.description ?? "",
+      googleMapsLink: hotel.googleMapsLink ?? "",
+      website: hotel.website ?? "",
+      phoneInternational: hotel.phoneInternational ?? "",
+      locationSummaryDescription: hotel.locationSummaryDescription ?? "",
       latitude: hotel.latitude,
       longitude: hotel.longitude,
+      adm0Gid: hotel.adm0Gid,
+      adm1Gid: hotel.adm1Gid,
+      adm2Gid: hotel.adm2Gid,
+      adm3Gid: hotel.adm3Gid,
+      imageLinks: hotel.images.map((image) => image.link),
+      amenities: hotel.amenities,
+      bookingPlatforms: hotel.bookingPlatforms.map(({ name, priceWithTax, link }) => ({
+        name,
+        priceWithTax,
+        link,
+      })),
     });
-    setShowEditModal(true);
+    setShowForm(true);
   };
 
-  const handleSaveEdit = async () => {
-    if (!editingHotel) return;
-
-    if (authStorage.isAuthenticated()) {
-      try {
-        const uuid = editingHotel.id;
-        if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uuid)) {
-          await staysApi.updateStay(uuid, {
-            name: formData.name,
-            description: formData.description,
-            address: formData.address,
-            pricePerNight: formData.pricePerNight,
-            currency: formData.currency,
-            maxGuests: formData.maxGuests,
-            latitude: formData.latitude,
-            longitude: formData.longitude,
-            tags: formData.tags,
-            amenities: formData.tags,
-            images: formData.images,
-          });
-        }
-      } catch { }
+  const save = async () => {
+    if (!form.name.trim() || form.price <= 0 || form.latitude == null || form.longitude == null) {
+      toast.error("Name, a positive nightly price, and a map location are required.");
+      return;
     }
 
-    setHotels(prev =>
-      prev.map(h => h.id === editingHotel.id ? { ...h, ...formData } : h)
-    );
-    setShowEditModal(false);
-    setEditingHotel(null);
-    resetForm();
-    toast.success("Hotel updated successfully! ✅");
-  };
+    setSaving(true);
+    try {
+      const saved = editing
+        ? await staysApi.updateStay(editing.id, form)
+        : await staysApi.createStay(form);
 
-  const handleDelete = async (id: string, name: string) => {
-    if (authStorage.isAuthenticated()) {
-      try {
-        if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
-          await staysApi.deactivateStay(id);
-        }
-      } catch { }
+      setHotels((current) =>
+        editing
+          ? current.map((hotel) => (hotel.id === saved.id ? saved : hotel))
+          : [saved, ...current],
+      );
+      setShowForm(false);
+      toast.success(editing ? "Stay updated." : "Stay created.");
+    } catch (error) {
+      toast.error(errorMessage(error));
+    } finally {
+      setSaving(false);
     }
-    setHotels(prev => prev.filter(h => h.id !== id));
-    toast.error(`"${name}" has been removed`);
   };
 
-  const handleToggleActive = async (id: string) => {
-    if (authStorage.isAuthenticated()) {
-      try {
-        if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
-          const hotel = hotels.find(h => h.id === id);
-          if (hotel?.isActive) {
-            await staysApi.deactivateStay(id);
-          } else {
-            await staysApi.activateStay(id);
-          }
-        }
-      } catch { }
+  const selectLocation = async (latitude: number, longitude: number) => {
+    setForm((current) => ({ ...current, latitude, longitude }));
+    setLocatingRegion(true);
+    try {
+      const hierarchy = await regionsApi.getByPoint(latitude, longitude);
+      setForm((current) => ({ ...current, ...hierarchy, latitude, longitude }));
+    } catch (error) {
+      toast.error(errorMessage(error));
+    } finally {
+      setLocatingRegion(false);
     }
-    setHotels(prev =>
-      prev.map(h => h.id === id ? { ...h, isActive: !h.isActive } : h)
-    );
   };
 
-  const handleUpdateBookingStatus = (bookingId: string, status: "confirmed" | "completed" | "cancelled") => {
-    setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status } : b));
-    toast.success(`Booking ${status}!`);
+  const uploadImages = async (files: FileList | null) => {
+    if (!files?.length) return;
+    setUploadingImages(true);
+    try {
+      const uploaded = await Promise.all(
+        Array.from(files).map((file) => staysApi.uploadImage(file)),
+      );
+      setForm((current) => ({
+        ...current,
+        imageLinks: [...current.imageLinks, ...uploaded.map((image) => image.link)],
+      }));
+      toast.success(`${uploaded.length} image${uploaded.length === 1 ? "" : "s"} uploaded.`);
+    } catch (error) {
+      toast.error(errorMessage(error));
+    } finally {
+      setUploadingImages(false);
+    }
   };
 
-  const hotelBookings = (hotelId: string) => bookings.filter(b => b.hotelId === hotelId);
+  const toggleActive = async (hotel: StayResponseDto) => {
+    try {
+      const updated = hotel.isActive
+        ? await staysApi.deactivateStay(hotel.id)
+        : await staysApi.activateStay(hotel.id);
+      setHotels((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      toast.success(updated.isActive ? "Stay activated." : "Stay deactivated.");
+    } catch (error) {
+      toast.error(errorMessage(error));
+    }
+  };
+
+  const toggleBookings = async (hotelId: number) => {
+    if (expandedId === hotelId) {
+      setExpandedId(undefined);
+      return;
+    }
+
+    setExpandedId(hotelId);
+    try {
+      const loadedBookings = await staysApi.getBookings(hotelId);
+      setBookings((current) => ({ ...current, [hotelId]: loadedBookings }));
+    } catch (error) {
+      toast.error(errorMessage(error));
+    }
+  };
+
+  const updateBooking = async (hotelId: number, bookingId: string, status: StayBookingStatus) => {
+    try {
+      const updated = status === "Cancelled"
+        ? await staysApi.cancelBooking(bookingId)
+        : await staysApi.updateBookingStatus(bookingId, status);
+      setBookings((current) => ({
+        ...current,
+        [hotelId]: (current[hotelId] ?? []).map((booking) =>
+          booking.id === updated.id ? updated : booking),
+      }));
+      toast.success(`Booking ${status.toLowerCase()}.`);
+    } catch (error) {
+      toast.error(errorMessage(error));
+    }
+  };
+
+  if (loadState.status === "loading") {
+    return <p className="text-sm text-muted-foreground">Loading your stays…</p>;
+  }
+  if (loadState.status === "error") {
+    return <p className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">{loadState.message}</p>;
+  }
 
   return (
-    <>
-      <div className="flex items-center justify-between mb-6">
+    <div>
+      <div className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Building2 className="w-6 h-6 text-accent" />
+          <Building2 className="h-6 w-6 text-accent" />
           <div>
             <h1 className="text-2xl font-bold">My Hotels</h1>
-            <p className="text-xs text-muted-foreground">{hotels.length} listing{hotels.length !== 1 ? "s" : ""}</p>
+            <p className="text-xs text-muted-foreground">{hotels.length} backend listing(s)</p>
           </div>
         </div>
-        <button
-          onClick={() => { resetForm(); setShowAddModal(true); }}
-          className="btn-accent px-4 py-2 rounded-lg text-sm flex items-center gap-2"
-        >
-          <Plus className="w-4 h-4" /> Add Hotel
+        <button onClick={openCreate} className="btn-accent flex items-center gap-2 rounded-lg px-4 py-2 text-sm">
+          <Plus className="h-4 w-4" /> Add Hotel
         </button>
       </div>
 
       {hotels.length === 0 ? (
         <div className="card-glass p-12 text-center">
-          <Building2 className="w-16 h-16 text-muted-foreground mx-auto mb-4 opacity-30" />
-          <h2 className="text-lg font-bold mb-2">No hotels yet</h2>
-          <p className="text-sm text-muted-foreground mb-4">Start by adding your first hotel listing</p>
-          <button
-            onClick={() => { resetForm(); setShowAddModal(true); }}
-            className="btn-accent px-5 py-2 rounded-lg text-sm"
-          >
-            <Plus className="w-4 h-4 inline mr-1" /> Add Your First Hotel
-          </button>
+          <Building2 className="mx-auto mb-4 h-16 w-16 opacity-30" />
+          <p className="mb-4 text-sm text-muted-foreground">No stays have been created for this account.</p>
+          <button onClick={openCreate} className="btn-accent rounded-lg px-5 py-2 text-sm">Add your first stay</button>
         </div>
       ) : (
         <div className="space-y-4">
           {hotels.map((hotel) => (
-            <motion.div
-              key={hotel.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="card-glass p-5"
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <h3 className="font-bold text-lg">{hotel.name}</h3>
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full ${
-                      hotel.isActive ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"
-                    }`}>
+            <section key={hotel.id} className="card-glass p-5">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="mb-2 flex items-center gap-2">
+                    <h3 className="text-lg font-bold">{hotel.name}</h3>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] ${hotel.isActive ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"}`}>
                       {hotel.isActive ? "Active" : "Inactive"}
                     </span>
                   </div>
-                  <p className="text-xs text-muted-foreground flex items-center gap-1 mb-2">
-                    <MapPin className="w-3 h-3" /> {hotel.address}
+                  <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <MapPin className="h-3 w-3" /> {hotel.locationSummaryDescription || "No location description"}
                   </p>
-                  <div className="flex items-center gap-4 text-sm mb-3">
-                    <span className="text-accent font-bold">${hotel.pricePerNight}<span className="text-xs text-muted-foreground font-normal">/{hotel.currency}/night</span></span>
-                    <span className="text-muted-foreground flex items-center gap-1"><Users className="w-3 h-3" /> Max {hotel.maxGuests} guests</span>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {hotel.tags.map(tag => (
-                      <span key={tag} className="text-[10px] bg-secondary px-2 py-0.5 rounded-full">{tag}</span>
-                    ))}
+                  <p className="mt-2 font-bold text-accent">${hotel.price ?? "—"}/night</p>
+                  <div className="mt-3 flex flex-wrap gap-1">
+                    {hotel.amenities.map((item) => <span key={item} className="rounded-full bg-secondary px-2 py-1 text-[10px]">{item}</span>)}
                   </div>
                 </div>
                 <div className="flex gap-1">
-                  <button onClick={() => handleEdit(hotel)} className="p-2 hover:bg-secondary rounded-lg transition-colors" title="Edit">
-                    <Edit className="w-4 h-4 text-yellow-500" />
-                  </button>
-                  <button onClick={() => handleToggleActive(hotel.id)} className="p-2 hover:bg-secondary rounded-lg transition-colors" title="Toggle active">
-                    <Eye className="w-4 h-4 text-blue-500" />
-                  </button>
-                  <button onClick={() => handleDelete(hotel.id, hotel.name)} className="p-2 hover:bg-secondary rounded-lg transition-colors" title="Delete">
-                    <Trash2 className="w-4 h-4 text-red-500" />
+                  <button onClick={() => openEdit(hotel)} className="rounded-lg p-2 hover:bg-secondary" title="Edit"><Edit className="h-4 w-4" /></button>
+                  <button onClick={() => void toggleActive(hotel)} className="rounded-lg p-2 hover:bg-secondary" title={hotel.isActive ? "Deactivate" : "Activate"}>
+                    {hotel.isActive ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
               </div>
-
-              {hotel.description && (
-                <p className="text-xs text-muted-foreground mt-3 line-clamp-2">{hotel.description}</p>
-              )}
-
-              <div className="mt-3">
-                <button
-                  onClick={() => setExpandedHotel(expandedHotel === hotel.id ? null : hotel.id)}
-                  className="text-xs text-accent hover:underline"
-                >
-                  {expandedHotel === hotel.id ? "Hide" : "View"} Bookings ({hotelBookings(hotel.id).length})
-                </button>
-              </div>
-
-              {expandedHotel === hotel.id && (
-                <div className="mt-3 pt-3 border-t border-border">
-                  {hotelBookings(hotel.id).length === 0 ? (
-                    <p className="text-xs text-muted-foreground text-center py-3">No bookings for this hotel yet</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {hotelBookings(hotel.id).map(b => (
-                        <div key={b.id} className="flex items-center justify-between p-3 bg-secondary/30 rounded-lg text-xs">
-                          <div>
-                            <p className="font-medium">{b.guestName}</p>
-                            <p className="text-muted-foreground">{b.checkIn} → {b.checkOut} · {b.guestCount} guest{b.guestCount > 1 ? "s" : ""}</p>
-                          </div>
-                          <div className="text-right">
-                            <p className="font-bold text-accent">${b.totalPrice}</p>
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                              b.status === "confirmed" ? "bg-green-500/20 text-green-400" :
-                              b.status === "pending" ? "bg-yellow-500/20 text-yellow-400" :
-                              b.status === "completed" ? "bg-blue-500/20 text-blue-400" :
-                              "bg-red-500/20 text-red-400"
-                            }`}>{b.status}</span>
-                          </div>
-                          {b.status === "pending" && (
-                            <div className="flex gap-1 ml-2">
-                              <button onClick={() => handleUpdateBookingStatus(b.id, "confirmed")} className="text-green-500 hover:text-green-400">✓</button>
-                              <button onClick={() => handleUpdateBookingStatus(b.id, "cancelled")} className="text-red-500 hover:text-red-400">✕</button>
-                            </div>
-                          )}
+              <button onClick={() => void toggleBookings(hotel.id)} className="mt-4 text-xs text-accent hover:underline">
+                {expandedId === hotel.id ? "Hide" : "View"} bookings
+              </button>
+              {expandedId === hotel.id && (
+                <div className="mt-3 space-y-2 border-t border-border pt-3">
+                  {(bookings[hotel.id] ?? []).length === 0 && <p className="text-xs text-muted-foreground">No bookings yet.</p>}
+                  {(bookings[hotel.id] ?? []).map((booking) => (
+                    <div key={booking.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-secondary/30 p-3 text-xs">
+                      <div>
+                        <p className="font-medium">{booking.guestName}</p>
+                        <p className="text-muted-foreground">{booking.checkInDate} → {booking.checkOutDate} · {booking.guestCount} guest(s)</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold text-accent">${booking.totalPrice}</p>
+                        <p>{booking.status}</p>
+                      </div>
+                      {booking.status === "Pending" && (
+                        <div className="flex gap-2">
+                          <button onClick={() => void updateBooking(hotel.id, booking.id, "Confirmed")} className="text-green-400">Confirm</button>
+                          <button onClick={() => void updateBooking(hotel.id, booking.id, "Cancelled")} className="text-red-400">Cancel</button>
                         </div>
-                      ))}
+                      )}
+                      {booking.status === "Confirmed" && (
+                        <button onClick={() => void updateBooking(hotel.id, booking.id, "Completed")} className="text-blue-400">Complete</button>
+                      )}
                     </div>
-                  )}
+                  ))}
                 </div>
               )}
-            </motion.div>
+            </section>
           ))}
         </div>
       )}
 
-      {/* Add/Edit Hotel Modal */}
-      {(showAddModal || showEditModal) && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-background border border-border rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold">{showEditModal ? "Edit Hotel" : "Add New Hotel"}</h2>
-              <button
-                onClick={() => { setShowAddModal(false); setShowEditModal(false); setEditingHotel(null); resetForm(); }}
-                className="p-1 hover:bg-secondary rounded"
-              >
-                <X className="w-5 h-5" />
-              </button>
+      {showForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-border bg-background p-6">
+            <div className="mb-5 flex items-center justify-between">
+              <h2 className="text-xl font-bold">{editing ? "Edit stay" : "Create stay"}</h2>
+              <button onClick={() => setShowForm(false)}><X className="h-5 w-5" /></button>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="text-xs">Name *<input className="input-glass mt-1 w-full" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label>
+              <label className="text-xs">Price/night (USD) *<input type="number" min="1" className="input-glass mt-1 w-full" value={form.price} onChange={(event) => setForm({ ...form, price: Number(event.target.value) })} /></label>
+              <label className="text-xs md:col-span-2">Description<textarea className="input-glass mt-1 w-full" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} /></label>
+              <div className="md:col-span-2">
+                <RegionCascadeSelect
+                  value={form}
+                  onChange={(selection) => setForm({ ...form, ...selection })}
+                  label="Backend region"
+                />
+              </div>
+              <label className="text-xs md:col-span-2">Location summary<input className="input-glass mt-1 w-full" value={form.locationSummaryDescription} onChange={(event) => setForm({ ...form, locationSummaryDescription: event.target.value })} /></label>
+              <div className="md:col-span-2">
+                <p className="mb-2 text-xs">
+                  Click the map to set the exact location and resolve its backend region.
+                  {locatingRegion && <span className="ml-2 text-accent">Resolving region…</span>}
+                </p>
+                <LeafletMap
+                  center={[
+                    form.latitude ?? 30.0444,
+                    form.longitude ?? 31.2357,
+                  ]}
+                  zoom={form.latitude == null ? 10 : 14}
+                  markers={form.latitude != null && form.longitude != null
+                    ? [{
+                        lat: form.latitude,
+                        lng: form.longitude,
+                        name: form.name || "Selected stay location",
+                      }]
+                    : []}
+                  onMapClick={(latitude, longitude) => void selectLocation(latitude, longitude)}
+                  showSearch
+                  showFullscreen={false}
+                  showLegend={false}
+                  height="280px"
+                />
+                <p className="mt-2 text-[11px] text-muted-foreground">
+                  {form.latitude == null
+                    ? "No location selected."
+                    : `${form.latitude.toFixed(6)}, ${form.longitude?.toFixed(6)}`}
+                </p>
+              </div>
+              <label className="text-xs">Website<input className="input-glass mt-1 w-full" value={form.website} onChange={(event) => setForm({ ...form, website: event.target.value })} /></label>
+              <label className="text-xs">Phone<input className="input-glass mt-1 w-full" value={form.phoneInternational} onChange={(event) => setForm({ ...form, phoneInternational: event.target.value })} /></label>
+              <label className="text-xs md:col-span-2">Google Maps link<input className="input-glass mt-1 w-full" value={form.googleMapsLink} onChange={(event) => setForm({ ...form, googleMapsLink: event.target.value })} /></label>
             </div>
 
-            <div className="space-y-4">
-              <div>
-                <label className="text-xs text-muted-foreground mb-1 block">Hotel Name *</label>
+            <div className="mt-5">
+              <p className="mb-2 text-xs">Images</p>
+              <label className="mb-3 flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-accent/50 bg-accent/5 p-4 text-sm text-accent">
+                <ImagePlus className="h-4 w-4" />
+                {uploadingImages ? "Uploading images…" : "Upload JPEG, PNG, or WebP images"}
                 <input
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="e.g. Nile Palace Hotel"
-                  className="w-full px-3 py-2 rounded-lg bg-secondary border border-border text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  multiple
+                  disabled={uploadingImages}
+                  className="sr-only"
+                  onChange={(event) => void uploadImages(event.target.files)}
                 />
+              </label>
+              <div className="flex gap-2">
+                <input className="input-glass flex-1" value={imageUrl} onChange={(event) => setImageUrl(event.target.value)} placeholder="Or add an external image URL" />
+                <button onClick={() => { if (imageUrl.trim()) setForm({ ...form, imageLinks: [...form.imageLinks, imageUrl.trim()] }); setImageUrl(""); }} className="rounded bg-secondary px-3">Add</button>
               </div>
-
-              <div>
-                <label className="text-xs text-muted-foreground mb-1 block">Description</label>
-                <textarea
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Describe your hotel..."
-                  rows={3}
-                  className="w-full px-3 py-2 rounded-lg bg-secondary border border-border text-sm focus:outline-none focus:ring-1 focus:ring-primary resize-none"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs text-muted-foreground mb-1 block">Address *</label>
-                <input
-                  value={formData.address}
-                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                  placeholder="e.g. 15 Nile Street, Cairo"
-                  className="w-full px-3 py-2 rounded-lg bg-secondary border border-border text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">Price Per Night *</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={formData.pricePerNight || ""}
-                    onChange={(e) => setFormData({ ...formData, pricePerNight: parseFloat(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 rounded-lg bg-secondary border border-border text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">Currency</label>
-                  <select
-                    value={formData.currency}
-                    onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
-                    className="w-full px-3 py-2 rounded-lg bg-secondary border border-border text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+              <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
+                {form.imageLinks.map((url) => (
+                  <button
+                    key={url}
+                    onClick={() => setForm({ ...form, imageLinks: form.imageLinks.filter((item) => item !== url) })}
+                    className="group relative overflow-hidden rounded-lg border border-border"
+                    title="Click to remove"
                   >
-                    <option>EGP</option>
-                    <option>USD</option>
-                    <option>EUR</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs text-muted-foreground mb-1 block">Max Guests *</label>
-                <input
-                  type="number"
-                  min={1}
-                  value={formData.maxGuests}
-                  onChange={(e) => setFormData({ ...formData, maxGuests: parseInt(e.target.value) || 1 })}
-                  className="w-full px-3 py-2 rounded-lg bg-secondary border border-border text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">Latitude</label>
-                  <input
-                    type="number"
-                    step="any"
-                    value={formData.latitude}
-                    onChange={(e) => setFormData({ ...formData, latitude: parseFloat(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 rounded-lg bg-secondary border border-border text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">Longitude</label>
-                  <input
-                    type="number"
-                    step="any"
-                    value={formData.longitude}
-                    onChange={(e) => setFormData({ ...formData, longitude: parseFloat(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 rounded-lg bg-secondary border border-border text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs text-muted-foreground mb-1 block">Images</label>
-                <div className="flex gap-2 mb-2">
-                  <input
-                    value={newImageUrl}
-                    onChange={(e) => setNewImageUrl(e.target.value)}
-                    placeholder="Paste image URL..."
-                    className="flex-1 px-3 py-2 rounded-lg bg-secondary border border-border text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                  />
-                  <button onClick={handleAddImage} className="px-3 py-2 bg-accent rounded-lg text-sm">Add</button>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {formData.images.map((img, idx) => (
-                    <div key={idx} className="relative group">
-                      <img src={img} alt="" className="w-16 h-16 rounded-lg object-cover" />
-                      <button
-                        onClick={() => setFormData({ ...formData, images: formData.images.filter((_, i) => i !== idx) })}
-                        className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs text-muted-foreground mb-1 block">Tags</label>
-                <div className="flex gap-2 mb-2">
-                  <select
-                    value={newTag}
-                    onChange={(e) => setNewTag(e.target.value)}
-                    className="flex-1 px-3 py-2 rounded-lg bg-secondary border border-border text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                  >
-                    <option value="">Select a tag...</option>
-                    {defaultTags.filter(t => !formData.tags.includes(t)).map(t => (
-                      <option key={t} value={t}>{t}</option>
-                    ))}
-                  </select>
-                  <button onClick={handleAddTag} disabled={!newTag} className="px-3 py-2 bg-accent rounded-lg text-sm">Add</button>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {formData.tags.map(tag => (
-                    <span key={tag} className="text-xs bg-secondary px-2 py-1 rounded-full flex items-center gap-1">
-                      {tag}
-                      <button onClick={() => setFormData({ ...formData, tags: formData.tags.filter(t => t !== tag) })}>
-                        <X className="w-3 h-3" />
-                      </button>
-                    </span>
-                  ))}
-                </div>
+                    <img src={url} alt="" className="h-20 w-full object-cover" />
+                    <span className="absolute inset-0 hidden items-center justify-center bg-black/60 text-xs group-hover:flex">Remove</span>
+                  </button>
+                ))}
               </div>
             </div>
-
-            <div className="flex gap-3 mt-6">
-              <button
-                onClick={showEditModal ? handleSaveEdit : handleCreate}
-                className="flex-1 bg-accent text-accent-foreground py-2.5 rounded-xl font-medium hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
-              >
-                <Save className="w-4 h-4" /> {showEditModal ? "Save Changes" : "Create Hotel"}
-              </button>
-              <button
-                onClick={() => { setShowAddModal(false); setShowEditModal(false); setEditingHotel(null); resetForm(); }}
-                className="px-4 py-2.5 border border-border rounded-xl hover:bg-secondary transition-colors"
-              >
-                Cancel
-              </button>
+            <div className="mt-5">
+              <p className="mb-2 text-xs">Amenities</p>
+              <div className="flex gap-2"><input className="input-glass flex-1" value={amenity} onChange={(event) => setAmenity(event.target.value)} placeholder="Wi-Fi" /><button onClick={() => { if (amenity.trim()) setForm({ ...form, amenities: [...form.amenities, amenity.trim()] }); setAmenity(""); }} className="rounded bg-secondary px-3">Add</button></div>
+              <div className="mt-2 flex flex-wrap gap-1">{form.amenities.map((item) => <button key={item} onClick={() => setForm({ ...form, amenities: form.amenities.filter((value) => value !== item) })} className="rounded bg-secondary px-2 py-1 text-[10px]" title="Click to remove">{item}</button>)}</div>
             </div>
+
+            <button disabled={saving} onClick={() => void save()} className="btn-accent mt-6 flex w-full items-center justify-center gap-2 rounded-lg py-2 disabled:opacity-50">
+              <Save className="h-4 w-4" /> {saving ? "Saving…" : editing ? "Save changes" : "Create stay"}
+            </button>
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 };
 

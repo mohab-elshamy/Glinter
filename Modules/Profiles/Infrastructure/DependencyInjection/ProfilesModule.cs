@@ -19,6 +19,7 @@ using Glinter.Modules.Profiles.Application.Profiles.Commands.UpdateLocalBuddyVer
 using Glinter.Modules.Profiles.Application.Profiles.Queries;
 
 using Glinter.Modules.Profiles.Infrastructure.Services;
+using Glinter.Modules.Profiles.Application.Profiles.Services;
 namespace Glinter.Modules.Profiles.Infrastructure.DependencyInjection;
 
 public static class ProfilesModule
@@ -51,6 +52,7 @@ public static class ProfilesModule
         services.AddScoped<UpdateProfileImageCommandHandler>();
         services.AddScoped<UpdateLocalBuddyVerificationCommandHandler>();
         services.AddScoped<GetLocalBuddyVerificationHistoryHandler>();
+        services.AddScoped<BuddyEngagementService>();
 
         return services;
     }

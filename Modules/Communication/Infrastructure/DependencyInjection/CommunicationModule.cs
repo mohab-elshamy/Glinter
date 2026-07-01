@@ -75,6 +75,7 @@ public static class CommunicationModule
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<INotificationPreferenceRepository, NotificationPreferenceRepository>();
         services.AddScoped<IChatRealtimeNotifier, SignalRChatRealtimeNotifier>();
+        services.AddScoped<INotificationRealtimeNotifier, SignalRNotificationRealtimeNotifier>();
         services.AddSingleton<ChatConnectionRegistry>();
 
         services.AddScoped<CreateDirectChatThreadHandler>();

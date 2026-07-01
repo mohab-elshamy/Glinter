@@ -28,6 +28,7 @@ public class Stay
 
     public double? Latitude { get; set; }
     public double? Longitude { get; set; }
+    public bool IsActive { get; set; } = true;
 
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
     public DateTime? UpdatedAtUtc { get; set; }
@@ -37,4 +38,5 @@ public class Stay
     public List<StayReviewsPerRating> ReviewsPerRatings { get; set; } = [];
     public List<StayBookingPlatform> BookingPlatforms { get; set; } = [];
     public List<StayReview> StayReviews { get; set; } = [];
+    public List<StayBooking> Bookings { get; set; } = [];
 }

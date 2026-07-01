@@ -2,6 +2,7 @@ using System.Text.Json;
 using Glinter.Modules.Experiences.Application.Dtos;
 using Glinter.Modules.Experiences.Application.Services;
 using Glinter.Modules.Experiences.Domain.Enums;
+using Glinter.Modules.Experiences.Infrastructure.Files;
 using Glinter.Modules.IdentityAccess.Domain.Constants;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
@@ -14,10 +15,14 @@ namespace Glinter.Modules.Experiences.Presentation.Controllers;
 public class ExperiencesController : ControllerBase
 {
     private readonly ExperienceService _experienceService;
+    private readonly ExperienceImageStorage _imageStorage;
 
-    public ExperiencesController(ExperienceService experienceService)
+    public ExperiencesController(
+        ExperienceService experienceService,
+        ExperienceImageStorage imageStorage)
     {
         _experienceService = experienceService;
+        _imageStorage = imageStorage;
     }
 
     [HttpGet]
@@ -36,6 +41,21 @@ public class ExperiencesController : ControllerBase
     {
         var result = await _experienceService.GetMapItemsAsync(request, cancellationToken);
         return Ok(result);
+    }
+
+    [HttpGet("categories")]
+    public IActionResult GetCategories()
+    {
+        return Ok(Enum.GetNames<ExperienceCategory>());
+    }
+
+    [Authorize(
+        AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme,
+        Roles = RoleNames.ExperienceProvider + "," + RoleNames.Admin)]
+    [HttpGet("mine")]
+    public async Task<IActionResult> GetMine(CancellationToken cancellationToken)
+    {
+        return Ok(await _experienceService.GetMyExperiencesAsync(cancellationToken));
     }
 
     [HttpGet("{id:int}")]
@@ -69,6 +89,7 @@ public class ExperiencesController : ControllerBase
     }
 
     [HttpGet("{id:int}/reviews/llm-input")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = RoleNames.Admin)]
     public async Task<IActionResult> GetReviewsForLlm(int id, CancellationToken cancellationToken)
     {
         var result = await _experienceService.GetReviewsForLlmAsync(id, cancellationToken);
@@ -118,6 +139,185 @@ public class ExperiencesController : ControllerBase
             return BadRequest(new { message = ex.Message });
         }
         catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [Authorize(
+        AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme,
+        Roles = RoleNames.ExperienceProvider + "," + RoleNames.Admin)]
+    [HttpPost("images")]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(ExperienceImageStorage.MaxImageBytes)]
+    [RequestFormLimits(MultipartBodyLengthLimit = ExperienceImageStorage.MaxImageBytes)]
+    public async Task<IActionResult> UploadImage(
+        [FromForm] UploadExperienceImageRequest request,
+        CancellationToken cancellationToken)
+    {
+        var stored = await _imageStorage.SaveAsync(request.File, cancellationToken);
+        return Ok(new ExperienceImageUploadResponse
+        {
+            FileName = stored.FileName,
+            SizeBytes = stored.SizeBytes,
+            Link = Url.ActionLink(
+                nameof(GetImage),
+                values: new { fileName = stored.FileName })!
+        });
+    }
+
+    [AllowAnonymous]
+    [HttpGet("images/{fileName}")]
+    public IActionResult GetImage(string fileName)
+    {
+        var stored = _imageStorage.Find(fileName);
+        return stored is null
+            ? NotFound()
+            : PhysicalFile(stored.Value.Path, stored.Value.ContentType);
+    }
+
+    [Authorize(
+        AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme,
+        Roles = RoleNames.ExperienceProvider + "," + RoleNames.Admin)]
+    [HttpPut("{id:int}")]
+    public async Task<IActionResult> Update(
+        int id,
+        [FromBody] UpdateExperienceRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _experienceService.UpdateProviderExperienceAsync(id, request, cancellationToken);
+            return result is null ? NotFound(new { message = "Experience not found." }) : Ok(result);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+        }
+    }
+
+    [Authorize(
+        AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme,
+        Roles = RoleNames.ExperienceProvider + "," + RoleNames.Admin)]
+    [HttpPatch("{id:int}/activate")]
+    public Task<IActionResult> Activate(int id, CancellationToken cancellationToken) =>
+        SetActive(id, true, cancellationToken);
+
+    [Authorize(
+        AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme,
+        Roles = RoleNames.ExperienceProvider + "," + RoleNames.Admin)]
+    [HttpPatch("{id:int}/deactivate")]
+    public Task<IActionResult> Deactivate(int id, CancellationToken cancellationToken) =>
+        SetActive(id, false, cancellationToken);
+
+    [HttpGet("{id:int}/availability")]
+    public async Task<IActionResult> GetAvailability(int id, CancellationToken cancellationToken)
+    {
+        var result = await _experienceService.GetAvailabilityAsync(id, false, cancellationToken);
+        return result is null ? NotFound(new { message = "Active experience not found." }) : Ok(result);
+    }
+
+    [Authorize(
+        AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme,
+        Roles = RoleNames.ExperienceProvider + "," + RoleNames.Admin)]
+    [HttpGet("{id:int}/availability/manage")]
+    public async Task<IActionResult> GetManagedAvailability(int id, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _experienceService.GetAvailabilityAsync(id, true, cancellationToken);
+            return result is null ? NotFound(new { message = "Experience not found." }) : Ok(result);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+        }
+    }
+
+    [Authorize(
+        AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme,
+        Roles = RoleNames.ExperienceProvider + "," + RoleNames.Admin)]
+    [HttpPost("{id:int}/availability")]
+    public async Task<IActionResult> CreateAvailability(
+        int id,
+        [FromBody] CreateExperienceAvailabilityRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _experienceService.CreateAvailabilityAsync(id, request, cancellationToken);
+            return result is null
+                ? NotFound(new { message = "Experience not found." })
+                : StatusCode(StatusCodes.Status201Created, result);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+        }
+    }
+
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = RoleNames.Traveler)]
+    [HttpPost("{id:int}/bookings")]
+    public async Task<IActionResult> CreateBooking(
+        int id,
+        [FromBody] CreateExperienceBookingRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _experienceService.CreateBookingAsync(id, request, cancellationToken);
+            return result is null
+                ? NotFound(new { message = "Bookable experience or availability not found." })
+                : StatusCode(StatusCodes.Status201Created, result);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [Authorize(
+        AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme,
+        Roles = RoleNames.ExperienceProvider + "," + RoleNames.Admin)]
+    [HttpGet("{id:int}/bookings")]
+    public async Task<IActionResult> GetBookings(int id, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _experienceService.GetExperienceBookingsAsync(id, cancellationToken);
+            return result is null ? NotFound(new { message = "Experience not found." }) : Ok(result);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+        }
+    }
+
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = RoleNames.Traveler)]
+    [HttpPost("{id:int}/reviews")]
+    public async Task<IActionResult> CreateReview(
+        int id,
+        [FromBody] CreateExperienceReviewRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _experienceService.CreateReviewAsync(id, request, cancellationToken);
+            return result is null ? NotFound(new { message = "Active experience not found." }) : Ok(result);
+        }
+        catch (ArgumentException ex)
         {
             return BadRequest(new { message = ex.Message });
         }
@@ -177,5 +377,21 @@ public class ExperiencesController : ControllerBase
         }
 
         return items;
+    }
+
+    private async Task<IActionResult> SetActive(
+        int id,
+        bool isActive,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _experienceService.SetActiveAsync(id, isActive, cancellationToken);
+            return result is null ? NotFound(new { message = "Experience not found." }) : Ok(result);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+        }
     }
 }

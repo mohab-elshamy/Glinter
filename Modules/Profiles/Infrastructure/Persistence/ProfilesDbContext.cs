@@ -28,6 +28,9 @@ public class ProfilesDbContext : DbContext, IProfilesDbContext
     public DbSet<UserFollow> UserFollows => Set<UserFollow>();
     public DbSet<LocalBuddyVerificationEvent> LocalBuddyVerificationEvents =>
         Set<LocalBuddyVerificationEvent>();
+    public DbSet<BuddyAvailability> BuddyAvailabilities => Set<BuddyAvailability>();
+    public DbSet<BuddyBooking> BuddyBookings => Set<BuddyBooking>();
+    public DbSet<BuddyReview> BuddyReviews => Set<BuddyReview>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

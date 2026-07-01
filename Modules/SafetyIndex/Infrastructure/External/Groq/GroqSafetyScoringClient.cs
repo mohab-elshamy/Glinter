@@ -92,12 +92,43 @@ public class GroqSafetyScoringClient(
                 continue;
             }
 
+            if (response.StatusCode == HttpStatusCode.TooManyRequests)
+            {
+                var retryAfter = GetRetryAfter(response);
+                rateLimiter.Defer(retryAfter);
+                logger.LogWarning(
+                    "Groq quota was reached while scoring {AreaNameAr}. Skipping this score and pausing requests for {RetryAfterSeconds} seconds",
+                    areaNameAr,
+                    Math.Ceiling(retryAfter.TotalSeconds));
+                return null;
+            }
+
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadFromJsonAsync<GroqChatResponse>(JsonOptions, ct);
         }
 
         throw new HttpRequestException(
             $"Groq safety scoring payload is too large after {maxPayloadAttempts} attempts for {areaNameAr}.");
+    }
+
+    private static TimeSpan GetRetryAfter(HttpResponseMessage response)
+    {
+        var retryAfter = response.Headers.RetryAfter;
+        if (retryAfter?.Delta is { } delta && delta > TimeSpan.Zero)
+        {
+            return delta;
+        }
+
+        if (retryAfter?.Date is { } date)
+        {
+            var delay = date - DateTimeOffset.UtcNow;
+            if (delay > TimeSpan.Zero)
+            {
+                return delay;
+            }
+        }
+
+        return TimeSpan.FromMinutes(1);
     }
 
     private HttpRequestMessage BuildRequest(

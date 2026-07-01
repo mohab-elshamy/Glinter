@@ -1,4 +1,5 @@
 using Glinter.Modules.Experiences.Application.Services;
+using Glinter.Modules.Experiences.Infrastructure.Files;
 using Glinter.Modules.Experiences.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -14,6 +15,7 @@ public static class ExperiencesModule
             options.UseNpgsql(configuration.GetConnectionString("DefaultConnection")));
 
         services.AddScoped<ExperienceService>();
+        services.AddSingleton<ExperienceImageStorage>();
 
         return services;
     }

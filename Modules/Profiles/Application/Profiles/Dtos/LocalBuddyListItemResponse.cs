@@ -27,4 +27,6 @@ public class LocalBuddyListItemResponse
     public int FollowersCount { get; set; }
 
     public int FollowingCount { get; set; }
+
+    public bool IsFollowing { get; set; }
 }

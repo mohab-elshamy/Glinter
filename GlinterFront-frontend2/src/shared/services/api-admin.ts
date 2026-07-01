@@ -1,13 +1,19 @@
 import { request } from "@/shared/lib/api-client";
 import type {
   AdminUserListItem,
+  AdminUserResponse,
   AdminRoleResponse,
   AdminAssignRoleRequest,
   AdminChangeUserStatusRequest,
   AdminGetExperiencesRequest,
-  AdminSetApprovalStatusRequest,
+  AdminModerateExperienceRequest,
   AdminUpdateBuddyVerificationRequest,
   ExperienceSummaryDto,
+  AdminLocalBuddy,
+  AdminDashboard,
+  AdminAnalytics,
+  AdminAuditPage,
+  BuddyVerificationEvent,
 } from "@/shared/types/api";
 
 export const adminApi = {
@@ -18,10 +24,10 @@ export const adminApi = {
     request<AdminRoleResponse[]>("/admin/users/roles"),
 
   assignRole: (userId: string, data: AdminAssignRoleRequest) =>
-    request<AdminUserListItem>(`/admin/users/${userId}/roles`, { method: "POST", body: data }),
+    request<AdminUserResponse>(`/admin/users/${userId}/roles`, { method: "POST", body: data }),
 
   changeUserStatus: (userId: string, data: AdminChangeUserStatusRequest) =>
-    request<AdminUserListItem>(`/admin/users/${userId}/status`, { method: "PATCH", body: data }),
+    request<AdminUserResponse>(`/admin/users/${userId}/status`, { method: "PATCH", body: data }),
 
   getExperiences: (params?: AdminGetExperiencesRequest) => {
     const query = params
@@ -35,9 +41,44 @@ export const adminApi = {
     return request<ExperienceSummaryDto[]>(`/admin/experiences${query}`);
   },
 
-  setExperienceApprovalStatus: (id: string, data: AdminSetApprovalStatusRequest) =>
-    request<ExperienceSummaryDto>(`/admin/experiences/${id}/approval-status`, { method: "PATCH", body: data }),
+  moderateExperience: (id: number, data: AdminModerateExperienceRequest) =>
+    request<ExperienceSummaryDto>(`/admin/experiences/${id}/moderation`, { method: "PATCH", body: data }),
 
   updateBuddyVerification: (userId: string, data: AdminUpdateBuddyVerificationRequest) =>
-    request<void>(`/admin/local-buddies/${userId}/verification`, { method: "PATCH", body: data }),
+    request<AdminLocalBuddy>(`/admin/local-buddies/${userId}/verification`, { method: "PATCH", body: data }),
+
+  getLocalBuddies: (verificationStatus?: string) =>
+    request<AdminLocalBuddy[]>(
+      `/admin/local-buddies${verificationStatus ? `?verificationStatus=${encodeURIComponent(verificationStatus)}` : ""}`,
+    ),
+
+  getBuddyVerificationHistory: (userId: string, page = 1, pageSize = 50) =>
+    request<BuddyVerificationEvent[]>(
+      `/admin/local-buddies/${userId}/verification-history?page=${page}&pageSize=${pageSize}`,
+    ),
+
+  getDashboard: () =>
+    request<AdminDashboard>("/admin/dashboard"),
+
+  getAnalytics: () =>
+    request<AdminAnalytics>("/admin/analytics"),
+
+  getAuditEvents: (params?: {
+    actorUserId?: string;
+    action?: string;
+    fromUtc?: string;
+    toUtc?: string;
+    page?: number;
+    pageSize?: number;
+  }) => {
+    const query = params
+      ? `?${new URLSearchParams(
+          Object.entries(params).reduce<Record<string, string>>((acc, [key, value]) => {
+            if (value !== undefined) acc[key] = String(value);
+            return acc;
+          }, {}),
+        ).toString()}`
+      : "";
+    return request<AdminAuditPage>(`/admin/audit-events${query}`);
+  },
 };

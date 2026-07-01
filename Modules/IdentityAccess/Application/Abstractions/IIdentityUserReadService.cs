@@ -11,4 +11,8 @@ public interface IIdentityUserReadService
         string securityStamp,
         CancellationToken cancellationToken = default);
 
+    Task<Dictionary<Guid, string>> GetDisplayNamesAsync(
+        IEnumerable<Guid> userIds,
+        CancellationToken cancellationToken = default);
+
 }

@@ -2,6 +2,7 @@ using System.Reflection;
 using Glinter.IntegrationTests.Infrastructure;
 using Glinter.Modules.Communication.Application.Notifications.Commands;
 using Glinter.Modules.Communication.Application.Chats.Dtos;
+using Glinter.Modules.Communication.Application.Notifications.Dtos;
 using Glinter.Modules.Communication.Domain.Enums;
 using Glinter.Shared.Application.Exceptions;
 using Microsoft.AspNetCore.Http.Connections;
@@ -33,6 +34,21 @@ public sealed class CommunicationTests : ApiTestBase
         firstThread.EnsureSuccessStatusCode();
         using var firstThreadJson = await ReadJsonAsync(firstThread);
         var threadId = firstThreadJson.RootElement.GetProperty("id").GetGuid();
+
+        var threads = await SendAsync(
+            HttpMethod.Get,
+            "/api/chat/threads",
+            userA.Token);
+        threads.EnsureSuccessStatusCode();
+        using var threadsJson = await ReadJsonAsync(threads);
+        var listedThread = Assert.Single(
+            threadsJson.RootElement.EnumerateArray(),
+            item => item.GetProperty("id").GetGuid() == threadId);
+        Assert.Equal(
+            $"Integration Traveler",
+            listedThread.GetProperty("participantDisplayNames")
+                .GetProperty(userB.UserId.ToString())
+                .GetString());
 
         var duplicateThread = await SendAsync(
             HttpMethod.Post,
@@ -130,7 +146,15 @@ public sealed class CommunicationTests : ApiTestBase
         var unsafeException = Assert.Throws<TargetInvocationException>(
             () => validator.Invoke(null, ["https://evil.example/path"]));
         Assert.IsType<ValidationException>(unsafeException.InnerException);
-        Assert.Equal("/notifications/123", validator.Invoke(null, ["/notifications/123"]));
+        var unsupportedException = Assert.Throws<TargetInvocationException>(
+            () => validator.Invoke(null, ["/admin"]));
+        Assert.IsType<ValidationException>(unsupportedException.InnerException);
+        var malformedThreadException = Assert.Throws<TargetInvocationException>(
+            () => validator.Invoke(null, ["/messages?thread=not-a-guid"]));
+        Assert.IsType<ValidationException>(malformedThreadException.InnerException);
+        Assert.Equal(
+            "/profile/me?tab=bookings",
+            validator.Invoke(null, ["/profile/me?tab=bookings"]));
 
         var user = await CreateUserAsync("Traveler", "notification");
         var notificationId = Guid.NewGuid();
@@ -144,7 +168,7 @@ public sealed class CommunicationTests : ApiTestBase
              VALUES
                  ('{notificationId}', '{user.UserId}', 'System',
                   'Integration notification', 'Notification body',
-                  '/notifications/123', 'Communication', 'Integration',
+                  '/profile/me?tab=bookings', 'Communication', 'Integration',
                   '{sourceId}', NOW(), NULL)
              """);
 
@@ -157,6 +181,7 @@ public sealed class CommunicationTests : ApiTestBase
         Assert.Contains(
             listJson.RootElement.GetProperty("items").EnumerateArray(),
             item => item.GetProperty("id").GetGuid() == notificationId);
+        Assert.True(listJson.RootElement.GetProperty("totalCount").GetInt32() >= 1);
 
         var markRead = await SendAsync(
             HttpMethod.Patch,
@@ -195,6 +220,11 @@ public sealed class CommunicationTests : ApiTestBase
         participantConnection.On<ChatMessageEventDto>(
             "MessageReceived",
             message => messageReceived.TrySetResult(message));
+        var notificationReceived = new TaskCompletionSource<NotificationResponseDto>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        participantConnection.On<NotificationResponseDto>(
+            "NotificationCreated",
+            notification => notificationReceived.TrySetResult(notification));
 
         await participantConnection.StartAsync();
         await participantConnection.InvokeAsync("JoinThread", threadId);
@@ -214,6 +244,10 @@ public sealed class CommunicationTests : ApiTestBase
         Assert.Equal(threadId, realtimeMessage.ThreadId);
         Assert.Equal(userA.UserId, realtimeMessage.SenderUserId);
         Assert.Equal("SignalR integration message", realtimeMessage.Body);
+        var realtimeNotification = await notificationReceived.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal(NotificationType.ChatMessage, realtimeNotification.Type);
+        Assert.Equal($"/messages?thread={threadId}", realtimeNotification.LinkUrl);
+        Assert.False(realtimeNotification.IsRead);
 
         await Factory.ExecuteAsync(
             $"""

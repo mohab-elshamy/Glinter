@@ -66,6 +66,26 @@ public sealed class ChatHub : Hub
         _connectionRegistry.Join(threadId, registration);
     }
 
+    public override async Task OnConnectedAsync()
+    {
+        var registration = GetRegistration();
+        if (registration.ExpiresAtUtc <= DateTime.UtcNow ||
+            !await _userReadService.IsActiveUserWithSecurityStampAsync(
+                registration.UserId,
+                registration.SecurityStamp,
+                Context.ConnectionAborted) ||
+            await _tokenRevocationService.IsRevokedAsync(
+                registration.Jti,
+                Context.ConnectionAborted))
+        {
+            Context.Abort();
+            return;
+        }
+
+        _connectionRegistry.Register(registration);
+        await base.OnConnectedAsync();
+    }
+
     public Task LeaveThread(Guid threadId)
     {
         _connectionRegistry.Leave(threadId, Context.ConnectionId);
