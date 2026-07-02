@@ -15,13 +15,16 @@ namespace Glinter.Modules.Experiences.Presentation.Controllers;
 public class ExperiencesController : ControllerBase
 {
     private readonly ExperienceService _experienceService;
+    private readonly ExperienceRecommendationService _recommendationService;
     private readonly ExperienceImageStorage _imageStorage;
 
     public ExperiencesController(
         ExperienceService experienceService,
+        ExperienceRecommendationService recommendationService,
         ExperienceImageStorage imageStorage)
     {
         _experienceService = experienceService;
+        _recommendationService = recommendationService;
         _imageStorage = imageStorage;
     }
 
@@ -47,6 +50,38 @@ public class ExperiencesController : ControllerBase
     public IActionResult GetCategories()
     {
         return Ok(Enum.GetNames<ExperienceCategory>());
+    }
+
+    [HttpPost("recommendations")]
+    public async Task<IActionResult> Recommend(
+        [FromBody] ExperienceRecommendationRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _recommendationService.RecommendAsync(request, cancellationToken);
+            return Ok(result);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpPost("recommendations/natural-language")]
+    public async Task<IActionResult> RecommendFromNaturalLanguage(
+        [FromBody] NaturalLanguageExperienceRecommendationRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _recommendationService.RecommendFromTextAsync(request, cancellationToken);
+            return Ok(result);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     [Authorize(

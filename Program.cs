@@ -6,6 +6,7 @@ using Glinter.Modules.IdentityAccess.Domain.Entities;
 using Glinter.Modules.IdentityAccess.Infrastructure.DependencyInjection;
 using Glinter.Modules.IdentityAccess.Infrastructure.Identity;
 using Glinter.Modules.Experiences.Infrastructure.DependencyInjection;
+using Glinter.Modules.Itineraries.Infrastructure.DependencyInjection;
 using Glinter.Modules.Profiles.Infrastructure.DependencyInjection;
 using Glinter.Modules.Profiles.Infrastructure.Persistence;
 using Glinter.Modules.Regions.Infrastructure.DependencyInjection;
@@ -124,10 +125,13 @@ builder.Services.AddStaysModule(builder.Configuration);
 // Module 5: Experiences
 builder.Services.AddExperiencesModule(builder.Configuration);
 
-// Module 6: Regions
+// Module 6: Itineraries
+builder.Services.AddItinerariesModule(builder.Configuration);
+
+// Module 7: Regions
 builder.Services.AddRegionsModule(builder.Configuration);
 
-// Module 7: Safety Index
+// Module 8: Safety Index
 builder.Services.AddSafetyIndexModule(builder.Configuration);
 
 // Module 9: Communication

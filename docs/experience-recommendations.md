@@ -1,21 +1,47 @@
 # Experience Recommendations
 
-This document describes the planned recommendation feature for the Experiences module. The goal is to return high-quality, route-ready experience candidates that can later feed the Routing module to build a client itinerary.
+The Experiences module now exposes deterministic, route-ready recommendations that can feed the Routing module when building a client itinerary.
 
-Groq may be used for natural-language preference extraction and human-friendly explanations only. Ranking, scoring, filtering, and itinerary readiness must stay deterministic in backend code.
+Groq is used only for:
+
+- Natural-language preference classification.
+- Human-friendly explanations after backend ranking is complete.
+
+Groq must not decide ranking, reorder results, or invent unavailable facts.
+
+## Endpoints
+
+```http
+POST /api/experiences/recommendations
+POST /api/experiences/recommendations/natural-language
+```
+
+The first endpoint accepts structured preferences. The second accepts free text, uses Groq when configured, validates the classification, then runs the same backend scoring pipeline.
+
+## Supported Categories
+
+The recommendation system supports the current enum values:
+
+- `Historical`
+- `Nature`
+- `Shopping`
+- `Nightlife`
+- `Dining`
+
+The algorithm is not hardcoded to the current database distribution. New categories can be added later by extending the enum, default duration mapping, and Groq prompt/category validation.
 
 ## Current Data Reality
 
 The local `glinter` database currently has useful data for:
 
-- Coordinates for experiences.
+- Experience coordinates.
 - Rating and review volume.
 - Administrative region IDs.
 - Address.
-- Reviews and review distribution.
-- Hours for some experiences.
+- Review distribution and review rows.
+- Featured images for some experiences.
+- Opening hours for some experiences.
 - Popular times for some experiences.
-- Images for some experiences.
 - Amenities for a small subset.
 
 The current database does not yet have reliable recommendation data for:
@@ -26,93 +52,11 @@ The current database does not yet have reliable recommendation data for:
 - Provider-only pricing.
 - Category diversity across all five categories.
 
-The implementation must therefore treat availability, booking capacity, price, opening hours, popular times, amenities, and descriptions as optional signals. Missing optional data should not crash scoring and should not unfairly penalize an otherwise good experience.
+Availability, capacity, price, opening hours, popular times, amenities, and descriptions are therefore optional signals. Missing optional data does not crash scoring and does not unfairly penalize an otherwise good experience.
 
-The system must support all planned categories even if the current database is mostly or entirely Historical:
+`bookableOnly=true` currently returns no results until reliable availability/capacity data exists in the active database.
 
-- Historical
-- Nature
-- Shopping
-- Nightlife
-- Dining
-
-## Implementation Plan
-
-### Phase 1: Route-Ready Deterministic Recommendations
-
-Add a recommendation service inside the Experiences module, following the current service/controller style:
-
-- `ExperienceRecommendationService`
-- DTOs in `Modules/Experiences/Application/Dtos`
-- Optional Groq client abstraction for classification/explanation.
-- Endpoints on `ExperiencesController`.
-
-Suggested endpoints:
-
-```http
-POST /api/experiences/recommendations
-POST /api/experiences/recommendations/natural-language
-```
-
-The structured endpoint should accept already-normalized preferences. The natural-language endpoint should use Groq to classify user text into the same internal preference model.
-
-### Phase 2: Natural-Language Understanding
-
-Use Groq to classify text such as:
-
-```text
-عايز أماكن تاريخية ومطاعم قريبة مني بكرة بعد المغرب ومش زحمة
-```
-
-Into structured preferences:
-
-```json
-{
-  "categories": [
-    { "category": "Historical", "weight": 0.6 },
-    { "category": "Dining", "weight": 0.4 }
-  ],
-  "visitDate": "2026-07-02",
-  "preferredStartLocal": "18:00",
-  "preferredEndLocal": "22:00",
-  "crowdPreference": "Quiet",
-  "language": "ar"
-}
-```
-
-Unsupported or unavailable categories should be repaired or ignored after Groq classification. The backend should validate categories against the supported enum list and normalize weights internally.
-
-### Phase 3: AI Explanation
-
-After backend scoring and ranking, send Groq a compact payload for explanation only:
-
-- User preferences.
-- Experience name.
-- Category.
-- Region display name.
-- Rating/reviews.
-- Distance.
-- Opening/crowd/availability summary when available.
-- Score breakdown.
-
-Groq must not reorder experiences, invent facts, or decide score values.
-
-If Groq fails, times out, returns invalid JSON, or returns payload-size errors, return deterministic local fallback explanations.
-
-### Phase 4: Personalization and Itinerary Enhancement
-
-After the base recommendation feature is stable:
-
-- Use traveler profile interests.
-- Prefer not-yet-booked/not-yet-visited experiences.
-- Add diversity reranking so an itinerary candidate pool is not all one category.
-- Add time-of-day preferences by category.
-- Integrate with hotel recommendation output as a start point.
-- Return larger candidate pools for Routing, such as 20-40 items, while keeping normal UI limits smaller.
-
-## Request Model
-
-Suggested structured request:
+## Structured Request
 
 ```json
 {
@@ -126,47 +70,68 @@ Suggested structured request:
   "adm1Gid": null,
   "adm2Gid": null,
   "adm3Gid": null,
-  "visitDate": "2026-07-02",
-  "preferredStartLocal": "10:00",
-  "preferredEndLocal": "22:00",
+  "visitAtLocal": "2026-07-02T18:00:00",
   "guestsCount": 2,
-  "crowdPreference": "Balanced",
+  "crowdPreference": "Quiet",
   "bookableOnly": false,
   "forItinerary": true,
   "limit": 30,
-  "preferredLanguage": "en"
+  "preferredLanguage": "ar"
 }
 ```
 
 ### Request Fields
 
 `categories`
-: Optional list of supported categories with optional weights. If missing, all available categories can be considered.
+: Optional category preferences with optional weights. Weights can be `0-1`, `0-100`, or omitted. They are normalized internally.
 
 `latitude` and `longitude`
-: Optional user/hotel/start point. When present, distance scoring becomes active.
+: Optional start point, hotel point, or user point. When both are present, distance scoring is active. They must be provided together.
 
 `adm0Gid`, `adm1Gid`, `adm2Gid`, `adm3Gid`
 : Optional administrative filters.
 
-`visitDate`, `preferredStartLocal`, `preferredEndLocal`
-: Optional routing/time context. Used for opening-hours and popular-times scoring when data exists.
+`visitAtLocal`
+: Optional local visit datetime. Used for opening-hours and popular-times scoring when data exists.
 
 `guestsCount`
-: Optional. Used only when availability/capacity data exists.
+: Optional. Reserved for availability/capacity scoring once reliable data exists.
 
 `crowdPreference`
 : Optional values: `Quiet`, `Balanced`, `Lively`.
 
 `bookableOnly`
-: Should only be strict when availability data exists. For current third-party data, this should usually be `false`.
+: Strictly filters to bookable experiences. Keep it `false` for current third-party data.
 
 `forItinerary`
-: When true, return route-ready metadata and a larger candidate pool.
+: Returns a larger route-ready candidate pool and applies light diversity reranking.
+
+`preferredLanguage`
+: `ar` or `en` for explanations and region display names.
+
+## Natural-Language Request
+
+```json
+{
+  "text": "عايز أماكن تاريخية ومطاعم قريبة مني بعد المغرب ومش زحمة",
+  "latitude": 30.0444,
+  "longitude": 31.2357,
+  "visitAtLocal": "2026-07-02T18:00:00",
+  "forItinerary": true,
+  "limit": 30,
+  "preferredLanguage": "ar"
+}
+```
+
+Groq returns strict JSON classification. The backend then repairs unsupported values, normalizes weights, applies caller-provided location/admin/time overrides, and scores deterministically.
+
+If Groq is missing, times out, returns invalid JSON, or returns an HTTP error, the service falls back to a simple local classifier and deterministic local explanations.
 
 ## Scoring
 
-The base score should be 0-100. Suggested default weights:
+Final score is `0-100`. Available factors are weighted and missing/unrequested factors are excluded, redistributing weight across the remaining factors.
+
+Default factor weights:
 
 ```text
 CategoryMatchScore          0.20
@@ -174,264 +139,165 @@ DistanceScore               0.20
 QualityScore                0.20
 TimingOpenScore             0.15
 CrowdPreferenceScore        0.10
-AvailabilityScore           0.10
 ContentCompletenessScore    0.05
 ```
 
-If a factor is unavailable or not requested, exclude it and redistribute weights across available factors.
+Availability is represented in the response but currently not scored because reliable slot/capacity data is not available in the active database.
 
 ### Category Match
 
-If the user selected categories, exact category matches score according to normalized category weights. If no category preference was provided, do not penalize experiences.
-
-The implementation must support:
-
-- Historical
-- Nature
-- Shopping
-- Nightlife
-- Dining
-
-Current data may only contain Historical, but the algorithm should not be hardcoded to one category.
+If categories are selected, exact matches score according to normalized category weights. If no category preference is provided, this factor is excluded.
 
 ### Distance
 
-Use straight-line Haversine distance in kilometers. Do not implement real routing here.
-
-Suggested formula:
+Uses straight-line Haversine distance in kilometers. No road routing is done in this module.
 
 ```text
 DistanceScore = max(0, 1 - (DistanceKm / MaxUsefulDistanceKm))
 ```
 
-Default `MaxUsefulDistanceKm` can be 20 km for city exploration and configurable later.
+`MaxUsefulDistanceKm` defaults to `20` and is configurable.
 
 ### Quality
-
-Use rating and review volume:
 
 ```text
 RawQualityScore = Rating * log(Reviews + 1)
 ```
 
-Normalize across the candidate set:
+Raw quality is normalized across the candidate set. If all candidates have the same raw quality, a neutral `0.5` is used.
 
-```text
-NormalizedQualityScore =
-(RawQualityScore - MinRawQualityScore) /
-(MaxRawQualityScore - MinRawQualityScore)
-```
+### Timing
 
-If max equals min, use neutral score `0.5`.
-
-### Timing and Opening Hours
-
-If `visitDate` and preferred time window are provided and the experience has `ExperienceHour` rows:
-
-- Score high when open during the preferred window.
-- Score medium when hours exist but only partly overlap.
-- Score low when closed.
-
-If hours are missing, use neutral score and set:
-
-```json
-"openHoursDataAvailable": false
-```
+When `visitAtLocal` is supplied and opening-hour rows exist, the score prefers experiences open at that time. If hours are missing, the timing factor is excluded and `openHoursDataAvailable=false`.
 
 ### Crowd Preference
 
-Use `ExperiencePopularTime` when available:
+When `visitAtLocal`, `crowdPreference`, and matching popular-times rows exist:
 
-- `Quiet`: prefer low popularity.
-- `Balanced`: prefer medium popularity.
-- `Lively`: prefer high popularity.
+- `Quiet` prefers lower popularity.
+- `Balanced` prefers medium popularity.
+- `Lively` prefers higher popularity.
 
-If popular time data is missing, use neutral score and set:
-
-```json
-"popularTimesDataAvailable": false
-```
-
-### Availability
-
-Availability and capacity should be optional because current third-party experiences may not have slots.
-
-When availability tables/data exist:
-
-- Score high when there is an active future slot in the preferred time window.
-- Score high when remaining capacity is enough for `guestsCount`.
-- Return `nextAvailableSlot`.
-
-When no availability data exists:
-
-```json
-{
-  "availabilityDataAvailable": false,
-  "nextAvailableSlot": null
-}
-```
-
-Do not penalize third-party experiences only because they are not provider-bookable, unless the request explicitly uses `bookableOnly: true`.
+If popular-time data is missing, the factor is excluded and `popularTimesDataAvailable=false`.
 
 ### Content Completeness
 
-Small supporting signal based on:
+Adds a small signal for practical itinerary usefulness: image, description, address, website, reviews, hours, popular times, and amenities.
 
-- Has images.
-- Has address.
-- Has reviews.
-- Has description.
-- Has amenities.
+## Response Shape
 
-This should never dominate ranking.
+Each item includes:
 
-## Route-Ready Response
+- Ranking and final score.
+- Score breakdown.
+- Category, coordinates, address, region display name.
+- Rating and review count.
+- Straight-line distance when a point was provided.
+- Estimated duration and duration source.
+- Recommended visit window.
+- Opening window when available.
+- Data availability flags.
+- Routing hints such as `clusterKey` and `timeOfDayPreference`.
+- AI or fallback explanation.
 
-The response must be suitable for Routing module consumption without relying on AI text.
-
-Suggested item shape:
+Example:
 
 ```json
 {
-  "ranking": 1,
-  "experienceId": 12,
-  "name": "Example Museum",
-  "category": "Historical",
-  "latitude": 30.0444,
-  "longitude": 31.2357,
-  "adm0Gid": 1,
-  "adm1Gid": 6,
-  "adm2Gid": 42,
-  "adm3Gid": 581,
-  "regionDisplayName": "Downtown Cairo, Cairo",
-  "distanceKm": 2.14,
-  "estimatedDurationMinutes": 90,
-  "durationSource": "DefaultEstimate",
-  "recommendedVisitWindow": {
-    "startLocal": "10:00",
-    "endLocal": "12:00"
+  "preferences": {
+    "categories": [{ "category": "Historical", "weight": 1 }],
+    "latitude": 30.0444,
+    "longitude": 31.2357,
+    "forItinerary": true,
+    "limit": 30,
+    "preferredLanguage": "ar"
   },
-  "openingWindow": {
-    "opensAt": "09:00",
-    "closesAt": "17:00"
-  },
-  "openHoursDataAvailable": true,
-  "popularTimesDataAvailable": false,
-  "availabilityDataAvailable": false,
-  "nextAvailableSlot": null,
-  "routingHints": {
-    "mustVisitAtFixedTime": false,
-    "requiresBooking": false,
-    "clusterKey": "adm3:581",
-    "timeOfDayPreference": "MorningOrAfternoon"
-  },
-  "finalScore": 88.4,
-  "scores": {
-    "categoryMatchScore": 1,
-    "distanceScore": 0.89,
-    "qualityScore": 0.76,
-    "timingOpenScore": 1,
-    "crowdPreferenceScore": null,
-    "availabilityScore": null,
-    "contentCompletenessScore": 0.6
-  },
-  "explanation": {
-    "isAiGenerated": true,
-    "shortExplanation": "...",
-    "reasons": ["...", "..."],
-    "bestFor": ["Historical", "Near your start point"]
-  }
+  "totalCandidates": 120,
+  "returnedCount": 30,
+  "items": [
+    {
+      "ranking": 1,
+      "experienceId": 12,
+      "name": "Example Museum",
+      "category": "Historical",
+      "regionDisplayName": "Cairo",
+      "distanceKm": 2.4,
+      "rating": 4.6,
+      "reviews": 1800,
+      "estimatedDurationMinutes": 90,
+      "routingHints": {
+        "mustVisitAtFixedTime": false,
+        "requiresBooking": false,
+        "clusterKey": "adm2:123",
+        "timeOfDayPreference": "MorningOrAfternoon"
+      },
+      "finalScore": 87.3,
+      "scores": {
+        "categoryMatchScore": 1,
+        "distanceScore": 0.88,
+        "qualityScore": 0.91,
+        "timingOpenScore": null,
+        "crowdPreferenceScore": null,
+        "availabilityScore": null,
+        "contentCompletenessScore": 0.75
+      },
+      "explanation": {
+        "shortExplanation": "A strong historical match near your start point with solid review confidence.",
+        "reasons": [
+          "Matches the selected Historical category.",
+          "Close to the provided start point.",
+          "Rating and review volume make it a reliable itinerary candidate."
+        ],
+        "bestFor": ["Historical", "Itinerary"],
+        "isAiGenerated": true
+      }
+    }
+  ]
 }
 ```
 
-## Routing Module Contract
+## Routing Integration Notes
 
-The Routing module should use deterministic fields only:
+For itinerary building, call recommendations with `forItinerary=true` and a larger `limit`, usually `20-40`.
+
+Use these response fields in Routing:
 
 - `experienceId`
 - `latitude`
 - `longitude`
-- `category`
-- `finalScore`
-- `distanceKm`
 - `estimatedDurationMinutes`
 - `recommendedVisitWindow`
 - `openingWindow`
+- `openHoursDataAvailable`
 - `nextAvailableSlot`
-- `routingHints`
-- data-availability flags
+- `routingHints.mustVisitAtFixedTime`
+- `routingHints.requiresBooking`
+- `routingHints.clusterKey`
+- `routingHints.timeOfDayPreference`
+- `finalScore`
 
-The Routing module should not parse or depend on:
+The Routing module should still calculate real route order and travel time. This recommendation feature only provides candidate quality, straight-line proximity, soft timing hints, and route-friendly metadata.
 
-- `shortExplanation`
-- `reasons`
-- `bestFor`
+## Configuration
 
-AI explanations are display text, not routing logic.
+```json
+{
+  "ExperienceRecommendations": {
+    "GroqApiKey": "",
+    "GroqModel": "qwen/qwen3-32b",
+    "GroqBaseUrl": "https://api.groq.com/openai/v1",
+    "GroqRequestTimeoutSeconds": 45,
+    "GroqClassificationMaxTokens": 500,
+    "GroqExplanationMaxTokens": 750,
+    "GroqMaxExplanationItems": 8,
+    "GroqRetryMaxExplanationItems": 3,
+    "DefaultLimit": 10,
+    "DefaultItineraryLimit": 30,
+    "MaxLimit": 40,
+    "MaxCandidateExperiences": 600,
+    "MaxUsefulDistanceKm": 20
+  }
+}
+```
 
-## Diversity for Itineraries
-
-When `forItinerary` is true, recommendations should return a diverse candidate pool rather than only the highest raw scores.
-
-Suggested approach:
-
-1. Score all candidates.
-2. Keep a larger top pool, for example top 100.
-3. Apply light diversity reranking:
-   - Avoid too many same-category experiences in the first results.
-   - Prefer geographic clusters that routing can combine efficiently.
-   - Keep high-score anchors even if category repeats.
-4. Return 20-40 candidates to Routing.
-
-This allows the Routing module to build better day plans without losing high-quality options.
-
-## Category Time-of-Day Hints
-
-These are routing hints, not hard rules:
-
-- Historical: morning or afternoon.
-- Nature: morning, afternoon, or golden-hour windows.
-- Shopping: afternoon or evening.
-- Nightlife: evening or night.
-- Dining: lunch or dinner windows.
-
-When the database contains category-specific hours and popular times, those should override generic hints.
-
-## Groq Token Control
-
-For natural-language classification, send only user text and the allowed schema.
-
-For explanations, send compact ranked data only:
-
-- Top few recommendations.
-- Short names/categories/regions.
-- Score breakdown.
-- Distance and timing summary.
-- Availability summary only if present.
-
-Do not send full reviews, long descriptions, large image lists, or full routing candidate pools.
-
-If Groq fails, return local fallback explanations.
-
-## Suggested Implementation Order
-
-1. Verify/apply Experience migrations so current code and database schema agree.
-2. Add recommendation DTOs and options.
-3. Add deterministic `ExperienceRecommendationService`.
-4. Add structured recommendation endpoint.
-5. Add route-ready response metadata and data-availability flags.
-6. Add natural-language classification with Groq.
-7. Add compact Groq explanations.
-8. Add focused integration tests using existing third-party Historical data patterns.
-9. Add provider/availability tests once provider data exists.
-10. Add diversity reranking for itinerary mode.
-
-## MVP Rules
-
-- Never assume availability/capacity exists.
-- Never assume all five categories currently have data.
-- Never penalize missing optional data too heavily.
-- Always return data-availability flags.
-- Keep ranking deterministic.
-- Keep Groq out of routing and scoring.
-- Return route-ready fields even when some values are defaults.
+The service also reads `GROQ_API_KEY`, `GROQ_MODEL`, and `GROQ_BASE_URL` from environment variables. If the experience-specific Groq key is empty, it can reuse the existing hotel or safety-index Groq configuration.
