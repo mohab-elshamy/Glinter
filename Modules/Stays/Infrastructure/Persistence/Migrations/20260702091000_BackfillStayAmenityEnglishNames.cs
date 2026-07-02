@@ -5,6 +5,8 @@
 namespace Glinter.Modules.Stays.Infrastructure.Persistence.Migrations
 {
     /// <inheritdoc />
+    [Microsoft.EntityFrameworkCore.Infrastructure.DbContextAttribute(typeof(StaysDbContext))]
+    [Microsoft.EntityFrameworkCore.Migrations.MigrationAttribute("20260702091000_BackfillStayAmenityEnglishNames")]
     public partial class BackfillStayAmenityEnglishNames : Migration
     {
         /// <inheritdoc />
