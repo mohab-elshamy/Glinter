@@ -280,7 +280,15 @@ const ExperienceDetailsModal = ({
                 }`}
                 aria-label={`Show image ${index + 1}`}
               >
-                <img src={image} alt="" className="h-full w-full object-cover" />
+                <img
+                  src={image}
+                  alt=""
+                  className="h-full w-full object-cover"
+                  onError={(event) => {
+                    event.currentTarget.onerror = null;
+                    event.currentTarget.src = fallbackImage;
+                  }}
+                />
               </button>
             ))}
           </div>
