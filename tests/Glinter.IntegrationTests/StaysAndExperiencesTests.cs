@@ -1,4 +1,5 @@
 using Glinter.IntegrationTests.Infrastructure;
+using System.Text;
 using System.Text.Json;
 
 namespace Glinter.IntegrationTests;
@@ -286,6 +287,65 @@ public sealed class StaysAndExperiencesTests : ApiTestBase
             new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", traveler.Token);
         forbiddenRequest.Content = forbiddenContent;
         await AssertProblemAsync(await Client.SendAsync(forbiddenRequest), 403, "forbidden");
+    }
+
+    [Fact]
+    public async Task Experience_import_skips_duplicate_cids_and_continues()
+    {
+        var adminToken = await GetAdminTokenAsync();
+        var suffix = Guid.NewGuid().ToString("N");
+        var duplicateCid = $"experience-import-duplicate-{suffix}";
+        var newCid = $"experience-import-new-{suffix}";
+
+        var firstImport = await ImportExperiencesJsonAsync(
+            adminToken,
+            "Historical",
+            $$"""
+            [
+              {
+                "name": "Imported Duplicate First {{suffix}}",
+                "cid": "{{duplicateCid}}",
+                "coordinates": { "latitude": 30.05, "longitude": 31.25 }
+              },
+              {
+                "name": "Imported Duplicate Second {{suffix}}",
+                "cid": "{{duplicateCid}}",
+                "coordinates": { "latitude": 30.06, "longitude": 31.26 }
+              }
+            ]
+            """);
+
+        firstImport.EnsureSuccessStatusCode();
+        using (var firstJson = await ReadJsonAsync(firstImport))
+        {
+            Assert.Equal(1, firstJson.RootElement.GetProperty("created").GetInt32());
+            Assert.Equal(0, firstJson.RootElement.GetProperty("updated").GetInt32());
+            Assert.Equal(1, firstJson.RootElement.GetProperty("skipped").GetInt32());
+        }
+
+        var secondImport = await ImportExperiencesJsonAsync(
+            adminToken,
+            "Historical",
+            $$"""
+            [
+              {
+                "name": "Imported Duplicate Existing {{suffix}}",
+                "cid": "{{duplicateCid}}",
+                "coordinates": { "latitude": 30.07, "longitude": 31.27 }
+              },
+              {
+                "name": "Imported New {{suffix}}",
+                "cid": "{{newCid}}",
+                "coordinates": { "latitude": 30.08, "longitude": 31.28 }
+              }
+            ]
+            """);
+
+        secondImport.EnsureSuccessStatusCode();
+        using var secondJson = await ReadJsonAsync(secondImport);
+        Assert.Equal(1, secondJson.RootElement.GetProperty("created").GetInt32());
+        Assert.Equal(0, secondJson.RootElement.GetProperty("updated").GetInt32());
+        Assert.Equal(1, secondJson.RootElement.GetProperty("skipped").GetInt32());
     }
 
     [Fact]
@@ -785,6 +845,27 @@ public sealed class StaysAndExperiencesTests : ApiTestBase
         response.EnsureSuccessStatusCode();
         using var json = await ReadJsonAsync(response);
         return json.RootElement.GetProperty("id").GetInt32();
+    }
+
+    private async Task<HttpResponseMessage> ImportExperiencesJsonAsync(
+        string adminToken,
+        string category,
+        string json)
+    {
+        using var content = new MultipartFormDataContent();
+        content.Add(new StringContent(category), "Category");
+
+        var fileContent = new ByteArrayContent(Encoding.UTF8.GetBytes(json));
+        fileContent.Headers.ContentType =
+            new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+        content.Add(fileContent, "File", "experiences.json");
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/experiences/import");
+        request.Headers.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", adminToken);
+        request.Content = content;
+
+        return await Client.SendAsync(request);
     }
 
     private async Task<int> CreateExperienceAsync(
