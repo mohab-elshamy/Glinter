@@ -5,6 +5,7 @@ using Glinter.Modules.IdentityAccess.Infrastructure.Persistence;
 using Glinter.Modules.IdentityAccess.Infrastructure.Security;
 using Glinter.Modules.Profiles.Infrastructure.Persistence;
 using Glinter.Modules.Regions.Infrastructure.Persistence;
+using Glinter.Modules.SafetyIndex.Infrastructure.Persistence;
 using Glinter.Modules.Stays.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Hosting;
@@ -113,14 +114,20 @@ public sealed class GlinterApiFactory : WebApplicationFactory<Program>, IAsyncLi
                 ["RateLimiting:WindowMinutes"] = "1",
                 ["Communication:RateLimiting:DirectThreadPermitLimit"] = "5",
                 ["Communication:RateLimiting:MessagePermitLimit"] = "8",
-                ["Communication:RateLimiting:WindowSeconds"] = "60"
+                ["Communication:RateLimiting:WindowSeconds"] = "60",
+
+                ["SafetyIndex:EnableWeeklyService"] = "false",
+                ["SafetyIndex:RunInitialHistoricalCollectionOnStartup"] = "false",
+                ["SafetyIndex:HostedServiceStartupDelaySeconds"] = "0"
             });
         });
+
         builder.ConfigureTestServices(services =>
         {
             ReplaceDbContext<IdentityAccessDbContext>(services, false);
             ReplaceDbContext<ProfilesDbContext>(services, false);
             ReplaceDbContext<RegionsDbContext>(services, true);
+            ReplaceDbContext<SafetyIndexDbContext>(services, false);
             ReplaceDbContext<StaysDbContext>(services, false);
             ReplaceDbContext<ExperiencesDbContext>(services, false);
             ReplaceDbContext<CommunicationDbContext>(services, false);
@@ -132,6 +139,7 @@ public sealed class GlinterApiFactory : WebApplicationFactory<Program>, IAsyncLi
                 options.SecretKey = JwtSecret;
                 options.ExpiryMinutes = 60;
             });
+
             services.PostConfigure<JwtBearerOptions>(
                 JwtBearerDefaults.AuthenticationScheme,
                 options =>
@@ -198,37 +206,57 @@ public sealed class GlinterApiFactory : WebApplicationFactory<Program>, IAsyncLi
             .UseNpgsql(ConnectionString)
             .Options;
         await using (var context = new IdentityAccessDbContext(identityOptions))
+        {
             await context.Database.MigrateAsync();
+        }
 
         var profileOptions = new DbContextOptionsBuilder<ProfilesDbContext>()
             .UseNpgsql(ConnectionString)
             .Options;
         await using (var context = new ProfilesDbContext(profileOptions))
+        {
             await context.Database.MigrateAsync();
+        }
 
         var regionOptions = new DbContextOptionsBuilder<RegionsDbContext>()
             .UseNpgsql(ConnectionString, options => options.UseNetTopologySuite())
             .Options;
         await using (var context = new RegionsDbContext(regionOptions))
+        {
             await context.Database.MigrateAsync();
+        }
+
+        var safetyIndexOptions = new DbContextOptionsBuilder<SafetyIndexDbContext>()
+            .UseNpgsql(ConnectionString)
+            .Options;
+        await using (var context = new SafetyIndexDbContext(safetyIndexOptions))
+        {
+            await context.Database.MigrateAsync();
+        }
 
         var stayOptions = new DbContextOptionsBuilder<StaysDbContext>()
             .UseNpgsql(ConnectionString)
             .Options;
         await using (var context = new StaysDbContext(stayOptions))
+        {
             await context.Database.MigrateAsync();
+        }
 
         var experienceOptions = new DbContextOptionsBuilder<ExperiencesDbContext>()
             .UseNpgsql(ConnectionString)
             .Options;
         await using (var context = new ExperiencesDbContext(experienceOptions))
+        {
             await context.Database.MigrateAsync();
+        }
 
         var communicationOptions = new DbContextOptionsBuilder<CommunicationDbContext>()
             .UseNpgsql(ConnectionString)
             .Options;
         await using (var context = new CommunicationDbContext(communicationOptions))
+        {
             await context.Database.MigrateAsync();
+        }
     }
 
     private void ReplaceDbContext<TContext>(

@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
@@ -29,6 +30,7 @@
 
   <ItemGroup>
     <Compile Remove="tests\**\*.cs" />
+    <Compile Include="tests\Glinter.IntegrationTests\SafetyIndexTests.cs" />
     <Content Remove="tests\**\*" />
     <Content Remove="**\*.log" />
     <None Remove="tests\**\*" />
@@ -64,6 +66,9 @@
     <Folder Include="Modules\Stays\Domain\ValueObjects\" />
     <Folder Include="Modules\Stays\Infrastructure\DependencyInjection\" />
     <Folder Include="Modules\Stays\Infrastructure\Persistence\Repositories\" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Remove="tests/**/*.cs" />
   </ItemGroup>
 
 </Project>
