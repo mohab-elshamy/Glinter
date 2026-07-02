@@ -41,7 +41,7 @@ const Footer = () => (
         </div>
       </div>
       <div className="text-center text-xs text-gray-600 border-t border-brand-glassBorder pt-8">
-        © 2025 Glinter. All rights reserved.
+        © {new Date().getFullYear()} Glinter. All rights reserved.
       </div>
     </div>
   </footer>

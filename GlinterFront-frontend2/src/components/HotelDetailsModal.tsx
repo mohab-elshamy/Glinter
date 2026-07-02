@@ -161,7 +161,15 @@ const HotelDetailsModal = ({
         </button>
 
         <div className="relative h-64 overflow-hidden rounded-t-2xl bg-white/5 sm:h-80">
-          <img src={gallery[activeImage]} alt={`${hotel.name} — image ${activeImage + 1}`} className="h-full w-full object-cover" />
+          <img
+            src={gallery[activeImage]}
+            alt={`${hotel.name} — image ${activeImage + 1}`}
+            className="h-full w-full object-cover"
+            onError={(event) => {
+              event.currentTarget.onerror = null;
+              event.currentTarget.src = hotelImg;
+            }}
+          />
           <div className="absolute inset-0 bg-gradient-to-t from-[#101116] via-transparent to-black/20" />
           {gallery.length > 1 && (
             <>
@@ -206,7 +214,15 @@ const HotelDetailsModal = ({
                 aria-pressed={activeImage === index}
                 className={`h-16 w-24 shrink-0 overflow-hidden rounded-lg border-2 ${activeImage === index ? "border-brand-gold" : "border-transparent opacity-65 hover:opacity-100"}`}
               >
-                <img src={image} alt="" className="h-full w-full object-cover" />
+                <img
+                  src={image}
+                  alt=""
+                  className="h-full w-full object-cover"
+                  onError={(event) => {
+                    event.currentTarget.onerror = null;
+                    event.currentTarget.src = hotelImg;
+                  }}
+                />
               </button>
             ))}
           </div>
