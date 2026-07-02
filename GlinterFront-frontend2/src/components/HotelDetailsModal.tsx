@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   CalendarDays,
   Check,
@@ -23,6 +24,7 @@ import { authStorage } from "@/shared/lib/auth";
 import { toast } from "sonner";
 import type { LoadState } from "@/shared/types/async-state";
 import { formatUsdPrice } from "@/shared/lib/price";
+import { overlayLayers } from "@/shared/lib/overlay-layers";
 
 interface HotelDetailsModalProps {
   hotel: Hotel | null;
@@ -61,6 +63,66 @@ const HotelDetailsModal = ({
   const [loadingMore, setLoadingMore] = useState(false);
   const [rating, setRating] = useState(5);
   const [reviewText, setReviewText] = useState("");
+  const dialogRef = useRef<HTMLElement>(null);
+  const onCloseRef = useRef(onClose);
+  const titleId = useId();
+  const activeHotelId = hotel?.id;
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    if (!activeHotelId) return;
+
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const focusDialog = window.requestAnimationFrame(() => {
+      const firstFocusable = dialogRef.current?.querySelector<HTMLElement>(
+        'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      );
+      (firstFocusable ?? dialogRef.current)?.focus();
+    });
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCloseRef.current();
+        return;
+      }
+      if (event.key !== "Tab" || !dialogRef.current) return;
+
+      const focusable = Array.from(dialogRef.current.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      )).filter((element) => element.getAttribute("aria-hidden") !== "true");
+
+      if (focusable.length === 0) {
+        event.preventDefault();
+        dialogRef.current.focus();
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.cancelAnimationFrame(focusDialog);
+      document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+      if (previouslyFocused?.isConnected) previouslyFocused.focus();
+    };
+  }, [activeHotelId]);
 
   useEffect(() => {
     setActiveImage(0);
@@ -142,20 +204,26 @@ const HotelDetailsModal = ({
     setActiveImage((current) => (current + direction + gallery.length) % gallery.length);
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
-      <div className="absolute inset-0 bg-black/75 backdrop-blur-md" onClick={onClose} />
+  return createPortal(
+    <div
+      className={`${overlayLayers.modalBackdrop} fixed inset-0 flex items-center justify-center bg-black/75 p-2 backdrop-blur-md sm:p-4`}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
       <section
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
-        aria-labelledby="hotel-details-title"
-        className="relative max-h-[96vh] w-full max-w-6xl overflow-y-auto rounded-2xl border border-white/10 bg-[#101116] shadow-2xl"
+        aria-labelledby={titleId}
+        className={`${overlayLayers.modalContent} relative max-h-[96vh] w-full max-w-6xl overflow-y-auto rounded-2xl border border-white/10 bg-[#101116] shadow-2xl outline-none`}
       >
         <button
           type="button"
           onClick={onClose}
           aria-label="Close hotel details"
-          className="fixed right-5 top-5 z-[60] flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-black/75 text-white backdrop-blur transition hover:bg-black sm:absolute sm:right-4 sm:top-4"
+          className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-black/75 text-white backdrop-blur transition hover:bg-black"
         >
           <X className="h-5 w-5" />
         </button>
@@ -191,7 +259,7 @@ const HotelDetailsModal = ({
                   <Images className="h-3 w-3" /> {gallery.length} image{gallery.length === 1 ? "" : "s"}
                 </span>
               </div>
-              <h2 id="hotel-details-title" className="max-w-3xl text-2xl font-bold text-white sm:text-4xl">{hotel.name}</h2>
+              <h2 id={titleId} className="max-w-3xl text-2xl font-bold text-white sm:text-4xl">{hotel.name}</h2>
               <p className="mt-2 flex items-center gap-1 text-sm text-gray-300">
                 <MapPin className="h-4 w-4" /> {hotel.area}
               </p>
@@ -430,7 +498,8 @@ const HotelDetailsModal = ({
           </aside>
         </div>
       </section>
-    </div>
+    </div>,
+    document.body,
   );
 };
 

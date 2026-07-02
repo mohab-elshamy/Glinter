@@ -1,8 +1,7 @@
 using System.Globalization;
 using System.Text;
-using Glinter.Modules.Experiences.Domain.Enums;
-using Glinter.Modules.Experiences.Infrastructure.Persistence;
-using Glinter.Modules.Regions.Infrastructure.Persistence;
+using Glinter.Modules.Experiences.Application.Abstractions;
+using Glinter.Modules.Regions.Application.Abstractions;
 using Glinter.Modules.Stays.Application.Abstractions;
 using Glinter.Modules.Stays.Application.Dtos;
 using Glinter.Modules.Stays.Application.Options;
@@ -15,8 +14,14 @@ namespace Glinter.Modules.Stays.Application.Services;
 
 public class HotelRecommendationService
 {
-    private static readonly string[] SupportedCategories = Enum
-        .GetNames<ExperienceCategory>();
+    private static readonly string[] SupportedCategories =
+    [
+        "Historical",
+        "Nature",
+        "Shopping",
+        "Nightlife",
+        "Dining"
+    ];
 
     private static readonly Dictionary<int, string> BudgetLabels = new()
     {
@@ -28,23 +33,23 @@ public class HotelRecommendationService
     };
 
     private readonly StaysDbContext _staysDbContext;
-    private readonly ExperiencesDbContext _experiencesDbContext;
-    private readonly RegionsDbContext _regionsDbContext;
+    private readonly IExperienceRecommendationReadService _experienceReadService;
+    private readonly IRegionRecommendationReadService _regionReadService;
     private readonly IHotelRecommendationGroqClient _groqClient;
     private readonly HotelRecommendationOptions _options;
     private readonly ILogger<HotelRecommendationService> _logger;
 
     public HotelRecommendationService(
         StaysDbContext staysDbContext,
-        ExperiencesDbContext experiencesDbContext,
-        RegionsDbContext regionsDbContext,
+        IExperienceRecommendationReadService experienceReadService,
+        IRegionRecommendationReadService regionReadService,
         IHotelRecommendationGroqClient groqClient,
         IOptions<HotelRecommendationOptions> options,
         ILogger<HotelRecommendationService> logger)
     {
         _staysDbContext = staysDbContext;
-        _experiencesDbContext = experiencesDbContext;
-        _regionsDbContext = regionsDbContext;
+        _experienceReadService = experienceReadService;
+        _regionReadService = regionReadService;
         _groqClient = groqClient;
         _options = options.Value;
         _logger = logger;
@@ -75,6 +80,12 @@ public class HotelRecommendationService
             throw new ArgumentException("Natural-language recommendation text is required.");
         }
 
+        if (request.Text.Length > _options.NaturalLanguageMaxCharacters)
+        {
+            throw new ArgumentException(
+                $"Natural-language recommendation text cannot exceed {_options.NaturalLanguageMaxCharacters} characters.");
+        }
+
         var language = NormalizeLanguage(request.PreferredLanguage) ?? DetectLanguage(request.Text);
         var classified = await _groqClient.ClassifyAsync(request.Text, language, cancellationToken)
                          ?? ClassifyLocally(request.Text, language);
@@ -103,12 +114,14 @@ public class HotelRecommendationService
     private static HotelRecommendationPreferences RepairClassifiedPreferences(
         HotelRecommendationPreferences preferences)
     {
-        preferences.ExperienceCategories = preferences.ExperienceCategories
+        preferences.ExperienceCategories = (preferences.ExperienceCategories ?? [])
             .Where(x => !string.IsNullOrWhiteSpace(x.Category))
-            .Where(x => Enum.TryParse<ExperienceCategory>(x.Category, true, out _))
+            .Where(x => SupportedCategories.Contains(
+                x.Category,
+                StringComparer.OrdinalIgnoreCase))
             .ToList();
 
-        preferences.RequestedAmenities = preferences.RequestedAmenities
+        preferences.RequestedAmenities = (preferences.RequestedAmenities ?? [])
             .Select(NormalizeAmenityTag)
             .Where(x => x is not null)
             .Select(x => x!)
@@ -231,7 +244,10 @@ public class HotelRecommendationService
         CancellationToken cancellationToken)
     {
         var query = ApplyAdminFilters(_staysDbContext.Stays.AsNoTracking(), preferences)
-            .Where(x => x.Latitude != null && x.Longitude != null);
+            .Where(x =>
+                x.IsActive &&
+                x.Latitude != null &&
+                x.Longitude != null);
 
         var hotels = await query
             .Include(x => x.Amenities)
@@ -286,11 +302,13 @@ public class HotelRecommendationService
         HotelRecommendationPreferences preferences,
         CancellationToken cancellationToken)
     {
-        var localPrices = candidates
-            .Where(x => x.Price is > 0)
-            .Select(x => new PricePoint(x.Id, x.Price!.Value))
-            .OrderBy(x => x.Price)
-            .ToList();
+        var localPrices = await ApplyAdminFilters(
+                _staysDbContext.Stays.AsNoTracking(),
+                preferences)
+            .Where(x => x.IsActive && x.Price != null && x.Price > 0)
+            .Select(x => x.Price!.Value)
+            .OrderBy(x => x)
+            .ToListAsync(cancellationToken);
 
         var distribution = localPrices.Count >= Math.Max(1, _options.MinLocalPriceSampleSize)
             ? localPrices
@@ -312,18 +330,18 @@ public class HotelRecommendationService
         return result;
     }
 
-    private async Task<List<PricePoint>> GetGlobalPriceDistributionAsync(CancellationToken cancellationToken)
+    private async Task<List<decimal>> GetGlobalPriceDistributionAsync(
+        CancellationToken cancellationToken)
     {
         return await _staysDbContext.Stays
             .AsNoTracking()
-            .Where(x => x.Price != null && x.Price > 0)
+            .Where(x => x.IsActive && x.Price != null && x.Price > 0)
             .OrderBy(x => x.Price)
-            .Select(x => new PricePoint(x.Id, x.Price!.Value))
-            .Take(5000)
+            .Select(x => x.Price!.Value)
             .ToListAsync(cancellationToken);
     }
 
-    private async Task<Dictionary<ExperienceCategory, List<ExperienceCandidate>>> GetRelevantExperiencesAsync(
+    private async Task<Dictionary<string, List<ExperienceRecommendationCandidate>>> GetRelevantExperiencesAsync(
         HotelRecommendationPreferences preferences,
         CancellationToken cancellationToken)
     {
@@ -333,89 +351,55 @@ public class HotelRecommendationService
         }
 
         var categories = preferences.ExperienceCategories
-            .Select(x => Enum.Parse<ExperienceCategory>(x.Category))
+            .Select(x => x.Category)
             .ToArray();
 
-        var query = ApplyAdminFilters(_experiencesDbContext.Experiences.AsNoTracking(), preferences)
-            .Where(x => categories.Contains(x.Category))
-            .Where(x => x.Latitude != null && x.Longitude != null);
-
-        var experiences = await query
-            .OrderByDescending(x => x.Rating)
-            .ThenByDescending(x => x.Reviews)
-            .ThenBy(x => x.Name)
-            .Take(Math.Clamp(_options.MaxExperiencesPerCategory * categories.Length, 1, 5000))
-            .Select(x => new ExperienceCandidate
-            {
-                Id = x.Id,
-                Category = x.Category,
-                Name = x.Name,
-                Latitude = x.Latitude!.Value,
-                Longitude = x.Longitude!.Value,
-                Rating = x.Rating,
-                Reviews = x.Reviews
-            })
-            .ToListAsync(cancellationToken);
+        var experiences = await _experienceReadService.GetCandidatesAsync(
+            new ExperienceRecommendationQuery(
+                categories,
+                preferences.Adm0Gid,
+                preferences.Adm1Gid,
+                preferences.Adm2Gid,
+                preferences.Adm3Gid,
+                Math.Clamp(_options.MaxExperiencesPerCategory, 1, 5000)),
+            cancellationToken);
 
         return experiences
             .GroupBy(x => x.Category)
-            .ToDictionary(x => x.Key, x => x.ToList());
+            .ToDictionary(
+                x => x.Key,
+                x => x.ToList(),
+                StringComparer.OrdinalIgnoreCase);
     }
 
     private async Task<Dictionary<int, HotelRecommendationRegionResponse>> GetRegionContextsAsync(
         IReadOnlyList<HotelCandidate> candidates,
         CancellationToken cancellationToken)
     {
-        var adm0Ids = candidates.Select(x => x.Adm0Gid).Where(x => x is not null).Select(x => x!.Value).Distinct().ToArray();
-        var adm1Ids = candidates.Select(x => x.Adm1Gid).Where(x => x is not null).Select(x => x!.Value).Distinct().ToArray();
-        var adm2Ids = candidates.Select(x => x.Adm2Gid).Where(x => x is not null).Select(x => x!.Value).Distinct().ToArray();
-        var adm3Ids = candidates.Select(x => x.Adm3Gid).Where(x => x is not null).Select(x => x!.Value).Distinct().ToArray();
+        var resolved = await _regionReadService.ResolveAsync(
+            candidates
+                .Select(x => new RegionRecommendationReference(
+                    x.Id,
+                    x.Adm0Gid,
+                    x.Adm1Gid,
+                    x.Adm2Gid,
+                    x.Adm3Gid))
+                .ToArray(),
+            cancellationToken);
 
-        var adm0 = await _regionsDbContext.Adm0
-            .AsNoTracking()
-            .Where(x => adm0Ids.Contains(x.Gid))
-            .Select(x => new RegionName(x.Gid, x.NameEn, x.NameAr))
-            .ToDictionaryAsync(x => x.Gid, cancellationToken);
-
-        var adm1 = await _regionsDbContext.Adm1
-            .AsNoTracking()
-            .Where(x => adm1Ids.Contains(x.Gid))
-            .Select(x => new RegionName(x.Gid, x.NameEn, x.NameAr))
-            .ToDictionaryAsync(x => x.Gid, cancellationToken);
-
-        var adm2 = await _regionsDbContext.Adm2
-            .AsNoTracking()
-            .Where(x => adm2Ids.Contains(x.Gid))
-            .Select(x => new RegionName(x.Gid, x.NameEn, x.NameAr))
-            .ToDictionaryAsync(x => x.Gid, cancellationToken);
-
-        var adm3 = await _regionsDbContext.Adm3
-            .AsNoTracking()
-            .Where(x => adm3Ids.Contains(x.Gid))
-            .Select(x => new RegionName(x.Gid, x.NameEn, x.NameAr))
-            .ToDictionaryAsync(x => x.Gid, cancellationToken);
-
-        return candidates.ToDictionary(
-            x => x.Id,
-            x =>
+        return resolved.ToDictionary(
+            x => x.Key,
+            x => new HotelRecommendationRegionResponse
             {
-                var country = x.Adm0Gid is not null && adm0.TryGetValue(x.Adm0Gid.Value, out var c) ? c : null;
-                var governorate = x.Adm1Gid is not null && adm1.TryGetValue(x.Adm1Gid.Value, out var g) ? g : null;
-                var district = x.Adm2Gid is not null && adm2.TryGetValue(x.Adm2Gid.Value, out var d) ? d : null;
-                var neighbourhood = x.Adm3Gid is not null && adm3.TryGetValue(x.Adm3Gid.Value, out var n) ? n : null;
-
-                return new HotelRecommendationRegionResponse
-                {
-                    CountryNameEn = country?.NameEn,
-                    CountryNameAr = country?.NameAr,
-                    GovernorateNameEn = governorate?.NameEn,
-                    GovernorateNameAr = governorate?.NameAr,
-                    DistrictNameEn = district?.NameEn,
-                    DistrictNameAr = district?.NameAr,
-                    NeighbourhoodNameEn = neighbourhood?.NameEn,
-                    NeighbourhoodNameAr = neighbourhood?.NameAr,
-                    DisplayName = BuildRegionDisplayName(neighbourhood, district, governorate, country)
-                };
+                CountryNameEn = x.Value.CountryNameEn,
+                CountryNameAr = x.Value.CountryNameAr,
+                GovernorateNameEn = x.Value.GovernorateNameEn,
+                GovernorateNameAr = x.Value.GovernorateNameAr,
+                DistrictNameEn = x.Value.DistrictNameEn,
+                DistrictNameAr = x.Value.DistrictNameAr,
+                NeighbourhoodNameEn = x.Value.NeighbourhoodNameEn,
+                NeighbourhoodNameAr = x.Value.NeighbourhoodNameAr,
+                DisplayName = x.Value.DisplayName
             });
     }
 
@@ -423,7 +407,7 @@ public class HotelRecommendationService
         HotelCandidate candidate,
         HotelRecommendationPreferences preferences,
         IReadOnlyDictionary<int, int?> budgetLevels,
-        IReadOnlyDictionary<ExperienceCategory, List<ExperienceCandidate>> experiences,
+        IReadOnlyDictionary<string, List<ExperienceRecommendationCandidate>> experiences,
         QualityRange qualityRange,
         IReadOnlyDictionary<int, HotelRecommendationRegionResponse> regionContexts)
     {
@@ -511,7 +495,7 @@ public class HotelRecommendationService
     private InterestProximityResult CalculateInterestProximity(
         HotelCandidate candidate,
         HotelRecommendationPreferences preferences,
-        IReadOnlyDictionary<ExperienceCategory, List<ExperienceCandidate>> experiences)
+        IReadOnlyDictionary<string, List<ExperienceRecommendationCandidate>> experiences)
     {
         if (preferences.ExperienceCategories.Count == 0)
         {
@@ -522,11 +506,29 @@ public class HotelRecommendationService
         var maxDistance = Math.Max(1, _options.MaxUsefulDistanceKm);
         var score = 0.0;
         var nearby = new List<NearbyExperienceSummaryResponse>();
+        var availableCategories = preferences.ExperienceCategories
+            .Where(x =>
+                experiences.TryGetValue(x.Category, out var candidates) &&
+                candidates.Count > 0)
+            .ToArray();
 
-        foreach (var categoryPreference in preferences.ExperienceCategories)
+        if (availableCategories.Length == 0)
         {
-            var category = Enum.Parse<ExperienceCategory>(categoryPreference.Category);
-            if (!experiences.TryGetValue(category, out var categoryExperiences) || categoryExperiences.Count == 0)
+            return new InterestProximityResult(null, []);
+        }
+
+        var availableWeight = availableCategories.Sum(x => x.Weight);
+        if (availableWeight <= 0)
+        {
+            availableWeight = availableCategories.Length;
+        }
+
+        foreach (var categoryPreference in availableCategories)
+        {
+            if (!experiences.TryGetValue(
+                    categoryPreference.Category,
+                    out var categoryExperiences) ||
+                categoryExperiences.Count == 0)
             {
                 continue;
             }
@@ -552,13 +554,16 @@ public class HotelRecommendationService
 
             var averageDistance = nearest.Average(x => x.DistanceKm);
             var categoryScore = Math.Clamp(1 - averageDistance / maxDistance, 0, 1);
-            score += categoryScore * categoryPreference.Weight;
+            var redistributedWeight = availableCategories.Sum(x => x.Weight) > 0
+                ? categoryPreference.Weight / availableWeight
+                : 1.0 / availableCategories.Length;
+            score += categoryScore * redistributedWeight;
 
             nearby.AddRange(nearest.Select(x => new NearbyExperienceSummaryResponse
             {
                 ExperienceId = x.Experience.Id,
                 Name = x.Experience.Name,
-                Category = x.Experience.Category.ToString(),
+                Category = x.Experience.Category,
                 DistanceKm = Round(x.DistanceKm),
                 Rating = x.Experience.Rating,
                 Reviews = x.Experience.Reviews
@@ -568,7 +573,7 @@ public class HotelRecommendationService
         return new InterestProximityResult(score, nearby
             .OrderBy(x => x.DistanceKm)
             .ThenByDescending(x => x.Rating ?? 0)
-            .Take(preferences.ExperienceCategories.Count * nearestPerCategory)
+            .Take(availableCategories.Length * nearestPerCategory)
             .ToList());
     }
 
@@ -680,14 +685,14 @@ public class HotelRecommendationService
         return NormalizePreferences(new HotelRecommendationPreferences
         {
             BudgetLevel = request.BudgetLevel,
-            ExperienceCategories = request.ExperienceCategories
+            ExperienceCategories = (request.ExperienceCategories ?? [])
                 .Select(x => new WeightedExperienceCategoryPreference
                 {
                     Category = x.Category,
                     Weight = x.Weight ?? 0
                 })
                 .ToList(),
-            RequestedAmenities = request.RequestedAmenities,
+            RequestedAmenities = request.RequestedAmenities ?? [],
             Adm0Gid = request.Adm0Gid,
             Adm1Gid = request.Adm1Gid,
             Adm2Gid = request.Adm2Gid,
@@ -708,7 +713,7 @@ public class HotelRecommendationService
         preferences.PreferredLanguage = NormalizeLanguage(preferences.PreferredLanguage) ?? "en";
         preferences.BudgetLabel = preferences.BudgetLevel is null ? null : BudgetLabels[preferences.BudgetLevel.Value];
 
-        var categories = preferences.ExperienceCategories
+        var categories = (preferences.ExperienceCategories ?? [])
             .Where(x => !string.IsNullOrWhiteSpace(x.Category))
             .GroupBy(x => x.Category.Trim(), StringComparer.OrdinalIgnoreCase)
             .Select(x => new WeightedExperienceCategoryPreference
@@ -722,6 +727,12 @@ public class HotelRecommendationService
         {
             var supported = string.Join(", ", SupportedCategories);
             throw new ArgumentException($"Unsupported experience category. Supported categories: {supported}.");
+        }
+
+        if (categories.Count > SupportedCategories.Length)
+        {
+            throw new ArgumentException(
+                $"No more than {SupportedCategories.Length} distinct experience categories may be requested.");
         }
 
         var positiveTotal = categories.Sum(x => x.Weight);
@@ -749,13 +760,19 @@ public class HotelRecommendationService
             .ThenBy(x => x.Category)
             .ToList();
 
-        preferences.RequestedAmenities = preferences.RequestedAmenities
+        preferences.RequestedAmenities = (preferences.RequestedAmenities ?? [])
             .Select(NormalizeAmenityTag)
             .Where(x => x is not null)
             .Select(x => x!)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(x => x)
             .ToList();
+
+        if (preferences.RequestedAmenities.Count > _options.MaxRequestedAmenities)
+        {
+            throw new ArgumentException(
+                $"No more than {_options.MaxRequestedAmenities} distinct amenities may be requested.");
+        }
 
         return preferences;
     }
@@ -791,11 +808,11 @@ public class HotelRecommendationService
             preferences.BudgetLevel = 4;
         }
 
-        AddCategoryIfMentioned(preferences, normalized, ExperienceCategory.Historical, "historical", "history", "اثري", "تاريخي", "الأماكن التاريخية", "اماكن تاريخية");
-        AddCategoryIfMentioned(preferences, normalized, ExperienceCategory.Nature, "nature", "park", "beach", "طبيعة", "حديقة", "بحر");
-        AddCategoryIfMentioned(preferences, normalized, ExperienceCategory.Shopping, "shopping", "mall", "market", "تسوق", "مول", "سوق");
-        AddCategoryIfMentioned(preferences, normalized, ExperienceCategory.Nightlife, "nightlife", "club", "night", "سهر", "ليل", "نايت");
-        AddCategoryIfMentioned(preferences, normalized, ExperienceCategory.Dining, "dining", "restaurant", "food", "مطاعم", "مطعم", "اكل");
+        AddCategoryIfMentioned(preferences, normalized, "Historical", "historical", "history", "اثري", "تاريخي", "الأماكن التاريخية", "اماكن تاريخية");
+        AddCategoryIfMentioned(preferences, normalized, "Nature", "nature", "park", "beach", "طبيعة", "حديقة", "بحر");
+        AddCategoryIfMentioned(preferences, normalized, "Shopping", "shopping", "mall", "market", "تسوق", "مول", "سوق");
+        AddCategoryIfMentioned(preferences, normalized, "Nightlife", "nightlife", "club", "night", "سهر", "ليل", "نايت");
+        AddCategoryIfMentioned(preferences, normalized, "Dining", "dining", "restaurant", "food", "مطاعم", "مطعم", "اكل");
 
         foreach (var amenity in new[] { "wifi", "واي فاي", "gym", "جيم", "pool", "مسبح", "spa", "سبا", "restaurant", "مطعم", "bar", "بار", "parking", "موقف" })
         {
@@ -815,7 +832,7 @@ public class HotelRecommendationService
     private static void AddCategoryIfMentioned(
         HotelRecommendationPreferences preferences,
         string normalizedText,
-        ExperienceCategory category,
+        string category,
         params string[] terms)
     {
         if (!ContainsAny(normalizedText, terms))
@@ -832,33 +849,6 @@ public class HotelRecommendationService
 
     private static IQueryable<Stay> ApplyAdminFilters(
         IQueryable<Stay> query,
-        HotelRecommendationPreferences preferences)
-    {
-        if (preferences.Adm0Gid is not null)
-        {
-            query = query.Where(x => x.Adm0Gid == preferences.Adm0Gid);
-        }
-
-        if (preferences.Adm1Gid is not null)
-        {
-            query = query.Where(x => x.Adm1Gid == preferences.Adm1Gid);
-        }
-
-        if (preferences.Adm2Gid is not null)
-        {
-            query = query.Where(x => x.Adm2Gid == preferences.Adm2Gid);
-        }
-
-        if (preferences.Adm3Gid is not null)
-        {
-            query = query.Where(x => x.Adm3Gid == preferences.Adm3Gid);
-        }
-
-        return query;
-    }
-
-    private static IQueryable<Glinter.Modules.Experiences.Domain.Entities.Experience> ApplyAdminFilters(
-        IQueryable<Glinter.Modules.Experiences.Domain.Entities.Experience> query,
         HotelRecommendationPreferences preferences)
     {
         if (preferences.Adm0Gid is not null)
@@ -923,16 +913,31 @@ public class HotelRecommendationService
         return Math.Clamp(1 - Math.Abs(userBudgetLevel.Value - hotelBudgetLevel.Value) / 4.0, 0, 1);
     }
 
-    private static int CalculateBudgetLevel(decimal price, IReadOnlyList<PricePoint> sortedPrices)
+    private static int CalculateBudgetLevel(
+        decimal price,
+        IReadOnlyList<decimal> sortedPrices)
     {
-        var insertionIndex = 0;
-        while (insertionIndex < sortedPrices.Count && sortedPrices[insertionIndex].Price <= price)
-        {
-            insertionIndex++;
-        }
+        var p20 = PercentileThreshold(sortedPrices, 0.20);
+        var p40 = PercentileThreshold(sortedPrices, 0.40);
+        var p60 = PercentileThreshold(sortedPrices, 0.60);
+        var p80 = PercentileThreshold(sortedPrices, 0.80);
 
-        var percentile = (double)Math.Max(0, insertionIndex - 1) / Math.Max(1, sortedPrices.Count - 1);
-        return Math.Clamp((int)Math.Floor(percentile * 5) + 1, 1, 5);
+        if (price <= p20) return 1;
+        if (price <= p40) return 2;
+        if (price <= p60) return 3;
+        if (price <= p80) return 4;
+        return 5;
+    }
+
+    private static decimal PercentileThreshold(
+        IReadOnlyList<decimal> sortedPrices,
+        double percentile)
+    {
+        if (sortedPrices.Count == 0)
+            throw new ArgumentException("A price distribution is required.");
+
+        var index = (int)Math.Ceiling(sortedPrices.Count * percentile) - 1;
+        return sortedPrices[Math.Clamp(index, 0, sortedPrices.Count - 1)];
     }
 
     private int NormalizeLimit(int? limit)
@@ -944,12 +949,9 @@ public class HotelRecommendationService
 
     private static string NormalizeCategory(string category)
     {
-        if (Enum.TryParse<ExperienceCategory>(category, true, out var parsed))
-        {
-            return parsed.ToString();
-        }
-
-        return string.Empty;
+        return SupportedCategories.FirstOrDefault(
+                   x => x.Equals(category.Trim(), StringComparison.OrdinalIgnoreCase))
+               ?? string.Empty;
     }
 
     private static double NormalizeWeight(double? weight)
@@ -971,19 +973,6 @@ public class HotelRecommendationService
 
         var normalized = language.Trim().ToLowerInvariant();
         return normalized.StartsWith("ar", StringComparison.Ordinal) ? "ar" : "en";
-    }
-
-    private static string? BuildRegionDisplayName(params RegionName?[] regions)
-    {
-        var names = regions
-            .Where(x => x is not null)
-            .Select(x => !string.IsNullOrWhiteSpace(x!.NameEn) ? x.NameEn : x.NameAr)
-            .Where(x => !string.IsNullOrWhiteSpace(x))
-            .Select(x => x!)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        return names.Count == 0 ? null : string.Join(", ", names);
     }
 
     private static string DetectLanguage(string text)
@@ -1061,11 +1050,7 @@ public class HotelRecommendationService
         int TotalCandidates,
         List<HotelRecommendationItemResponse> Items);
 
-    private sealed record PricePoint(int HotelId, decimal Price);
-
     private sealed record QualityRange(double Min, double Max);
-
-    private sealed record RegionName(int Gid, string? NameEn, string? NameAr);
 
     private sealed record InterestProximityResult(
         double? Score,
@@ -1099,14 +1084,4 @@ public class HotelRecommendationService
         public string? NameEn { get; set; }
     }
 
-    private sealed class ExperienceCandidate
-    {
-        public int Id { get; set; }
-        public ExperienceCategory Category { get; set; }
-        public string Name { get; set; } = string.Empty;
-        public double Latitude { get; set; }
-        public double Longitude { get; set; }
-        public decimal? Rating { get; set; }
-        public int? Reviews { get; set; }
-    }
 }

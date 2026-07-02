@@ -15,6 +15,10 @@ import type {
   StayImageUploadDto,
   ImportStaysResult,
   StayReviewsForLlmDto,
+  HotelRecommendationRequest,
+  HotelRecommendationResponse,
+  NaturalLanguageHotelRecommendationRequest,
+  NaturalLanguageHotelRecommendationResponse,
 } from "@/shared/types/api";
 
 export const staysApi = {
@@ -102,4 +106,16 @@ export const staysApi = {
 
   getReviewsForLlm: (stayId: number) =>
     request<StayReviewsForLlmDto>(`/stays/${stayId}/reviews/llm-input`),
+
+  getRecommendations: (data: HotelRecommendationRequest) =>
+    request<HotelRecommendationResponse>("/stays/recommendations", {
+      method: "POST",
+      body: data,
+    }),
+
+  getNaturalLanguageRecommendations: (data: NaturalLanguageHotelRecommendationRequest) =>
+    request<NaturalLanguageHotelRecommendationResponse>(
+      "/stays/recommendations/natural-language",
+      { method: "POST", body: data },
+    ),
 };

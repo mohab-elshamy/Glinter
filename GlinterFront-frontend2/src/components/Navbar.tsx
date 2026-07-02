@@ -7,6 +7,7 @@ import { authApi } from "@/shared/services/api-auth";
 import { getRoleHome } from "@/shared/lib/auth-routing";
 import { notificationsApi } from "@/shared/services/api-communication";
 import { ChatRealtimeClient } from "@/shared/services/chat-realtime";
+import { overlayLayers } from "@/shared/lib/overlay-layers";
 
 const navItems = [
   { path: "/explore", label: "Explore", icon: Compass },
@@ -90,7 +91,7 @@ const Navbar = ({ solid }: { solid?: boolean }) => {
   };
 
   return (
-    <nav className="sticky top-0 z-50 p-4">
+    <nav className={`${overlayLayers.navigation} sticky top-0 p-4`}>
       <div className="container mx-auto max-w-7xl">
         <div className={`rounded-full px-6 py-3 flex items-center justify-between transition-all duration-300 ${scrolled && !solid ? 'liquid-glass' : ''}`}>
           <Link to="/" className="flex items-center gap-2">

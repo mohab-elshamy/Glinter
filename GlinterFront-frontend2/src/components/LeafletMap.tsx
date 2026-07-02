@@ -15,6 +15,7 @@ import "leaflet.markercluster";
 import "leaflet-geosearch/dist/geosearch.css";
 import { GeoSearchControl, OpenStreetMapProvider } from "leaflet-geosearch";
 import { formatUsdPrice } from "@/shared/lib/price";
+import { overlayLayers } from "@/shared/lib/overlay-layers";
 
 // Fix for default marker icons in React/Webpack
 import icon from "leaflet/dist/images/marker-icon.png";
@@ -454,11 +455,10 @@ function MarkerLegend() {
     { color: "#FFD700", label: "Selected" },
   ];
   return (
-    <div style={{
+    <div className={overlayLayers.mapOverlay} style={{
       position: "absolute",
       bottom: 16,
       left: 16,
-      zIndex: 1000,
       background: "rgba(11,12,16,0.85)",
       backdropFilter: "blur(12px)",
       WebkitBackdropFilter: "blur(12px)",
@@ -500,7 +500,10 @@ const LeafletMap: React.FC<LeafletMapProps> = ({
   recenterSequence,
 }) => {
   return (
-    <div style={{ position: "relative", height, width: "100%" }} className="rounded-lg overflow-hidden border border-border/30">
+    <div
+      style={{ height, width: "100%" }}
+      className={`${overlayLayers.map} relative isolate overflow-hidden rounded-lg border border-border/30`}
+    >
       <MapContainer
         center={center}
         zoom={zoom}

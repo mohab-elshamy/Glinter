@@ -2,6 +2,8 @@ import { MapPin, Star, X } from "lucide-react";
 import LeafletMap, { type MapOverlayArea } from "@/components/LeafletMap";
 import { formatUsdPrice } from "@/shared/lib/price";
 import type { Hotel } from "../types";
+import hotelImg from "@/assets/hotel-1.jpg";
+import { overlayLayers } from "@/shared/lib/overlay-layers";
 import {
   getComfortScore,
   getPriceColor,
@@ -119,7 +121,7 @@ const HeatmapPanel = ({
     : null;
 
   return (
-    <div className="relative h-full w-full overflow-hidden rounded-2xl border border-white/10">
+    <div className={`${overlayLayers.map} relative isolate h-full w-full overflow-hidden rounded-2xl border border-white/10`}>
       <LeafletMap
         center={[27, 29.9]}
         zoom={5.49}
@@ -139,7 +141,10 @@ const HeatmapPanel = ({
         showFullscreen
       />
 
-      <div className="pointer-events-none absolute bottom-4 left-4 z-[1000] max-w-[min(19rem,calc(100%-2rem))] rounded-xl border border-white/10 bg-black/85 p-3 text-[11px] shadow-xl backdrop-blur">
+      <div
+        data-testid="map-legend"
+        className={`${overlayLayers.mapOverlay} pointer-events-none absolute left-3 top-3 max-h-[45%] max-w-[min(17rem,calc(100%-1.5rem))] overflow-y-auto rounded-xl border border-white/10 bg-black/85 p-2.5 text-[10px] shadow-xl backdrop-blur sm:bottom-4 sm:left-4 sm:top-auto sm:max-h-none sm:max-w-[min(19rem,calc(100%-2rem))] sm:p-3 sm:text-[11px]`}
+      >
         <p className="mb-2 font-semibold capitalize text-white">{mode} map</p>
         <div className="space-y-1 text-gray-300">
           {legendByMode[mode].map((item) => (
@@ -165,7 +170,10 @@ const HeatmapPanel = ({
       </div>
 
       {selectedHotel && (
-        <article className="absolute bottom-4 right-4 z-[1000] w-[min(22rem,calc(100%-2rem))] overflow-hidden rounded-2xl border border-white/10 bg-[#111218]/95 shadow-2xl backdrop-blur">
+        <article
+          data-testid="selected-stay-preview"
+          className={`${overlayLayers.mapOverlay} absolute bottom-3 left-3 right-3 max-h-[45%] overflow-y-auto rounded-2xl border border-white/10 bg-[#111218]/95 shadow-2xl backdrop-blur sm:bottom-4 sm:left-auto sm:right-4 sm:w-[min(22rem,calc(100%-2rem))]`}
+        >
           <button
             type="button"
             onClick={onClearHotel}
@@ -177,7 +185,15 @@ const HeatmapPanel = ({
           <div className="grid grid-cols-[6.5rem_1fr]">
             <div className="min-h-32 bg-white/5">
               {selectedHotel.image ? (
-                <img src={selectedHotel.image} alt="" className="h-full w-full object-cover" />
+                <img
+                  src={selectedHotel.image}
+                  alt=""
+                  className="h-full w-full object-cover"
+                  onError={(event) => {
+                    event.currentTarget.onerror = null;
+                    event.currentTarget.src = hotelImg;
+                  }}
+                />
               ) : (
                 <div className="flex h-full items-center justify-center"><MapPin className="h-6 w-6 text-gray-500" /></div>
               )}

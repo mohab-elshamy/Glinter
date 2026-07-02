@@ -2,10 +2,12 @@ using System.Text.Json;
 using Glinter.Modules.IdentityAccess.Domain.Constants;
 using Glinter.Modules.Stays.Application.Dtos;
 using Glinter.Modules.Stays.Application.Services;
+using Glinter.Modules.Stays.Infrastructure.DependencyInjection;
 using Glinter.Modules.Stays.Infrastructure.Files;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Glinter.Modules.Stays.Presentation.Controllers;
 
@@ -99,6 +101,8 @@ public class StaysController : ControllerBase
     }
 
     [HttpPost("recommendations")]
+    [EnableRateLimiting(HotelRecommendationRateLimitPolicies.AiRequests)]
+    [RequestSizeLimit(32 * 1024)]
     public async Task<IActionResult> Recommend(
         [FromBody] HotelRecommendationRequest request,
         CancellationToken cancellationToken)
@@ -110,11 +114,13 @@ public class StaysController : ControllerBase
         }
         catch (ArgumentException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return RecommendationValidationProblem(ex.Message);
         }
     }
 
     [HttpPost("recommendations/natural-language")]
+    [EnableRateLimiting(HotelRecommendationRateLimitPolicies.AiRequests)]
+    [RequestSizeLimit(32 * 1024)]
     public async Task<IActionResult> RecommendFromNaturalLanguage(
         [FromBody] NaturalLanguageHotelRecommendationRequest request,
         CancellationToken cancellationToken)
@@ -126,8 +132,22 @@ public class StaysController : ControllerBase
         }
         catch (ArgumentException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return RecommendationValidationProblem(ex.Message);
         }
+    }
+
+    private IActionResult RecommendationValidationProblem(string detail)
+    {
+        var problem = new ProblemDetails
+        {
+            Status = StatusCodes.Status400BadRequest,
+            Title = "Invalid hotel recommendation request.",
+            Detail = detail,
+            Instance = Request.Path
+        };
+        problem.Extensions["errorCode"] = "validation_error";
+        problem.Extensions["traceId"] = HttpContext.TraceIdentifier;
+        return BadRequest(problem);
     }
 
     [Authorize(

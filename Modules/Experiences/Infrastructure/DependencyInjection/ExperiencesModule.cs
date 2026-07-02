@@ -4,6 +4,7 @@ using Glinter.Modules.Experiences.Application.Services;
 using Glinter.Modules.Experiences.Infrastructure.External.Groq;
 using Glinter.Modules.Experiences.Infrastructure.Files;
 using Glinter.Modules.Experiences.Infrastructure.Persistence;
+using Glinter.Modules.Experiences.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -43,6 +44,9 @@ public static class ExperiencesModule
 
         services.AddScoped<ExperienceService>();
         services.AddScoped<ExperienceRecommendationService>();
+        services.AddScoped<
+            IExperienceRecommendationReadService,
+            ExperienceRecommendationReadService>();
         services.AddSingleton<ExperienceImageStorage>();
 
         services.AddHttpClient<IExperienceRecommendationGroqClient, GroqExperienceRecommendationClient>((serviceProvider, client) =>

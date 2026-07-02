@@ -76,10 +76,38 @@ describe("role profile form", () => {
         expect.objectContaining({
           interestIds: ["interest-culture"],
           preferredInterests: "Culture",
+          preferredBudgetLevel: "MidRange",
         }),
       );
     });
     expect(onSaved).toHaveBeenCalledWith(savedProfile);
+  });
+
+  it("renders and saves all five canonical traveler budget levels", async () => {
+    const savedProfile: MyProfileResponse = {
+      profileId: "profile-budget",
+      userId: "user-budget",
+      profileType: "Traveler",
+      displayName: "Test User",
+      preferredBudgetLevel: "Upscale",
+      interests: [],
+      followersCount: 0,
+      followingCount: 0,
+      createdAtUtc: "2026-07-02T00:00:00Z",
+    };
+    vi.mocked(profilesApi.updateTravelerProfile).mockResolvedValue(savedProfile);
+    renderForm("Traveler");
+
+    const select = screen.getByLabelText("Preferred budget");
+    await screen.findByRole("button", { name: "Culture" });
+    expect(Array.from((select as HTMLSelectElement).options).map((option) => option.text))
+      .toEqual(["Budget", "Economy", "Mid-range", "Upscale", "Luxury"]);
+    fireEvent.change(select, { target: { value: "4" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
+
+    await waitFor(() => expect(profilesApi.updateTravelerProfile).toHaveBeenCalledWith(
+      expect.objectContaining({ preferredBudgetLevel: "Upscale" }),
+    ));
   });
 
   it("edits a local buddy with existing backend interests", async () => {

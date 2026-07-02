@@ -45,4 +45,17 @@ public class HotelRecommendationOptions
     public double MaxUsefulDistanceKm { get; set; } = 20;
 
     public int MinLocalPriceSampleSize { get; set; } = 20;
+
+    public int NaturalLanguageMaxCharacters { get; set; } = 1000;
+
+    public int MaxRequestedAmenities { get; set; } = 20;
+
+    public HotelRecommendationRateLimitingOptions RateLimiting { get; set; } = new();
+}
+
+public class HotelRecommendationRateLimitingOptions
+{
+    public int PermitLimit { get; set; } = 10;
+
+    public int WindowSeconds { get; set; } = 60;
 }
