@@ -56,6 +56,69 @@ public class StaysController : ControllerBase
         return Ok(await _stayService.GetMyStaysAsync(cancellationToken));
     }
 
+    [Authorize(
+        AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme,
+        Roles = RoleNames.Traveler)]
+    [HttpGet("favorites")]
+    public async Task<IActionResult> GetFavorites(
+        [FromQuery] StayFavoriteListRequest request,
+        CancellationToken cancellationToken)
+    {
+        return Ok(await _stayService.GetFavoritesAsync(request, cancellationToken));
+    }
+
+    [Authorize(
+        AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme,
+        Roles = RoleNames.Traveler)]
+    [HttpPost("{id:int}/favorite")]
+    public async Task<IActionResult> AddFavorite(
+        int id,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _stayService.AddFavoriteAsync(id, cancellationToken);
+            return Ok(new StayFavoriteStatusResponse
+            {
+                StayId = id,
+                IsFavorite = true
+            });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new ProblemDetails
+            {
+                Status = StatusCodes.Status404NotFound,
+                Title = "Stay not found.",
+                Detail = ex.Message,
+                Instance = Request.Path
+            });
+        }
+    }
+
+    [Authorize(
+        AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme,
+        Roles = RoleNames.Traveler)]
+    [HttpDelete("{id:int}/favorite")]
+    public async Task<IActionResult> RemoveFavorite(
+        int id,
+        CancellationToken cancellationToken)
+    {
+        await _stayService.RemoveFavoriteAsync(id, cancellationToken);
+        return NoContent();
+    }
+
+    [Authorize(
+        AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme,
+        Roles = RoleNames.Traveler)]
+    [HttpGet("{id:int}/favorite-status")]
+    public async Task<IActionResult> GetFavoriteStatus(
+        int id,
+        CancellationToken cancellationToken)
+    {
+        return Ok(await _stayService.GetFavoriteStatusAsync(id, cancellationToken));
+    }
+
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetById(int id, CancellationToken cancellationToken)
     {

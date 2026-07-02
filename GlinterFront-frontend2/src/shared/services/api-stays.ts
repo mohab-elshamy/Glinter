@@ -118,4 +118,30 @@ export const staysApi = {
       "/stays/recommendations/natural-language",
       { method: "POST", body: data },
     ),
+
+  getFavorites: (page = 1, pageSize = 20) =>
+    request<PagedResponse<{
+      id: number;
+      name: string;
+      price?: number;
+      rating?: number;
+      reviews?: number;
+      primaryImage?: string;
+      locationSummaryDescription?: string;
+      favoritedAtUtc: string;
+    }>>(`/stays/favorites?page=${page}&pageSize=${pageSize}`),
+
+  getFavoriteStatus: (stayId: number) =>
+    request<{ stayId: number; isFavorite: boolean }>(
+      `/stays/${stayId}/favorite-status`,
+    ),
+
+  addFavorite: (stayId: number) =>
+    request<{ stayId: number; isFavorite: boolean }>(
+      `/stays/${stayId}/favorite`,
+      { method: "POST" },
+    ),
+
+  removeFavorite: (stayId: number) =>
+    request<void>(`/stays/${stayId}/favorite`, { method: "DELETE" }),
 };

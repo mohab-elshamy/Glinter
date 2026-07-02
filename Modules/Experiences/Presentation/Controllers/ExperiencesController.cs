@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Glinter.Modules.Experiences.Application.Dtos;
+using Glinter.Modules.Experiences.Application.Abstractions;
 using Glinter.Modules.Experiences.Application.Services;
 using Glinter.Modules.Experiences.Domain.Enums;
 using Glinter.Modules.Experiences.Infrastructure.Files;
@@ -7,6 +8,8 @@ using Glinter.Modules.IdentityAccess.Domain.Constants;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using Glinter.Modules.Experiences.Infrastructure.DependencyInjection;
 
 namespace Glinter.Modules.Experiences.Presentation.Controllers;
 
@@ -15,12 +18,12 @@ namespace Glinter.Modules.Experiences.Presentation.Controllers;
 public class ExperiencesController : ControllerBase
 {
     private readonly ExperienceService _experienceService;
-    private readonly ExperienceRecommendationService _recommendationService;
+    private readonly IExperienceRecommendationService _recommendationService;
     private readonly ExperienceImageStorage _imageStorage;
 
     public ExperiencesController(
         ExperienceService experienceService,
-        ExperienceRecommendationService recommendationService,
+        IExperienceRecommendationService recommendationService,
         ExperienceImageStorage imageStorage)
     {
         _experienceService = experienceService;
@@ -53,6 +56,8 @@ public class ExperiencesController : ControllerBase
     }
 
     [HttpPost("recommendations")]
+    [EnableRateLimiting(ExperienceRecommendationRateLimitPolicies.AiRequests)]
+    [RequestSizeLimit(32 * 1024)]
     public async Task<IActionResult> Recommend(
         [FromBody] ExperienceRecommendationRequest request,
         CancellationToken cancellationToken)
@@ -64,11 +69,13 @@ public class ExperiencesController : ControllerBase
         }
         catch (ArgumentException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return RecommendationValidationProblem(ex);
         }
     }
 
     [HttpPost("recommendations/natural-language")]
+    [EnableRateLimiting(ExperienceRecommendationRateLimitPolicies.AiRequests)]
+    [RequestSizeLimit(32 * 1024)]
     public async Task<IActionResult> RecommendFromNaturalLanguage(
         [FromBody] NaturalLanguageExperienceRecommendationRequest request,
         CancellationToken cancellationToken)
@@ -80,8 +87,22 @@ public class ExperiencesController : ControllerBase
         }
         catch (ArgumentException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return RecommendationValidationProblem(ex);
         }
+    }
+
+    private IActionResult RecommendationValidationProblem(ArgumentException exception)
+    {
+        var problem = new ProblemDetails
+        {
+            Status = StatusCodes.Status400BadRequest,
+            Title = "Invalid recommendation request.",
+            Detail = exception.Message,
+            Instance = Request.Path
+        };
+        problem.Extensions["errorCode"] = "invalid_recommendation_request";
+        problem.Extensions["traceId"] = HttpContext.TraceIdentifier;
+        return BadRequest(problem);
     }
 
     [Authorize(

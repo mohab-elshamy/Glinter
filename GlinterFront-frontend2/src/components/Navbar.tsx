@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Compass, Users, MessageSquare, Info, Settings, User, MapPin, Map, LogIn, Menu, X } from "lucide-react";
+import { Compass, Users, MessageSquare, Info, Settings, User, MapPin, Map, LogIn, Menu, X, Bookmark } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { authStorage } from "@/shared/lib/auth";
 import { authApi } from "@/shared/services/api-auth";
@@ -132,6 +132,15 @@ const Navbar = ({ solid }: { solid?: boolean }) => {
                 Admin
               </Link>
             )}
+            {isLoggedIn && authStorage.hasAnyRole(["Traveler"]) && (
+              <Link
+                to="/saved"
+                className="hidden lg:flex items-center gap-2 px-3 py-2 text-sm text-gray-400 hover:text-white transition-colors"
+              >
+                <Bookmark className="w-4 h-4" />
+                Saved
+              </Link>
+            )}
             {isLoggedIn ? (
               <>
                 <Link to={accountHome} className="w-9 h-9 rounded-full bg-brand-purple flex items-center justify-center border-2 border-brand-glassBorder hover:opacity-80 transition-opacity">
@@ -201,6 +210,12 @@ const Navbar = ({ solid }: { solid?: boolean }) => {
                       <Link to="/admin" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-gray-300 hover:bg-white/5 transition-all">
                         <Settings className="w-5 h-5" />
                         Admin
+                      </Link>
+                    )}
+                    {authStorage.hasAnyRole(["Traveler"]) && (
+                      <Link to="/saved" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-gray-300 hover:bg-white/5 transition-all">
+                        <Bookmark className="w-5 h-5" />
+                        Saved trips & hotels
                       </Link>
                     )}
                     <Link to={accountHome} onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-gray-300 hover:bg-white/5 transition-all">

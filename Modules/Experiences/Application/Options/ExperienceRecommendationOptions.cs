@@ -32,6 +32,12 @@ public class ExperienceRecommendationOptions
 
     public int MaxCandidateExperiences { get; set; } = 600;
 
+    public int NaturalLanguageMaxCharacters { get; set; } = 1000;
+
+    public int MaxRequestedCategories { get; set; } = 5;
+
+    public int MaxRequestedAmenities { get; set; } = 20;
+
     public double MaxUsefulDistanceKm { get; set; } = 20;
 
     public int DefaultHistoricalDurationMinutes { get; set; } = 90;
@@ -43,4 +49,13 @@ public class ExperienceRecommendationOptions
     public int DefaultNightlifeDurationMinutes { get; set; } = 120;
 
     public int DefaultDiningDurationMinutes { get; set; } = 75;
+
+    public ExperienceRecommendationRateLimitingOptions RateLimiting { get; set; } = new();
+}
+
+public class ExperienceRecommendationRateLimitingOptions
+{
+    public int PermitLimit { get; set; } = 10;
+
+    public int WindowSeconds { get; set; } = 60;
 }

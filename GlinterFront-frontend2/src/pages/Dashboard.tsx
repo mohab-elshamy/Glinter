@@ -17,6 +17,11 @@ import {
   readStoredBudgetLevel,
   type BudgetLevel,
 } from "@/shared/lib/budget-levels";
+import { useQuery } from "@tanstack/react-query";
+import { staysApi } from "@/shared/services/api-stays";
+import { experiencesApi } from "@/shared/services/api-experiences";
+import { formatExperiencePrice, formatUsdPrice } from "@/shared/lib/price";
+import type { ExperienceCategory } from "@/shared/types/api";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -28,6 +33,40 @@ const Dashboard = () => {
   const [recentNotifications, setRecentNotifications] = useState<NotificationDto[]>([]);
   const [notificationUnread, setNotificationUnread] = useState(0);
   const [notificationsLoading, setNotificationsLoading] = useState(true);
+  const [selectedBudget, setSelectedBudget] = useState<BudgetLevel>(() =>
+    readStoredBudgetLevel(localStorage));
+  const categoryNames = new Set<ExperienceCategory>([
+    "Historical", "Nature", "Shopping", "Nightlife", "Dining",
+  ]);
+  const recommendationCategories = (profile?.interests ?? [])
+    .map((interest) => interest.name as ExperienceCategory)
+    .filter((name) => categoryNames.has(name));
+  const hasRecommendationPreferences =
+    recommendationCategories.length > 0 || Boolean(profile?.preferredBudgetLevel);
+  const stayRecommendations = useQuery({
+    queryKey: ["dashboard-stay-recommendations", profile?.profileId, selectedBudget, recommendationCategories.join(",")],
+    queryFn: () => staysApi.getRecommendations({
+      budgetLevel: selectedBudget,
+      experienceCategories: recommendationCategories.map((category) => ({ category })),
+      requestedAmenities: [],
+      limit: 3,
+      preferredLanguage: "en",
+    }),
+    enabled: hasRecommendationPreferences,
+    staleTime: 10 * 60 * 1000,
+    retry: false,
+  });
+  const experienceRecommendations = useQuery({
+    queryKey: ["dashboard-experience-recommendations", profile?.profileId, recommendationCategories.join(",")],
+    queryFn: () => experiencesApi.getRecommendations({
+      categories: recommendationCategories.map((category) => ({ category })),
+      limit: 3,
+      preferredLanguage: "en",
+    }),
+    enabled: hasRecommendationPreferences,
+    staleTime: 10 * 60 * 1000,
+    retry: false,
+  });
 
   // Load saved preferences from localStorage
   const [selectedVibes, setSelectedVibes] = useState<string[]>(() => {
@@ -43,9 +82,6 @@ const Dashboard = () => {
     return localStorage.getItem("safetyPriority") || "Very High";
   });
   
-  const [selectedBudget, setSelectedBudget] = useState<BudgetLevel>(() =>
-    readStoredBudgetLevel(localStorage));
-
   useEffect(() => {
     const profileBudget = parseBudgetLevel(profile?.preferredBudgetLevel);
     if (profileBudget) setSelectedBudget(profileBudget);
@@ -403,16 +439,43 @@ const Dashboard = () => {
                 View All
               </span>
             </div>
-            <div className="card-glass mb-6 p-8 text-center">
-              <Sparkles className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
-              <h3 className="text-sm font-semibold">No personalized recommendations yet</h3>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Personalized dashboard recommendations are not configured yet.
-              </p>
-              <Link to="/explore" className="mt-4 inline-block text-xs font-medium text-accent">
-                Explore available content →
-              </Link>
-            </div>
+            {!hasRecommendationPreferences ? (
+              <div className="card-glass mb-6 p-8 text-center">
+                <Sparkles className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
+                <h3 className="text-sm font-semibold">Tell us what fits your trip</h3>
+                <p className="mt-1 text-xs text-muted-foreground">Add interests or a budget to receive useful matches.</p>
+                <Link to="/profile/me" className="mt-4 inline-block text-xs font-medium text-accent">Complete preferences →</Link>
+              </div>
+            ) : (
+              <div className="mb-6 grid gap-4 sm:grid-cols-2">
+                <RecommendationColumn
+                  title="Stays"
+                  loading={stayRecommendations.isLoading}
+                  error={stayRecommendations.isError}
+                  items={(stayRecommendations.data?.items ?? []).map((item) => ({
+                    id: item.hotelId,
+                    name: item.name,
+                    score: item.finalScore,
+                    meta: `${formatUsdPrice(item.price)} · ★ ${item.rating ?? "—"}`,
+                    explanation: item.explanation.shortExplanation,
+                    link: "/where-to-stay",
+                  }))}
+                />
+                <RecommendationColumn
+                  title="Experiences"
+                  loading={experienceRecommendations.isLoading}
+                  error={experienceRecommendations.isError}
+                  items={(experienceRecommendations.data?.items ?? []).map((item) => ({
+                    id: item.experienceId,
+                    name: item.name,
+                    score: item.finalScore,
+                    meta: `${formatExperiencePrice(item.startingPricePerPerson, item.priceRange)} · ★ ${item.rating ?? "—"}`,
+                    explanation: item.explanation.shortExplanation,
+                    link: "/where-to-go",
+                  }))}
+                />
+              </div>
+            )}
 
             {/* Upcoming Trip */}
             <div className="card-glass p-6 bg-gradient-to-r from-gold/5 to-accent/5">
@@ -515,5 +578,46 @@ const Dashboard = () => {
     </div>
   );
 };
+
+interface RecommendationCardItem {
+  id: number;
+  name: string;
+  score: number;
+  meta: string;
+  explanation: string;
+  link: string;
+}
+
+const RecommendationColumn = ({
+  title,
+  loading,
+  error,
+  items,
+}: {
+  title: string;
+  loading: boolean;
+  error: boolean;
+  items: RecommendationCardItem[];
+}) => (
+  <section className="card-glass p-4">
+    <h3 className="font-semibold">{title}</h3>
+    {loading && <p role="status" className="mt-3 text-xs text-muted-foreground">Finding matches…</p>}
+    {error && <p className="mt-3 text-xs text-destructive">Recommendations are temporarily unavailable.</p>}
+    {!loading && !error && items.length === 0 && <p className="mt-3 text-xs text-muted-foreground">No eligible matches found.</p>}
+    <div className="mt-3 space-y-3">
+      {items.map((item) => (
+        <article key={item.id} className="rounded-xl border border-border bg-background/50 p-3">
+          <div className="flex items-start justify-between gap-2">
+            <h4 className="text-sm font-semibold">{item.name}</h4>
+            <span className="rounded-full bg-primary/10 px-2 py-1 text-[10px] font-bold text-primary">{item.score.toFixed(0)}</span>
+          </div>
+          <p className="mt-1 text-[10px] text-muted-foreground">{item.meta}</p>
+          <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">{item.explanation}</p>
+          <Link to={item.link} className="mt-2 inline-block text-[11px] font-semibold text-accent">View details →</Link>
+        </article>
+      ))}
+    </div>
+  </section>
+);
 
 export default Dashboard;

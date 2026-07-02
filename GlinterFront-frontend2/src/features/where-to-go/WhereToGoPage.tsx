@@ -27,6 +27,9 @@ import RegionCascadeSelect from "@/components/RegionCascadeSelect";
 import cairoImage from "@/assets/cairo.jpg";
 import { formatExperiencePrice, formatUsdPrice } from "@/shared/lib/price";
 import { experiencesApi } from "@/shared/services/api-experiences";
+import { itinerariesApi } from "@/shared/services/api-itineraries";
+import { authStorage } from "@/shared/lib/auth";
+import type { WeatherForecast } from "@/shared/types/itineraries";
 import type {
   ExperienceCategory,
   ExperienceSummaryDto,
@@ -49,6 +52,14 @@ import {
   type ActivityLevel,
   type ItineraryItem,
 } from "./planner";
+import ExperienceRecommendationAssistant from "./ExperienceRecommendationAssistant";
+import ExperienceDetailsModal from "@/features/local-buddies/ExperienceDetailsModal";
+import type {
+  ExperienceAvailabilityDto,
+  ExperienceResponseDto,
+  ExperienceReviewDto,
+  ExperienceVisitInsightDto,
+} from "@/shared/types/api";
 
 const categories: Array<{ value: ExperienceCategory; label: string }> = [
   { value: "Historical", label: "History & culture" },
@@ -112,6 +123,17 @@ const WhereToGo = () => {
   const [addSelections, setAddSelections] = useState<Record<string, string>>({});
   const [prioritizeNearest, setPrioritizeNearest] = useState(false);
   const [recenterBump, setRecenterBump] = useState(0);
+  const [plannerMode, setPlannerMode] = useState<"guided" | "natural">("guided");
+  const [naturalRequest, setNaturalRequest] = useState("");
+  const [planSource, setPlanSource] = useState<"ai" | "local">();
+  const [savedItineraryId, setSavedItineraryId] = useState<string>();
+  const [weather, setWeather] = useState<WeatherForecast>();
+  const [details, setDetails] = useState<{
+    experience: ExperienceResponseDto;
+    availability: ExperienceAvailabilityDto[];
+    reviews: ExperienceReviewDto[];
+    insight?: ExperienceVisitInsightDto;
+  }>();
   const currentLocation = useCurrentLocation();
   const currentPosition = currentLocation.state.status === "ready"
     ? currentLocation.state.position
@@ -205,6 +227,7 @@ const WhereToGo = () => {
     }
 
     setLoadState({ status: "loading" });
+    setSavedItineraryId(undefined);
     try {
       const filters = {
         adm0Gid: region.adm0Gid,
@@ -226,31 +249,163 @@ const WhereToGo = () => {
         if (experience.isActive) uniqueExperiences.set(experience.id, experience);
       });
       const approved = [...uniqueExperiences.values()];
-      const next = buildFrontendItinerary(approved, {
-        startDate,
-        endDate,
-        budget: budgetValue,
-        interests,
-        activityLevel,
-        prioritizeNearest,
-        currentPosition,
-      });
+      const point = currentPosition ?? {
+        latitude: 30.0444,
+        longitude: 31.2357,
+        accuracy: 0,
+      };
+      const plannerDays = tripDates.slice(0, 10);
+      const plans = await Promise.all(plannerDays.map((date) => {
+        const common = {
+          start: {
+            latitude: point.latitude,
+            longitude: point.longitude,
+            label: currentPosition ? "Current location" : "Cairo center",
+          },
+          date,
+          dayStartLocal: "09:00:00",
+          dayEndLocal: "21:00:00",
+          travelMode: "PublicTransit" as const,
+          fallbackTravelMode: "Walking" as const,
+          pace: activityLevel,
+          adm0Gid: region.adm0Gid,
+          adm1Gid: region.adm1Gid,
+          adm2Gid: region.adm2Gid,
+          adm3Gid: region.adm3Gid,
+          maxStops: activityLevel === "Relaxed" ? 2 : activityLevel === "Packed" ? 4 : 3,
+          candidateLimit: 30,
+          guestsCount: 1,
+          includeMealBreaks: interests.includes("Dining"),
+          returnToStart: true,
+          avoidLongWalking: activityLevel === "Relaxed",
+          preferredLanguage: "en" as const,
+        };
+        return plannerMode === "natural"
+          ? itinerariesApi.planNaturalLanguage({ ...common, text: naturalRequest.trim() })
+              .then((response) => response.itinerary)
+          : itinerariesApi.plan({
+              ...common,
+              categories: interests.map((category) => ({ category })),
+            });
+      }));
+
+      const ids = [...new Set(plans.flatMap((plan) =>
+        plan.stops.flatMap((stop) => stop.experienceId ?? [])))];
+      const fullExperiences = await Promise.all(ids.map((id) =>
+        experiencesApi.getExperienceById(id)));
+      const byId = new Map(fullExperiences.map((experience) => [experience.id, experience]));
+      const next: ItineraryItem[] = plans.flatMap((plan) =>
+        plan.stops.flatMap((stop) => {
+          if (!stop.experienceId) return [];
+          const experience = byId.get(stop.experienceId);
+          return experience
+            ? [{
+                experience,
+                date: plan.date,
+                time: stop.arrivalLocal.slice(0, 5),
+              }]
+            : [];
+        }));
       setExperiencePool(approved);
       setItinerary(next);
+      setPlanSource("ai");
       setSelectedExperienceId(next[0]?.experience.id);
       setLoadState({ status: "ready" });
+
+      itinerariesApi.weather({
+        latitude: point.latitude,
+        longitude: point.longitude,
+        location: currentRegionLabel || "Trip area",
+        startDate,
+        endDate,
+      }).then(setWeather).catch(() => setWeather(undefined));
 
       if (next.length === 0) {
         toast.error("No matching backend experiences were found. Try broader interests, region or budget.");
       } else if (tripDates.length === 14 && startDate !== endDate) {
         toast.info("Plans are limited to the first 14 days.");
       } else {
-        toast.success(`Built a ${next.length}-activity draft from live experience data.`);
+        toast.success(`Built a ${next.length}-activity itinerary with the backend planner.`);
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Could not load experiences.";
-      setLoadState({ status: "error", message });
-      toast.error(message);
+      try {
+        const fallbackResult = await experiencesApi.getExperiences({
+          adm0Gid: region.adm0Gid,
+          adm1Gid: region.adm1Gid,
+          adm2Gid: region.adm2Gid,
+          adm3Gid: region.adm3Gid,
+          page: 1,
+          pageSize: 100,
+        });
+        const fallback = buildFrontendItinerary(fallbackResult.items, {
+          startDate,
+          endDate,
+          budget: budgetValue,
+          interests,
+          activityLevel,
+          prioritizeNearest,
+          currentPosition,
+        });
+        setExperiencePool(fallbackResult.items);
+        setItinerary(fallback);
+        setPlanSource("local");
+        setLoadState({ status: "ready" });
+        toast.warning("The backend planner was unavailable. A local fallback draft is shown.");
+      } catch {
+        const message = error instanceof Error ? error.message : "Could not build the itinerary.";
+        setLoadState({ status: "error", message });
+        toast.error(message);
+      }
+    }
+  };
+
+  const saveItinerary = async () => {
+    if (!authStorage.isAuthenticated()) {
+      toast.error("Sign in as a traveler to save this itinerary.");
+      return;
+    }
+    try {
+      const saved = await itinerariesApi.save({
+        title: `${currentRegionLabel || "Egypt"} itinerary`,
+        destination: currentRegionLabel || "Egypt",
+        ...region,
+        startDate,
+        endDate,
+        preferredLanguage: "en",
+        estimatedTotalCost: knownCost || undefined,
+        currency: "USD",
+        items: itinerary.map((item) => ({
+          dayNumber: Math.max(1, tripDates.indexOf(item.date) + 1),
+          sortOrder: itinerary
+            .filter((entry) => entry.date === item.date)
+            .findIndex((entry) => entry.experience.id === item.experience.id) + 1,
+          entityType: "Experience",
+          entityId: item.experience.id,
+          name: item.experience.name,
+          latitude: item.experience.latitude ?? 0,
+          longitude: item.experience.longitude ?? 0,
+          startTime: `${item.time}:00`,
+          estimatedCost: item.experience.startingPricePerPerson,
+        })),
+      });
+      setSavedItineraryId(saved.id);
+      toast.success("Itinerary saved to My Trips.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save the itinerary.");
+    }
+  };
+
+  const openExperienceDetails = async (id: number) => {
+    try {
+      const [experience, availability, reviews, insight] = await Promise.all([
+        experiencesApi.getExperienceById(id),
+        experiencesApi.getAvailability(id),
+        experiencesApi.getReviews(id, 1, 5),
+        experiencesApi.getVisitInsights(id).catch(() => undefined),
+      ]);
+      setDetails({ experience, availability, reviews, insight });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not load experience details.");
     }
   };
 
@@ -295,7 +450,7 @@ const WhereToGo = () => {
           <div className="absolute -right-16 -top-20 h-64 w-64 rounded-full bg-primary/20 blur-3xl" />
           <div className="relative max-w-3xl">
             <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary">
-              <Compass className="h-4 w-4" /> Frontend trip planner
+              <Compass className="h-4 w-4" /> Backend itinerary planner
             </div>
             <h1 className="text-3xl font-extrabold leading-tight sm:text-5xl">
               Shape your Egypt trip, <span className="text-gradient-orange">one day at a time</span>
@@ -304,7 +459,7 @@ const WhereToGo = () => {
               Choose your destination and travel style, then arrange real Glinter experiences into a practical itinerary.
             </p>
             <p className="mt-3 text-xs text-muted-foreground">
-              This draft is assembled in your browser from existing experience and region data. It is not AI-generated and is not saved to your account yet.
+              The backend planner ranks real approved experiences and builds the route. If it is unavailable, the page labels its local fallback clearly.
             </p>
           </div>
         </section>
@@ -315,6 +470,38 @@ const WhereToGo = () => {
               <Wand2 className="h-5 w-5 text-accent" />
               <h2 className="text-lg font-bold">Plan preferences</h2>
             </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-2 rounded-xl bg-secondary p-1">
+              {(["guided", "natural"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  aria-pressed={plannerMode === mode}
+                  onClick={() => setPlannerMode(mode)}
+                  className={`rounded-lg px-3 py-2 text-xs font-semibold ${
+                    plannerMode === mode ? "bg-primary text-primary-foreground" : "text-muted-foreground"
+                  }`}
+                >
+                  {mode === "guided" ? "Guided plan" : "Describe your trip"}
+                </button>
+              ))}
+            </div>
+
+            {plannerMode === "natural" && (
+              <label className="mt-4 block text-xs font-medium">
+                What should your trip feel like?
+                <textarea
+                  value={naturalRequest}
+                  maxLength={1500}
+                  onChange={(event) => setNaturalRequest(event.target.value)}
+                  placeholder="I will be in Cairo and prefer history, local food, a relaxed pace, and little walking."
+                  className="mt-1 min-h-28 w-full resize-y rounded-xl border border-border bg-secondary p-3 text-sm"
+                />
+                <span className="mt-1 block text-right text-[10px] text-muted-foreground">
+                  {naturalRequest.length}/1500
+                </span>
+              </label>
+            )}
 
             <div className="mt-5">
               <RegionCascadeSelect
@@ -474,8 +661,8 @@ const WhereToGo = () => {
               className="btn-accent mt-6 flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold disabled:opacity-50"
             >
               {loadState.status === "loading"
-                ? <><LoaderCircle className="h-4 w-4 animate-spin" /> Loading experiences…</>
-                : <><Sparkles className="h-4 w-4" /> Build my draft</>}
+                ? <><LoaderCircle className="h-4 w-4 animate-spin" /> Planning your route…</>
+                : <><Sparkles className="h-4 w-4" /> Build my itinerary</>}
             </button>
             {loadState.status === "error" && (
               <p role="alert" className="mt-3 text-xs text-destructive">{loadState.message}</p>
@@ -502,6 +689,46 @@ const WhereToGo = () => {
               </section>
             ) : (
               <>
+                <div className={`rounded-xl border px-4 py-3 text-xs ${
+                  planSource === "ai"
+                    ? "border-primary/25 bg-primary/10 text-primary"
+                    : "border-amber-500/25 bg-amber-500/10 text-amber-300"
+                }`}>
+                  {planSource === "ai"
+                    ? "Built by the backend itinerary planner from eligible Glinter experiences."
+                    : "Local fallback draft — backend AI/routing was unavailable."}
+                </div>
+
+                {weather && (
+                  <section className="rounded-2xl border border-border bg-card p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <h2 className="font-bold">Trip weather</h2>
+                      {weather.providerDataTimestampUtc && (
+                        <span className="text-[10px] text-muted-foreground">
+                          Updated {new Date(weather.providerDataTimestampUtc).toLocaleTimeString()}
+                        </span>
+                      )}
+                    </div>
+                    {weather.isAvailable ? (
+                      <div className="mt-3 flex snap-x gap-3 overflow-x-auto pb-2">
+                        {weather.days.map((day) => (
+                          <article key={day.date} className="min-w-44 snap-start rounded-xl bg-secondary p-3 text-xs">
+                            <p className="font-semibold">{formatDay(day.date)}</p>
+                            <p className="mt-2 text-lg font-bold">
+                              {day.temperatureMinC?.toFixed(0)}°–{day.temperatureMaxC?.toFixed(0)}°C
+                            </p>
+                            <p className="text-muted-foreground">{day.condition}</p>
+                            <p className="mt-2">{day.precipitationProbabilityPercent ?? "—"}% rain · {day.windSpeedKph?.toFixed(0) ?? "—"} km/h wind</p>
+                            <p className="mt-2 text-muted-foreground">{day.advice}</p>
+                          </article>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="mt-2 text-sm text-muted-foreground">{weather.unavailableReason}</p>
+                    )}
+                  </section>
+                )}
+
                 <section className="grid gap-3 sm:grid-cols-4">
                   <SummaryCard label="Trip length" value={`${tripDates.length} days`} icon={CalendarDays} />
                   <SummaryCard label="Activities" value={String(itinerary.length)} icon={Route} />
@@ -587,13 +814,23 @@ const WhereToGo = () => {
                         Reorder, replace, remove or add activities before you travel.
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => void buildPlan()}
-                      className="flex items-center gap-2 self-start rounded-lg border border-border px-3 py-2 text-xs hover:bg-secondary"
-                    >
-                      <RefreshCw className="h-3.5 w-3.5" /> Rebuild from preferences
-                    </button>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void saveItinerary()}
+                        disabled={Boolean(savedItineraryId)}
+                        className="btn-accent rounded-lg px-3 py-2 text-xs disabled:opacity-60"
+                      >
+                        {savedItineraryId ? "Saved to My Trips" : "Save itinerary"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void buildPlan()}
+                        className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs hover:bg-secondary"
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" /> Regenerate
+                      </button>
+                    </div>
                   </div>
 
                   <div className="space-y-5">
@@ -668,6 +905,20 @@ const WhereToGo = () => {
           </div>
         </div>
       </main>
+      <ExperienceRecommendationAssistant
+        region={region}
+        onViewDetails={openExperienceDetails}
+      />
+      {details && (
+        <ExperienceDetailsModal
+          experience={details.experience}
+          availability={details.availability}
+          initialReviews={details.reviews}
+          initialInsight={details.insight}
+          fallbackImage={cairoImage}
+          onClose={() => setDetails(undefined)}
+        />
+      )}
       <Footer />
     </div>
   );

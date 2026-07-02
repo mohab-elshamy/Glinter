@@ -187,6 +187,7 @@ public class GroqExperienceRecommendationClient(
                 {
                   "categories":[{"category":"Historical","weight":1}],
                   "crowdPreference":"Quiet",
+                  "regionName":"Cairo",
                   "visitAtLocal": null,
                   "forItinerary": true,
                   "preferredLanguage":"ar",
@@ -195,6 +196,7 @@ public class GroqExperienceRecommendationClient(
                 }
                 Supported categories: Historical, Nature, Shopping, Nightlife, Dining.
                 crowdPreference can be Quiet, Balanced, Lively, or null.
+                regionName is a human-readable place name from the user, never an administrative ID.
                 Use only categories implied by the user. Use equal weights if no priority is implied.
                 Return Arabic preferredLanguage for Arabic text, otherwise English.
                 """
@@ -274,6 +276,7 @@ public class GroqExperienceRecommendationClient(
             Notes = ReadString(root, "notes"),
             ForItinerary = ReadNullableBool(root, "forItinerary") ?? false,
             VisitAtLocal = ReadNullableDateTime(root, "visitAtLocal")
+            ,RegionName = ReadString(root, "regionName")
         };
 
         if (Enum.TryParse<ExperienceCrowdPreference>(ReadString(root, "crowdPreference"), true, out var crowd))

@@ -73,7 +73,7 @@ const string CorsPolicyName = "GlinterFrontend";
 
 var maxRequestBodyBytes =
     builder.Configuration.GetValue<long?>("RequestLimits:MaxBodyBytes")
-    ?? 50L * 1024 * 1024;
+    ?? 4L * 1024 * 1024;
 
 if (maxRequestBodyBytes <= 0)
 {
@@ -481,16 +481,22 @@ app.UseStatusCodePages(
             Status = response.StatusCode,
 
             Title =
-                response.StatusCode ==
-                StatusCodes.Status404NotFound
-                    ? "Resource not found"
-                    : "Request failed",
+                response.StatusCode switch
+                {
+                    StatusCodes.Status404NotFound => "Resource not found",
+                    StatusCodes.Status413PayloadTooLarge => "Request body too large",
+                    _ => "Request failed"
+                },
 
             Detail =
-                response.StatusCode ==
-                StatusCodes.Status404NotFound
-                    ? "The requested resource was not found."
-                    : "The request could not be completed.",
+                response.StatusCode switch
+                {
+                    StatusCodes.Status404NotFound =>
+                        "The requested resource was not found.",
+                    StatusCodes.Status413PayloadTooLarge =>
+                        "The request body exceeds the limit for this endpoint.",
+                    _ => "The request could not be completed."
+                },
 
             Instance =
                 statusCodeContext
@@ -503,6 +509,9 @@ app.UseStatusCodePages(
             response.StatusCode ==
             StatusCodes.Status404NotFound
                 ? "not_found"
+                : response.StatusCode ==
+                  StatusCodes.Status413PayloadTooLarge
+                    ? "request_body_too_large"
                 : "request_failed";
 
         problemDetails.Extensions["traceId"] =

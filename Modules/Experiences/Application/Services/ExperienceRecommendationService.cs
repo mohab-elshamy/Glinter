@@ -6,29 +6,29 @@ using Glinter.Modules.Experiences.Application.Options;
 using Glinter.Modules.Experiences.Domain.Entities;
 using Glinter.Modules.Experiences.Domain.Enums;
 using Glinter.Modules.Experiences.Infrastructure.Persistence;
-using Glinter.Modules.Regions.Infrastructure.Persistence;
+using Glinter.Modules.Regions.Application.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 namespace Glinter.Modules.Experiences.Application.Services;
 
-public class ExperienceRecommendationService
+public class ExperienceRecommendationService : IExperienceRecommendationService
 {
     private readonly ExperiencesDbContext _experiencesDbContext;
-    private readonly RegionsDbContext _regionsDbContext;
+    private readonly IRegionRecommendationReadService _regionReadService;
     private readonly IExperienceRecommendationGroqClient _groqClient;
     private readonly ExperienceRecommendationOptions _options;
     private readonly ILogger<ExperienceRecommendationService> _logger;
 
     public ExperienceRecommendationService(
         ExperiencesDbContext experiencesDbContext,
-        RegionsDbContext regionsDbContext,
+        IRegionRecommendationReadService regionReadService,
         IExperienceRecommendationGroqClient groqClient,
         IOptions<ExperienceRecommendationOptions> options,
         ILogger<ExperienceRecommendationService> logger)
     {
         _experiencesDbContext = experiencesDbContext;
-        _regionsDbContext = regionsDbContext;
+        _regionReadService = regionReadService;
         _groqClient = groqClient;
         _options = options.Value;
         _logger = logger;
@@ -45,6 +45,7 @@ public class ExperienceRecommendationService
         {
             Preferences = preferences,
             TotalCandidates = result.TotalCandidates,
+            EvaluatedCandidates = result.EvaluatedCandidates,
             ReturnedCount = result.Items.Count,
             Items = result.Items
         };
@@ -57,6 +58,11 @@ public class ExperienceRecommendationService
         if (string.IsNullOrWhiteSpace(request.Text))
         {
             throw new ArgumentException("Natural-language recommendation text is required.");
+        }
+        if (request.Text.Length > _options.NaturalLanguageMaxCharacters)
+        {
+            throw new ArgumentException(
+                $"Natural-language recommendation text cannot exceed {_options.NaturalLanguageMaxCharacters} characters.");
         }
 
         var language = NormalizeLanguage(request.PreferredLanguage) ?? DetectLanguage(request.Text);
@@ -75,6 +81,28 @@ public class ExperienceRecommendationService
         classified.Limit = NormalizeLimit(request.Limit ?? classified.Limit, classified.ForItinerary);
         classified.PreferredLanguage = language;
 
+        if (request.Adm0Gid is null && request.Adm1Gid is null &&
+            request.Adm2Gid is null && request.Adm3Gid is null &&
+            !string.IsNullOrWhiteSpace(classified.RegionName))
+        {
+            var resolution = await _regionReadService.ResolveNameAsync(
+                classified.RegionName,
+                cancellationToken);
+            if (resolution.IsResolved)
+            {
+                classified.Adm0Gid = resolution.Adm0Gid;
+                classified.Adm1Gid = resolution.Adm1Gid;
+                classified.Adm2Gid = resolution.Adm2Gid;
+                classified.Adm3Gid = resolution.Adm3Gid;
+            }
+            else if (resolution.IsAmbiguous)
+            {
+                classified.Notes = FirstConfigured(
+                    classified.Notes,
+                    $"Region “{classified.RegionName}” was ambiguous and was not applied.");
+            }
+        }
+
         var preferences = NormalizePreferences(RepairClassifiedPreferences(classified));
         var result = await RecommendCoreAsync(preferences, cancellationToken);
 
@@ -84,6 +112,7 @@ public class ExperienceRecommendationService
             ClassificationNotes = classified.Notes,
             Preferences = preferences,
             TotalCandidates = result.TotalCandidates,
+            EvaluatedCandidates = result.EvaluatedCandidates,
             ReturnedCount = result.Items.Count,
             Items = result.Items
         };
@@ -95,13 +124,14 @@ public class ExperienceRecommendationService
     {
         if (preferences.BookableOnly)
         {
-            return new RecommendationComputation(0, []);
+            return new RecommendationComputation(0, 0, []);
         }
 
-        var candidates = await GetCandidatesAsync(preferences, cancellationToken);
+        var candidateResult = await GetCandidatesAsync(preferences, cancellationToken);
+        var candidates = candidateResult.Items;
         if (candidates.Count == 0)
         {
-            return new RecommendationComputation(0, []);
+            return new RecommendationComputation(candidateResult.TotalCandidates, 0, []);
         }
 
         var qualityRange = CalculateQualityRange(candidates);
@@ -139,10 +169,13 @@ public class ExperienceRecommendationService
             }
         }
 
-        return new RecommendationComputation(candidates.Count, limited);
+        return new RecommendationComputation(
+            candidateResult.TotalCandidates,
+            candidates.Count,
+            limited);
     }
 
-    private async Task<List<ExperienceCandidate>> GetCandidatesAsync(
+    private async Task<CandidateSelection> GetCandidatesAsync(
         ExperienceRecommendationPreferences preferences,
         CancellationToken cancellationToken)
     {
@@ -177,7 +210,56 @@ public class ExperienceRecommendationService
             query = query.Where(x => x.Adm3Gid == preferences.Adm3Gid);
         }
 
-        return await query
+        var totalCandidates = await query.CountAsync(cancellationToken);
+        var cap = Math.Clamp(_options.MaxCandidateExperiences, 1, 5000);
+        var groupSize = Math.Max(1, cap / 3);
+        var qualityIds = await query
+            .OrderByDescending(x => x.Rating)
+            .ThenByDescending(x => x.Reviews)
+            .ThenBy(x => x.Name)
+            .Select(x => x.Id)
+            .Take(groupSize)
+            .ToListAsync(cancellationToken);
+        var pricedIds = await query
+            .Where(x => x.AvailabilitySlots.Any(slot =>
+                slot.IsActive && slot.EndTimeUtc > DateTime.UtcNow))
+            .OrderBy(x => x.AvailabilitySlots
+                .Where(slot => slot.IsActive && slot.EndTimeUtc > DateTime.UtcNow)
+                .Min(slot => slot.PricePerPerson))
+            .ThenByDescending(x => x.Rating)
+            .Select(x => x.Id)
+            .Take(groupSize)
+            .ToListAsync(cancellationToken);
+        var distanceIds = new List<int>();
+        if (preferences.Latitude is not null && preferences.Longitude is not null)
+        {
+            var latitude = preferences.Latitude.Value;
+            var longitude = preferences.Longitude.Value;
+            distanceIds = await query
+                .OrderBy(x =>
+                    (x.Latitude!.Value - latitude) * (x.Latitude.Value - latitude) +
+                    (x.Longitude!.Value - longitude) * (x.Longitude.Value - longitude))
+                .ThenByDescending(x => x.Rating)
+                .Select(x => x.Id)
+                .Take(groupSize)
+                .ToListAsync(cancellationToken);
+        }
+
+        var selectedIds = qualityIds
+            .Concat(pricedIds)
+            .Concat(distanceIds)
+            .Concat(await query
+                .OrderByDescending(x => x.Rating)
+                .ThenByDescending(x => x.Reviews)
+                .ThenBy(x => x.Name)
+                .Select(x => x.Id)
+                .Take(cap)
+                .ToListAsync(cancellationToken))
+            .Distinct()
+            .Take(cap)
+            .ToArray();
+        var items = await query
+            .Where(x => selectedIds.Contains(x.Id))
             .Include(x => x.FeaturedImages)
             .Include(x => x.Hours)
             .Include(x => x.PopularTimes)
@@ -185,7 +267,6 @@ public class ExperienceRecommendationService
             .OrderByDescending(x => x.Rating)
             .ThenByDescending(x => x.Reviews)
             .ThenBy(x => x.Name)
-            .Take(Math.Clamp(_options.MaxCandidateExperiences, 1, 5000))
             .AsSplitQuery()
             .Select(x => new ExperienceCandidate
             {
@@ -229,8 +310,14 @@ public class ExperienceRecommendationService
                     .Select(a => a!)
                     .ToList(),
                 HasReviews = x.ExperienceReviews.Any()
+                ,StartingPricePerPerson = x.AvailabilitySlots
+                    .Where(slot => slot.IsActive && slot.EndTimeUtc > DateTime.UtcNow)
+                    .Select(slot => (decimal?)slot.PricePerPerson)
+                    .Min()
             })
             .ToListAsync(cancellationToken);
+
+        return new CandidateSelection(totalCandidates, items);
     }
 
     private ExperienceRecommendationItemResponse ScoreCandidate(
@@ -286,7 +373,7 @@ public class ExperienceRecommendationService
             Rating = candidate.Rating,
             Reviews = candidate.Reviews,
             PriceRange = candidate.PriceRange,
-            StartingPricePerPerson = null,
+            StartingPricePerPerson = candidate.StartingPricePerPerson,
             PrimaryImage = candidate.PrimaryImage,
             EstimatedDurationMinutes = estimatedDuration,
             DurationSource = "DefaultEstimate",
@@ -295,7 +382,7 @@ public class ExperienceRecommendationService
             OpenHoursDataAvailable = candidate.Hours.Count > 0,
             PopularTimesDataAvailable = preferences.VisitAtLocal is not null &&
                                         FindPopularTime(candidate, preferences.VisitAtLocal.Value) is not null,
-            AvailabilityDataAvailable = false,
+            AvailabilityDataAvailable = candidate.StartingPricePerPerson is not null,
             NextAvailableSlot = null,
             RoutingHints = new ExperienceRoutingHintsResponse
             {
@@ -328,44 +415,31 @@ public class ExperienceRecommendationService
         string preferredLanguage,
         CancellationToken cancellationToken)
     {
-        var adm1Ids = candidates.Select(x => x.Adm1Gid).Where(x => x is not null).Select(x => x!.Value).Distinct().ToArray();
-        var adm2Ids = candidates.Select(x => x.Adm2Gid).Where(x => x is not null).Select(x => x!.Value).Distinct().ToArray();
-        var adm3Ids = candidates.Select(x => x.Adm3Gid).Where(x => x is not null).Select(x => x!.Value).Distinct().ToArray();
         var useArabic = preferredLanguage.Equals("ar", StringComparison.OrdinalIgnoreCase);
-
-        var adm1 = await _regionsDbContext.Adm1
-            .AsNoTracking()
-            .Where(x => adm1Ids.Contains(x.Gid))
-            .Select(x => new RegionName(x.Gid, x.NameEn, x.NameAr))
-            .ToDictionaryAsync(x => x.Gid, cancellationToken);
-
-        var adm2 = await _regionsDbContext.Adm2
-            .AsNoTracking()
-            .Where(x => adm2Ids.Contains(x.Gid))
-            .Select(x => new RegionName(x.Gid, x.NameEn, x.NameAr))
-            .ToDictionaryAsync(x => x.Gid, cancellationToken);
-
-        var adm3 = await _regionsDbContext.Adm3
-            .AsNoTracking()
-            .Where(x => adm3Ids.Contains(x.Gid))
-            .Select(x => new RegionName(x.Gid, x.NameEn, x.NameAr))
-            .ToDictionaryAsync(x => x.Gid, cancellationToken);
+        var resolved = await _regionReadService.ResolveAsync(
+            candidates.Select(x => new RegionRecommendationReference(
+                x.Id,
+                x.Adm0Gid,
+                x.Adm1Gid,
+                x.Adm2Gid,
+                x.Adm3Gid)).ToArray(),
+            cancellationToken);
 
         return candidates.ToDictionary(
             x => x.Id,
             x =>
             {
-                var neighbourhood = x.Adm3Gid is not null && adm3.TryGetValue(x.Adm3Gid.Value, out var n)
-                    ? PickLocalized(n, useArabic)
-                    : null;
-                var district = x.Adm2Gid is not null && adm2.TryGetValue(x.Adm2Gid.Value, out var d)
-                    ? PickLocalized(d, useArabic)
-                    : null;
-                var governorate = x.Adm1Gid is not null && adm1.TryGetValue(x.Adm1Gid.Value, out var g)
-                    ? PickLocalized(g, useArabic)
-                    : null;
+                if (!resolved.TryGetValue(x.Id, out var region))
+                {
+                    return null;
+                }
 
-                var names = new[] { neighbourhood, district, governorate }
+                var names = new[]
+                    {
+                        useArabic ? region.NeighbourhoodNameAr : region.NeighbourhoodNameEn,
+                        useArabic ? region.DistrictNameAr : region.DistrictNameEn,
+                        useArabic ? region.GovernorateNameAr : region.GovernorateNameEn
+                    }
                     .Where(value => !string.IsNullOrWhiteSpace(value))
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToList();
@@ -376,6 +450,12 @@ public class ExperienceRecommendationService
 
     private ExperienceRecommendationPreferences NormalizeStructuredRequest(ExperienceRecommendationRequest request)
     {
+        if (request.Categories.Count > _options.MaxRequestedCategories)
+        {
+            throw new ArgumentException(
+                $"No more than {_options.MaxRequestedCategories} categories may be requested.");
+        }
+
         return NormalizePreferences(new ExperienceRecommendationPreferences
         {
             Categories = request.Categories
@@ -484,6 +564,8 @@ public class ExperienceRecommendationService
         AddCategoryIfMentioned(preferences, normalized, ExperienceCategory.Shopping, "shopping", "mall", "market", "تسوق", "مول", "سوق");
         AddCategoryIfMentioned(preferences, normalized, ExperienceCategory.Nightlife, "nightlife", "night", "club", "سهر", "ليل", "نايت");
         AddCategoryIfMentioned(preferences, normalized, ExperienceCategory.Dining, "dining", "restaurant", "food", "مطاعم", "مطعم", "اكل");
+
+        preferences.RegionName = FirstMentionedRegion(normalized);
 
         if (ContainsAny(normalized, "quiet", "calm", "هادي", "هادئ", "مش زحمة"))
         {
@@ -778,7 +860,12 @@ public class ExperienceRecommendationService
             ? Math.Clamp(_options.DefaultItineraryLimit, 1, max)
             : Math.Clamp(_options.DefaultLimit, 1, max);
 
-        return Math.Clamp(limit ?? defaultLimit, 1, max);
+        if (limit is not null && (limit < 1 || limit > max))
+        {
+            throw new ArgumentException($"Result limit must be between 1 and {max}.");
+        }
+
+        return limit ?? defaultLimit;
     }
 
     private static ExperienceCategory ParseCategory(string category)
@@ -860,11 +947,12 @@ public class ExperienceRecommendationService
         return terms.Any(term => value.Contains(term, StringComparison.OrdinalIgnoreCase));
     }
 
-    private static string PickLocalized(RegionName region, bool useArabic)
+    private static string? FirstMentionedRegion(string text)
     {
-        return useArabic
-            ? FirstConfigured(region.NameAr, region.NameEn)
-            : FirstConfigured(region.NameEn, region.NameAr);
+        if (ContainsAny(text, "zamalek", "الزمالك")) return text.Contains("الزمالك") ? "الزمالك" : "Zamalek";
+        if (ContainsAny(text, "giza", "الجيزة")) return text.Contains("الجيزة") ? "الجيزة" : "Giza";
+        if (ContainsAny(text, "cairo", "القاهرة")) return text.Contains("القاهرة") ? "القاهرة" : "Cairo";
+        return null;
     }
 
     private static string FirstConfigured(params string?[] values)
@@ -916,15 +1004,18 @@ public class ExperienceRecommendationService
 
     private sealed record RecommendationComputation(
         int TotalCandidates,
+        int EvaluatedCandidates,
         List<ExperienceRecommendationItemResponse> Items);
+
+    private sealed record CandidateSelection(
+        int TotalCandidates,
+        List<ExperienceCandidate> Items);
 
     private sealed record QualityRange(double Min, double Max);
 
     private sealed record TimingScoreResult(
         double? Score,
         ExperienceOpeningWindowResponse? OpeningWindow);
-
-    private sealed record RegionName(int Gid, string? NameEn, string? NameAr);
 
     private sealed class ExperienceCandidate
     {
@@ -950,6 +1041,7 @@ public class ExperienceRecommendationService
         public List<PopularTimeCandidate> PopularTimes { get; set; } = [];
         public List<string> Amenities { get; set; } = [];
         public bool HasReviews { get; set; }
+        public decimal? StartingPricePerPerson { get; set; }
     }
 
     private sealed class HourCandidate

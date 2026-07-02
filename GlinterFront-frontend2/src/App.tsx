@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -15,6 +15,9 @@ import GlobalApiLoadingIndicator from "@/components/GlobalApiLoadingIndicator";
 import type { ApiFailureEventDetail } from "@/shared/lib/api-client";
 import { toast } from "sonner";
 import { PUBLIC_ACCOUNT_ROLES } from "@/shared/lib/auth-routing";
+import { authStorage } from "@/shared/lib/auth";
+import { authApi } from "@/shared/services/api-auth";
+import { ApiError } from "@/shared/lib/api-client";
 import {
   AuthenticatedLanding,
   RedirectIfAuthenticated,
@@ -75,6 +78,61 @@ const ApiFailureHandler = () => {
 
   return null;
 };
+
+const SessionBootstrap = ({ children }: { children: ReactNode }) => {
+  const [checking, setChecking] = useState(() => authStorage.isAuthenticated());
+  const [offline, setOffline] = useState(false);
+
+  useEffect(() => {
+    if (!authStorage.isAuthenticated()) {
+      setChecking(false);
+      return;
+    }
+
+    authApi.me()
+      .then((user) => {
+        if (!user.isActive) {
+          authStorage.clearAll();
+        } else {
+          authStorage.setUser(user);
+        }
+        window.dispatchEvent(new Event("auth-change"));
+      })
+      .catch((error: unknown) => {
+        if (error instanceof ApiError && error.status === 401) {
+          authStorage.clearAll();
+          window.dispatchEvent(new Event("auth-change"));
+        } else {
+          setOffline(true);
+        }
+      })
+      .finally(() => setChecking(false));
+  }, []);
+
+  if (checking) {
+    return (
+      <div
+        role="status"
+        aria-live="polite"
+        className="flex min-h-screen flex-col items-center justify-center gap-3 bg-background text-foreground"
+      >
+        <span className="h-9 w-9 animate-spin rounded-full border-2 border-primary/25 border-t-primary" />
+        <span className="text-sm text-muted-foreground">Verifying your session…</span>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {offline && (
+        <div role="status" className="bg-amber-500/10 px-4 py-2 text-center text-xs text-amber-200">
+          The server could not verify your session. Cached access is available while you reconnect.
+        </div>
+      )}
+      {children}
+    </>
+  );
+};
 const Auth = lazy(() => import("./features/auth/AuthPage"));
 const Explore = lazy(() => import("./pages/Explore"));
 const LocalBuddies = lazy(() => import("./features/local-buddies/LocalBuddiesPage"));
@@ -88,6 +146,7 @@ const ProfilePage = lazy(() => import("./features/profile/ProfilePage"));
 const EditProfilePage = lazy(() => import("./features/profile/EditProfilePage"));
 const ProfileSetupPage = lazy(() => import("./features/profile/ProfileSetupPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const Saved = lazy(() => import("./features/saved/SavedPage"));
 
 const queryClient = new QueryClient();
 
@@ -102,6 +161,7 @@ const App = () => (
         <SessionExpirationHandler />
         <ApiFailureHandler />
         <ScrollToTop />
+        <SessionBootstrap>
         <Suspense fallback={(
           <div role="status" aria-live="polite" className="flex min-h-screen items-center justify-center bg-background text-sm text-muted-foreground">
             Loading page…
@@ -119,6 +179,7 @@ const App = () => (
           <Route path="/about" element={<About />} />
           <Route path="/where-to-go" element={<WhereToGo />} />
           <Route path="/where-to-stay" element={<WhereToStay />} />
+          <Route path="/saved" element={<RequireAuth><RequireRole roles={["Traveler"]}><Saved /></RequireRole></RequireAuth>} />
           <Route
             path="/dashboard"
             element={(
@@ -157,6 +218,7 @@ const App = () => (
           <Route path="*" element={<NotFound />} />
         </Routes>
         </Suspense>
+        </SessionBootstrap>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

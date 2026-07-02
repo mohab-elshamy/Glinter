@@ -20,8 +20,26 @@ import type {
   ExperienceVisitInsightDto,
   ImportExperiencesResult,
 } from "@/shared/types/api";
+import type {
+  ExperienceRecommendationRequest,
+  ExperienceRecommendationResponse,
+  NaturalLanguageExperienceRecommendationRequest,
+  NaturalLanguageExperienceRecommendationResponse,
+} from "@/shared/types/recommendations";
 
 export const experiencesApi = {
+  getRecommendations: (data: ExperienceRecommendationRequest) =>
+    request<ExperienceRecommendationResponse>("/experiences/recommendations", {
+      method: "POST",
+      body: data,
+    }),
+
+  getNaturalLanguageRecommendations: (
+    data: NaturalLanguageExperienceRecommendationRequest,
+  ) => request<NaturalLanguageExperienceRecommendationResponse>(
+    "/experiences/recommendations/natural-language",
+    { method: "POST", body: data },
+  ),
   getExperiences: (params?: GetExperiencesRequest) => {
     const query = params
       ? "?" + new URLSearchParams(
