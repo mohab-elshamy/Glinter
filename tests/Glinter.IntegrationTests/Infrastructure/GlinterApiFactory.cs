@@ -11,6 +11,10 @@ using Glinter.Modules.SafetyIndex.Infrastructure.Persistence;
 using Glinter.Modules.Stays.Infrastructure.Persistence;
 using Glinter.Modules.Stays.Application.Abstractions;
 using Glinter.Modules.Stays.Application.Dtos;
+using Glinter.Modules.Itineraries.Application.Abstractions;
+using Glinter.Modules.Itineraries.Application.Dtos;
+using Glinter.Modules.Itineraries.Domain.Enums;
+using Glinter.Modules.Itineraries.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
@@ -145,6 +149,7 @@ public sealed class GlinterApiFactory : WebApplicationFactory<Program>, IAsyncLi
             ReplaceDbContext<StaysDbContext>(services, false);
             ReplaceDbContext<ExperiencesDbContext>(services, false);
             ReplaceDbContext<CommunicationDbContext>(services, false);
+            ReplaceDbContext<ItinerariesDbContext>(services, false);
 
             services.PostConfigure<JwtOptions>(options =>
             {
@@ -166,6 +171,12 @@ public sealed class GlinterApiFactory : WebApplicationFactory<Program>, IAsyncLi
             services.AddSingleton<IPasswordHasher<ApplicationUser>, FastTestPasswordHasher>();
             services.RemoveAll<IHotelRecommendationGroqClient>();
             services.AddSingleton<IHotelRecommendationGroqClient, NullHotelRecommendationGroqClient>();
+            services.RemoveAll<IItineraryGroqClient>();
+            services.AddSingleton<IItineraryGroqClient, NullItineraryGroqClient>();
+            services.RemoveAll<IItineraryRoutePlanner>();
+            services.AddSingleton<IItineraryRoutePlanner, TestItineraryRoutePlanner>();
+            services.RemoveAll<IWeatherForecastService>();
+            services.AddSingleton<IWeatherForecastService, TestWeatherForecastService>();
         });
     }
 
@@ -260,6 +271,12 @@ public sealed class GlinterApiFactory : WebApplicationFactory<Program>, IAsyncLi
             .Options;
         await using (var context = new CommunicationDbContext(communicationOptions))
             await context.Database.MigrateAsync();
+
+        var itineraryOptions = new DbContextOptionsBuilder<ItinerariesDbContext>()
+            .UseNpgsql(ConnectionString)
+            .Options;
+        await using (var context = new ItinerariesDbContext(itineraryOptions))
+            await context.Database.MigrateAsync();
     }
 
     private void ReplaceDbContext<TContext>(
@@ -328,5 +345,63 @@ public sealed class GlinterApiFactory : WebApplicationFactory<Program>, IAsyncLi
                 IReadOnlyList<HotelRecommendationItemResponse> rankedItems,
                 CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyDictionary<int, HotelRecommendationExplanationResponse>?>(null);
+    }
+
+    private sealed class NullItineraryGroqClient : IItineraryGroqClient
+    {
+        public Task<ItineraryPlanPreferences?> ClassifyPlanAsync(
+            string text,
+            string? preferredLanguage,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<ItineraryPlanPreferences?>(null);
+    }
+
+    private sealed class TestItineraryRoutePlanner : IItineraryRoutePlanner
+    {
+        public Task<ItineraryRouteResult> GetRouteAsync(
+            ItineraryRouteRequest request,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(new ItineraryRouteResult
+            {
+                Mode = request.FallbackMode,
+                Provider = ItineraryRouteProvider.FallbackEstimate,
+                DistanceKm = 1,
+                DurationMinutes = 12,
+                Geometry = new ItineraryLegGeometryResponse
+                {
+                    Coordinates =
+                    [
+                        [request.From.Longitude, request.From.Latitude],
+                        [request.To.Longitude, request.To.Latitude]
+                    ]
+                },
+                Steps = ["Test route estimate"],
+                Warnings = ["Test routing fallback"]
+            });
+    }
+
+    private sealed class TestWeatherForecastService : IWeatherForecastService
+    {
+        public Task<WeatherForecastResponse> GetForecastAsync(
+            WeatherForecastRequest request,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new WeatherForecastResponse
+            {
+                Location = request.Location,
+                IsAvailable = true,
+                ProviderDataTimestampUtc = DateTime.UtcNow,
+                Days =
+                [
+                    new DailyWeatherResponse
+                    {
+                        Date = request.StartDate,
+                        TemperatureMinC = 20,
+                        TemperatureMaxC = 30,
+                        Condition = "Clear",
+                        HumidityPercent = 40,
+                        Advice = "Test forecast"
+                    }
+                ]
+            });
     }
 }

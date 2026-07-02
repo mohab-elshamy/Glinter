@@ -66,6 +66,8 @@ public class HotelRecommendationService
         {
             Preferences = preferences,
             TotalCandidates = result.TotalCandidates,
+            TotalMatchingCandidates = result.TotalCandidates,
+            EvaluatedCandidates = result.EvaluatedCandidates,
             ReturnedCount = result.Items.Count,
             Items = result.Items
         };
@@ -90,12 +92,35 @@ public class HotelRecommendationService
         var classified = await _groqClient.ClassifyAsync(request.Text, language, cancellationToken)
                          ?? ClassifyLocally(request.Text, language);
 
-        classified.Adm0Gid ??= request.Adm0Gid;
-        classified.Adm1Gid ??= request.Adm1Gid;
-        classified.Adm2Gid ??= request.Adm2Gid;
-        classified.Adm3Gid ??= request.Adm3Gid;
+        classified.Adm0Gid = request.Adm0Gid ?? classified.Adm0Gid;
+        classified.Adm1Gid = request.Adm1Gid ?? classified.Adm1Gid;
+        classified.Adm2Gid = request.Adm2Gid ?? classified.Adm2Gid;
+        classified.Adm3Gid = request.Adm3Gid ?? classified.Adm3Gid;
         classified.Limit = NormalizeLimit(request.Limit ?? classified.Limit);
         classified.PreferredLanguage = language;
+
+        if (request.Adm0Gid is null && request.Adm1Gid is null &&
+            request.Adm2Gid is null && request.Adm3Gid is null &&
+            !string.IsNullOrWhiteSpace(classified.RegionName))
+        {
+            var resolution = await _regionReadService.ResolveNameAsync(
+                classified.RegionName,
+                cancellationToken);
+            if (resolution.IsResolved)
+            {
+                classified.Adm0Gid = resolution.Adm0Gid;
+                classified.Adm1Gid = resolution.Adm1Gid;
+                classified.Adm2Gid = resolution.Adm2Gid;
+                classified.Adm3Gid = resolution.Adm3Gid;
+                classified.ResolvedRegionName = resolution.DisplayName;
+            }
+            else
+            {
+                classified.Notes = resolution.IsAmbiguous
+                    ? $"Region “{classified.RegionName}” is ambiguous and was not applied."
+                    : $"Region “{classified.RegionName}” could not be resolved and was not applied.";
+            }
+        }
 
         var preferences = NormalizePreferences(RepairClassifiedPreferences(classified));
         var result = await RecommendCoreAsync(preferences, cancellationToken);
@@ -106,6 +131,8 @@ public class HotelRecommendationService
             ClassificationNotes = classified.Notes,
             Preferences = preferences,
             TotalCandidates = result.TotalCandidates,
+            TotalMatchingCandidates = result.TotalCandidates,
+            EvaluatedCandidates = result.EvaluatedCandidates,
             ReturnedCount = result.Items.Count,
             Items = result.Items
         };
@@ -191,10 +218,11 @@ public class HotelRecommendationService
         HotelRecommendationPreferences preferences,
         CancellationToken cancellationToken)
     {
-        var candidates = await GetCandidateHotelsAsync(preferences, cancellationToken);
+        var selection = await GetCandidateHotelsAsync(preferences, cancellationToken);
+        var candidates = selection.Items;
         if (candidates.Count == 0)
         {
-            return new RecommendationComputation(0, []);
+            return new RecommendationComputation(selection.TotalMatchingCandidates, 0, []);
         }
 
         var budgetLevels = await CalculateBudgetLevelsAsync(candidates, preferences, cancellationToken);
@@ -211,10 +239,9 @@ public class HotelRecommendationService
                 qualityRange,
                 regionContexts))
             .OrderByDescending(x => x.FinalScore)
-            .ThenByDescending(x => x.Rating ?? 0)
+            .ThenByDescending(x => x.Scores.HotelQualityScore ?? 0)
             .ThenByDescending(x => x.Reviews ?? 0)
-            .ThenBy(x => x.Price ?? decimal.MaxValue)
-            .ThenBy(x => x.Name)
+            .ThenBy(x => x.HotelId)
             .Take(preferences.Limit)
             .ToList();
 
@@ -236,10 +263,13 @@ public class HotelRecommendationService
             }
         }
 
-        return new RecommendationComputation(candidates.Count, scored);
+        return new RecommendationComputation(
+            selection.TotalMatchingCandidates,
+            candidates.Count,
+            scored);
     }
 
-    private async Task<List<HotelCandidate>> GetCandidateHotelsAsync(
+    private async Task<CandidateSelection> GetCandidateHotelsAsync(
         HotelRecommendationPreferences preferences,
         CancellationToken cancellationToken)
     {
@@ -249,13 +279,63 @@ public class HotelRecommendationService
                 x.Latitude != null &&
                 x.Longitude != null);
 
+        var totalMatching = await query.CountAsync(cancellationToken);
+        var cap = Math.Clamp(_options.MaxCandidateHotels, 1, 2000);
+        var groupSize = Math.Max(1, cap / 4);
+        var qualityIds = await query
+            .OrderByDescending(x => x.Rating)
+            .ThenByDescending(x => x.Reviews)
+            .ThenBy(x => x.Id)
+            .Select(x => x.Id)
+            .Take(groupSize)
+            .ToListAsync(cancellationToken);
+        var budgetIds = preferences.BudgetLevel is null
+            ? []
+            : await query
+                .Where(x => x.Price != null && x.Price > 0)
+                .OrderBy(x => x.Price)
+                .ThenByDescending(x => x.Rating)
+                .ThenBy(x => x.Id)
+                .Select(x => x.Id)
+                .Take(groupSize)
+                .ToListAsync(cancellationToken);
+        var amenityTerms = preferences.RequestedAmenities
+            .Select(x => x.ToLowerInvariant())
+            .ToArray();
+        var amenityIds = amenityTerms.Length == 0
+            ? []
+            : await query
+                .OrderByDescending(x => x.Amenities.Count(a =>
+                    (a.NameEn != null && amenityTerms.Contains(a.NameEn.ToLower())) ||
+                    (a.NameAr != null && amenityTerms.Contains(a.NameAr.ToLower()))))
+                .ThenByDescending(x => x.Rating)
+                .ThenBy(x => x.Id)
+                .Select(x => x.Id)
+                .Take(groupSize)
+                .ToListAsync(cancellationToken);
+        var regionIds = await query
+            .OrderByDescending(x => x.Adm3Gid != null)
+            .ThenByDescending(x => x.Adm2Gid != null)
+            .ThenByDescending(x => x.Rating)
+            .ThenBy(x => x.Id)
+            .Select(x => x.Id)
+            .Take(groupSize)
+            .ToListAsync(cancellationToken);
+        var selectedIds = qualityIds
+            .Concat(budgetIds)
+            .Concat(amenityIds)
+            .Concat(regionIds)
+            .Distinct()
+            .Take(cap)
+            .ToArray();
+
         var hotels = await query
+            .Where(x => selectedIds.Contains(x.Id))
             .Include(x => x.Amenities)
             .OrderByDescending(x => x.Rating)
             .ThenByDescending(x => x.Reviews)
             .ThenBy(x => x.Price)
             .ThenBy(x => x.Name)
-            .Take(Math.Clamp(_options.MaxCandidateHotels, 1, 2000))
             .AsSplitQuery()
             .Select(x => new HotelCandidate
             {
@@ -294,7 +374,7 @@ public class HotelRecommendationService
                 .ToList();
         }
 
-        return hotels;
+        return new CandidateSelection(totalMatching, hotels);
     }
 
     private async Task<Dictionary<int, int?>> CalculateBudgetLevelsAsync(
@@ -813,6 +893,7 @@ public class HotelRecommendationService
         AddCategoryIfMentioned(preferences, normalized, "Shopping", "shopping", "mall", "market", "تسوق", "مول", "سوق");
         AddCategoryIfMentioned(preferences, normalized, "Nightlife", "nightlife", "club", "night", "سهر", "ليل", "نايت");
         AddCategoryIfMentioned(preferences, normalized, "Dining", "dining", "restaurant", "food", "مطاعم", "مطعم", "اكل");
+        preferences.RegionName = FirstMentionedRegion(normalized);
 
         foreach (var amenity in new[] { "wifi", "واي فاي", "gym", "جيم", "pool", "مسبح", "spa", "سبا", "restaurant", "مطعم", "bar", "بار", "parking", "موقف" })
         {
@@ -907,7 +988,7 @@ public class HotelRecommendationService
 
         if (hotelBudgetLevel is null)
         {
-            return 0.5;
+            return null;
         }
 
         return Math.Clamp(1 - Math.Abs(userBudgetLevel.Value - hotelBudgetLevel.Value) / 4.0, 0, 1);
@@ -1004,6 +1085,32 @@ public class HotelRecommendationService
         return terms.Any(term => value.Contains(term, StringComparison.OrdinalIgnoreCase));
     }
 
+    private static string? FirstMentionedRegion(string text)
+    {
+        var aliases = new (string Match, string Region)[]
+        {
+            ("downtown cairo", "Downtown Cairo"),
+            ("وسط البلد", "Downtown Cairo"),
+            ("zamalek", "Zamalek"),
+            ("الزمالك", "Zamalek"),
+            ("alexandria", "Alexandria"),
+            ("الإسكندرية", "Alexandria"),
+            ("الاسكندرية", "Alexandria"),
+            ("giza", "Giza"),
+            ("الجيزة", "Giza"),
+            ("luxor", "Luxor"),
+            ("الأقصر", "Luxor"),
+            ("الاقصر", "Luxor"),
+            ("aswan", "Aswan"),
+            ("أسوان", "Aswan"),
+            ("اسوان", "Aswan"),
+            ("cairo", "Cairo"),
+            ("القاهرة", "Cairo")
+        };
+        return aliases.FirstOrDefault(x =>
+            text.Contains(x.Match, StringComparison.OrdinalIgnoreCase)).Region;
+    }
+
     private static double CalculateDistanceKm(
         double latitude1,
         double longitude1,
@@ -1048,7 +1155,12 @@ public class HotelRecommendationService
 
     private sealed record RecommendationComputation(
         int TotalCandidates,
+        int EvaluatedCandidates,
         List<HotelRecommendationItemResponse> Items);
+
+    private sealed record CandidateSelection(
+        int TotalMatchingCandidates,
+        List<HotelCandidate> Items);
 
     private sealed record QualityRange(double Min, double Max);
 

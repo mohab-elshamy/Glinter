@@ -36,6 +36,8 @@ public class ItineraryPlanningOptions
 
     public int MaxTravelers { get; set; } = 50;
 
+    public int MaxTripDays { get; set; } = 14;
+
     public int MinimumMealBreakMinutes { get; set; } = 45;
 
     public string GroqApiKey { get; set; } = string.Empty;

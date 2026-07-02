@@ -85,6 +85,9 @@ public class ProfilesController : ControllerBase
                 PreferredBudgetLevel = request.PreferredBudgetLevel,
                 TravelStyle = request.TravelStyle,
                 PreferredInterests = request.PreferredInterests,
+                PreferredVibes = request.PreferredVibes,
+                ComfortLevel = request.ComfortLevel,
+                SafetyPriority = request.SafetyPriority,
                 InterestIds = request.InterestIds
             },
             cancellationToken);

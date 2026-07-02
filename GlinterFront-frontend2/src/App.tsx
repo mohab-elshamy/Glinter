@@ -147,6 +147,7 @@ const EditProfilePage = lazy(() => import("./features/profile/EditProfilePage"))
 const ProfileSetupPage = lazy(() => import("./features/profile/ProfileSetupPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const Saved = lazy(() => import("./features/saved/SavedPage"));
+const SavedItineraryDetails = lazy(() => import("./features/saved/SavedItineraryDetailsPage"));
 
 const queryClient = new QueryClient();
 
@@ -180,6 +181,7 @@ const App = () => (
           <Route path="/where-to-go" element={<WhereToGo />} />
           <Route path="/where-to-stay" element={<WhereToStay />} />
           <Route path="/saved" element={<RequireAuth><RequireRole roles={["Traveler"]}><Saved /></RequireRole></RequireAuth>} />
+          <Route path="/itineraries/:id" element={<RequireAuth><RequireRole roles={["Traveler"]}><SavedItineraryDetails /></RequireRole></RequireAuth>} />
           <Route
             path="/dashboard"
             element={(

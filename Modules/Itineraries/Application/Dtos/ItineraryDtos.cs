@@ -7,8 +7,12 @@ namespace Glinter.Modules.Itineraries.Application.Dtos;
 public class ItineraryPlanRequest
 {
     public ItineraryPointRequest Start { get; set; } = new();
+    public ItineraryPointRequest? Origin { get; set; }
     public ItineraryPointRequest? End { get; set; }
     public DateOnly? Date { get; set; }
+    public DateOnly? StartDate { get; set; }
+    public DateOnly? EndDate { get; set; }
+    public string? Destination { get; set; }
     public TimeOnly? DayStartLocal { get; set; }
     public TimeOnly? DayEndLocal { get; set; }
     public ItineraryTravelMode TravelMode { get; set; } = ItineraryTravelMode.PublicTransit;
@@ -27,14 +31,21 @@ public class ItineraryPlanRequest
     public bool ReturnToStart { get; set; } = true;
     public bool AvoidLongWalking { get; set; }
     public string? PreferredLanguage { get; set; }
+    public int? BudgetLevel { get; set; }
+    public decimal? TotalBudget { get; set; }
+    public string? Currency { get; set; }
 }
 
 public class NaturalLanguageItineraryPlanRequest
 {
     public string Text { get; set; } = string.Empty;
     public ItineraryPointRequest Start { get; set; } = new();
+    public ItineraryPointRequest? Origin { get; set; }
     public ItineraryPointRequest? End { get; set; }
     public DateOnly? Date { get; set; }
+    public DateOnly? StartDate { get; set; }
+    public DateOnly? EndDate { get; set; }
+    public string? Destination { get; set; }
     public TimeOnly? DayStartLocal { get; set; }
     public TimeOnly? DayEndLocal { get; set; }
     public ItineraryTravelMode? TravelMode { get; set; }
@@ -48,6 +59,9 @@ public class NaturalLanguageItineraryPlanRequest
     public int? CandidateLimit { get; set; }
     public int? GuestsCount { get; set; }
     public string? PreferredLanguage { get; set; }
+    public int? BudgetLevel { get; set; }
+    public decimal? TotalBudget { get; set; }
+    public string? Currency { get; set; }
 }
 
 public class ItineraryPointRequest
@@ -66,6 +80,11 @@ public class ItineraryCategoryPreference
 public class ItineraryPlanResponse
 {
     public DateOnly Date { get; set; }
+    public DateOnly StartDate { get; set; }
+    public DateOnly EndDate { get; set; }
+    public string? Destination { get; set; }
+    public ItineraryPointRequest Origin { get; set; } = new();
+    public string OriginSource { get; set; } = "Explicit";
     public ItineraryTravelMode TravelMode { get; set; }
     public ItineraryTravelMode FallbackTravelMode { get; set; }
     public ItineraryPace Pace { get; set; }
@@ -74,6 +93,31 @@ public class ItineraryPlanResponse
     public int TotalDurationMinutes { get; set; }
     public int TotalTravelMinutes { get; set; }
     public double TotalDistanceKm { get; set; }
+    public double Score { get; set; }
+    public decimal? EstimatedTotalCost { get; set; }
+    public int UnknownPriceStops { get; set; }
+    public decimal? TotalBudget { get; set; }
+    public string Currency { get; set; } = "USD";
+    public bool BudgetApplied { get; set; }
+    public bool? IsWithinBudget { get; set; }
+    public List<string> Warnings { get; set; } = [];
+    public List<ItineraryStopResponse> Stops { get; set; } = [];
+    public List<ItineraryLegResponse> Legs { get; set; } = [];
+    public ItineraryExplanationResponse Explanation { get; set; } = new();
+    public List<ItineraryDayResponse> Days { get; set; } = [];
+}
+
+public sealed class ItineraryDayResponse
+{
+    public DateOnly Date { get; set; }
+    public int DayNumber { get; set; }
+    public int SelectedStopsCount { get; set; }
+    public int TotalCandidateExperiences { get; set; }
+    public int TotalDurationMinutes { get; set; }
+    public int TotalTravelMinutes { get; set; }
+    public double TotalDistanceKm { get; set; }
+    public decimal? EstimatedCost { get; set; }
+    public int UnknownPriceStops { get; set; }
     public double Score { get; set; }
     public List<string> Warnings { get; set; } = [];
     public List<ItineraryStopResponse> Stops { get; set; } = [];
@@ -110,6 +154,8 @@ public class ItineraryStopResponse
     public string ArrivalLocal { get; set; } = string.Empty;
     public string DepartureLocal { get; set; } = string.Empty;
     public int DurationMinutes { get; set; }
+    public decimal? EstimatedCost { get; set; }
+    public string? Explanation { get; set; }
     public double? RecommendationScore { get; set; }
     public string? PrimaryImage { get; set; }
     public List<string> Notes { get; set; } = [];
@@ -157,4 +203,6 @@ public class ItineraryPlanPreferences
     public string PreferredLanguage { get; set; } = "en";
     public double? ClassificationConfidence { get; set; }
     public string? Notes { get; set; }
+    public string? RegionName { get; set; }
+    public string? ResolvedRegionName { get; set; }
 }

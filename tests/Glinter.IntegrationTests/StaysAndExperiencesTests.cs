@@ -1092,6 +1092,86 @@ public sealed class StaysAndExperiencesTests : ApiTestBase
             Assert.Equal(HttpStatusCode.TooManyRequests, last?.StatusCode);
     }
 
+    [Fact]
+    public async Task Bookable_only_uses_real_future_slot_capacity_and_availability_scores()
+    {
+        var provider = await CreateUserAsync("ExperienceProvider", "bookable-recommendation");
+        await UpsertProviderAsync(provider);
+        var admin = await GetAdminTokenAsync();
+        var experienceId = await CreateExperienceAsync(
+            provider.Token,
+            "Historical",
+            $"Bookable Recommendation {Guid.NewGuid():N}",
+            30.05,
+            31.25);
+        await ModerateExperienceAsync(admin, experienceId, "Approved");
+        var start = DateTime.UtcNow.AddDays(4);
+        (await SendAsync(
+            HttpMethod.Post,
+            $"/api/experiences/{experienceId}/availability",
+            provider.Token,
+            new
+            {
+                startTimeUtc = start,
+                endTimeUtc = start.AddHours(2),
+                capacity = 6,
+                pricePerPerson = 25
+            })).EnsureSuccessStatusCode();
+
+        var response = await SendAsync(
+            HttpMethod.Post,
+            "/api/experiences/recommendations",
+            body: new
+            {
+                categories = new[] { new { category = "Historical" } },
+                guestsCount = 2,
+                bookableOnly = true,
+                limit = 10
+            });
+        response.EnsureSuccessStatusCode();
+        using var json = await ReadJsonAsync(response);
+        var item = json.RootElement.GetProperty("items").EnumerateArray()
+            .Single(value => value.GetProperty("experienceId").GetInt32() == experienceId);
+        Assert.True(item.GetProperty("availabilityDataAvailable").GetBoolean());
+        Assert.True(item.GetProperty("isBookable").GetBoolean());
+        Assert.Equal(6, item.GetProperty("availableCapacity").GetInt32());
+        Assert.True(item.GetProperty("matchingSlotCount").GetInt32() > 0);
+        Assert.True(item.GetProperty("scores").GetProperty("availabilityScore").GetDouble() > 0);
+        Assert.NotEqual(
+            Guid.Empty,
+            item.GetProperty("nextAvailableSlot").GetProperty("availabilityId").GetGuid());
+    }
+
+    [Fact]
+    public async Task Favorite_pagination_and_batch_status_are_stable_across_pages()
+    {
+        var owner = await CreateUserAsync("HotelOwner", "favorite-owner");
+        await UpsertHotelOwnerAsync(owner);
+        var traveler = await CreateUserAsync("Traveler", "favorite-traveler");
+        var first = await CreateStayAsync(owner.Token, $"Favorite A {Guid.NewGuid():N}", 100, 30, 31, []);
+        var second = await CreateStayAsync(owner.Token, $"Favorite B {Guid.NewGuid():N}", 120, 30.1, 31.1, []);
+        (await SendAsync(HttpMethod.Post, $"/api/stays/{first}/favorite", traveler.Token)).EnsureSuccessStatusCode();
+        (await SendAsync(HttpMethod.Post, $"/api/stays/{second}/favorite", traveler.Token)).EnsureSuccessStatusCode();
+
+        var page = await SendAsync(HttpMethod.Get, "/api/stays/favorites?page=1&pageSize=1", traveler.Token);
+        page.EnsureSuccessStatusCode();
+        using var pageJson = await ReadJsonAsync(page);
+        Assert.Equal(2, pageJson.RootElement.GetProperty("totalCount").GetInt32());
+        Assert.Equal(2, pageJson.RootElement.GetProperty("totalPages").GetInt32());
+        Assert.Single(pageJson.RootElement.GetProperty("items").EnumerateArray());
+
+        var statuses = await SendAsync(
+            HttpMethod.Post,
+            "/api/stays/favorite-statuses",
+            traveler.Token,
+            new { stayIds = new[] { first, second, int.MaxValue } });
+        statuses.EnsureSuccessStatusCode();
+        using var statusJson = await ReadJsonAsync(statuses);
+        var ids = statusJson.RootElement.GetProperty("favoriteStayIds")
+            .EnumerateArray().Select(value => value.GetInt32()).ToArray();
+        Assert.Equal(new[] { first, second }.Order(), ids.Order());
+    }
+
     private async Task<int> CreateStayAsync(
         string token,
         string name,

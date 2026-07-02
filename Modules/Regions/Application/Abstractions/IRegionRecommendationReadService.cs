@@ -9,6 +9,13 @@ public interface IRegionRecommendationReadService
     Task<RegionNameResolution> ResolveNameAsync(
         string name,
         CancellationToken cancellationToken = default);
+
+    Task<RegionCentroidResolution?> ResolveCentroidAsync(
+        int? adm0Gid,
+        int? adm1Gid,
+        int? adm2Gid,
+        int? adm3Gid,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed record RegionRecommendationReference(
@@ -37,3 +44,10 @@ public sealed record RegionNameResolution(
     int? Adm2Gid,
     int? Adm3Gid,
     string? DisplayName);
+
+public sealed record RegionCentroidResolution(
+    int RegionId,
+    string AdministrativeLevel,
+    string? Name,
+    double Latitude,
+    double Longitude);

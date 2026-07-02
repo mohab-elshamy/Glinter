@@ -34,6 +34,7 @@ interface HotelDetailsModalProps {
   guests: number;
   onClose: () => void;
   onBook?: (hotel: NonNullable<HotelDetailsModalProps["hotel"]>) => void;
+  onFavoriteChange?: (stayId: number, isFavorite: boolean) => void;
 }
 
 const reviewsPageSize = 5;
@@ -55,6 +56,7 @@ const HotelDetailsModal = ({
   guests,
   onClose,
   onBook,
+  onFavoriteChange,
 }: HotelDetailsModalProps) => {
   const [activeImage, setActiveImage] = useState(0);
   const [reviews, setReviews] = useState<StayReviewDto[]>([]);
@@ -92,6 +94,10 @@ const HotelDetailsModal = ({
     try {
       if (previous) await staysApi.removeFavorite(activeHotelId);
       else await staysApi.addFavorite(activeHotelId);
+      onFavoriteChange?.(activeHotelId, !previous);
+      window.dispatchEvent(new CustomEvent("stay-favorites-change", {
+        detail: { stayId: activeHotelId, isFavorite: !previous },
+      }));
     } catch (error) {
       setIsFavorite(previous);
       toast.error(error instanceof Error ? error.message : "Could not update favorites.");

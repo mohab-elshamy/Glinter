@@ -31,6 +31,8 @@ public class NaturalLanguageExperienceRecommendationRequest
     public int? Adm3Gid { get; set; }
     public DateTime? VisitAtLocal { get; set; }
     public int? GuestsCount { get; set; }
+    public ExperienceCrowdPreference? CrowdPreference { get; set; }
+    public bool? BookableOnly { get; set; }
     public bool? ForItinerary { get; set; }
     public int? Limit { get; set; }
     public string? PreferredLanguage { get; set; }
@@ -45,9 +47,12 @@ public class ExperienceRecommendationCategoryPreference
 public class ExperienceRecommendationResponse
 {
     public ExperienceRecommendationPreferences Preferences { get; set; } = new();
+    // Compatibility alias for TotalMatchingCandidates.
     public int TotalCandidates { get; set; }
+    public int TotalMatchingCandidates { get; set; }
     public int EvaluatedCandidates { get; set; }
     public int ReturnedCount { get; set; }
+    public int ReturnedRecommendations => ReturnedCount;
     public List<ExperienceRecommendationItemResponse> Items { get; set; } = [];
 }
 
@@ -97,6 +102,7 @@ public class ExperienceRecommendationItemResponse
     public int ExperienceId { get; set; }
     public string Name { get; set; } = string.Empty;
     public ExperienceCategory Category { get; set; }
+    public string Source { get; set; } = string.Empty;
     public string? Address { get; set; }
     public string? Description { get; set; }
     public int? Adm0Gid { get; set; }
@@ -119,6 +125,9 @@ public class ExperienceRecommendationItemResponse
     public bool OpenHoursDataAvailable { get; set; }
     public bool PopularTimesDataAvailable { get; set; }
     public bool AvailabilityDataAvailable { get; set; }
+    public bool IsBookable { get; set; }
+    public int? AvailableCapacity { get; set; }
+    public int MatchingSlotCount { get; set; }
     public ExperienceNextAvailableSlotResponse? NextAvailableSlot { get; set; }
     public ExperienceRoutingHintsResponse RoutingHints { get; set; } = new();
     public double FinalScore { get; set; }

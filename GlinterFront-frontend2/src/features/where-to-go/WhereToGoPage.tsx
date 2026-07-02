@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -22,14 +22,15 @@ import {
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import LeafletMap, { type MapMarker } from "@/components/LeafletMap";
+import LeafletMap, { type MapMarker, type MapRouteLine } from "@/components/LeafletMap";
 import RegionCascadeSelect from "@/components/RegionCascadeSelect";
 import cairoImage from "@/assets/cairo.jpg";
 import { formatExperiencePrice, formatUsdPrice } from "@/shared/lib/price";
 import { experiencesApi } from "@/shared/services/api-experiences";
 import { itinerariesApi } from "@/shared/services/api-itineraries";
+import { regionsApi } from "@/shared/services/api-regions";
 import { authStorage } from "@/shared/lib/auth";
-import type { WeatherForecast } from "@/shared/types/itineraries";
+import type { ItineraryPlanResponse, WeatherForecast } from "@/shared/types/itineraries";
 import type {
   ExperienceCategory,
   ExperienceSummaryDto,
@@ -60,6 +61,10 @@ import type {
   ExperienceReviewDto,
   ExperienceVisitInsightDto,
 } from "@/shared/types/api";
+import { useSearchParams } from "react-router-dom";
+import { buildItineraryRouteLines } from "./itinerary-presentation";
+import { useMyProfile } from "@/shared/hooks/use-my-profile";
+import { mapInterestsToCategories } from "@/shared/lib/interest-mapping";
 
 const categories: Array<{ value: ExperienceCategory; label: string }> = [
   { value: "Historical", label: "History & culture" },
@@ -110,6 +115,8 @@ const formatDistance = (distanceKm?: number) => {
 };
 
 const WhereToGo = () => {
+  const [searchParams] = useSearchParams();
+  const profileQuery = useMyProfile();
   const [region, setRegion] = useState<RegionHierarchyGids>({});
   const [startDate, setStartDate] = useState(initialStart);
   const [endDate, setEndDate] = useState(initialEnd);
@@ -128,6 +135,9 @@ const WhereToGo = () => {
   const [planSource, setPlanSource] = useState<"ai" | "local">();
   const [savedItineraryId, setSavedItineraryId] = useState<string>();
   const [weather, setWeather] = useState<WeatherForecast>();
+  const [backendPlan, setBackendPlan] = useState<ItineraryPlanResponse>();
+  const [customStartLatitude, setCustomStartLatitude] = useState("");
+  const [customStartLongitude, setCustomStartLongitude] = useState("");
   const [details, setDetails] = useState<{
     experience: ExperienceResponseDto;
     availability: ExperienceAvailabilityDto[];
@@ -139,6 +149,14 @@ const WhereToGo = () => {
     ? currentLocation.state.position
     : undefined;
   const currentRegionLabel = detectedRegionLabel(currentLocation.state.detectedRegion);
+
+  useEffect(() => {
+    if (profileQuery.data?.profileType !== "Traveler") return;
+    const mapped = mapInterestsToCategories(
+      profileQuery.data.interests.map((interest) => interest.name),
+    );
+    if (mapped.length > 0) setInterests(mapped);
+  }, [profileQuery.data]);
 
   const tripDates = useMemo(() => enumerateTripDates(startDate, endDate), [startDate, endDate]);
   const knownCost = useMemo(() => calculateKnownExperienceCost(itinerary), [itinerary]);
@@ -195,6 +213,11 @@ const WhereToGo = () => {
     [currentPosition, itinerary, tripDates],
   );
 
+  const routeLines: MapRouteLine[] = useMemo(
+    () => buildItineraryRouteLines(backendPlan),
+    [backendPlan],
+  );
+
   const mapCenter = useMemo<[number, number]>(() => {
     if (markers.length === 0) return [26.8206, 30.8025];
     return [
@@ -249,72 +272,98 @@ const WhereToGo = () => {
         if (experience.isActive) uniqueExperiences.set(experience.id, experience);
       });
       const approved = [...uniqueExperiences.values()];
-      const point = currentPosition ?? {
-        latitude: 30.0444,
-        longitude: 31.2357,
-        accuracy: 0,
-      };
-      const plannerDays = tripDates.slice(0, 10);
-      const plans = await Promise.all(plannerDays.map((date) => {
-        const common = {
-          start: {
-            latitude: point.latitude,
-            longitude: point.longitude,
-            label: currentPosition ? "Current location" : "Cairo center",
-          },
-          date,
-          dayStartLocal: "09:00:00",
-          dayEndLocal: "21:00:00",
-          travelMode: "PublicTransit" as const,
-          fallbackTravelMode: "Walking" as const,
-          pace: activityLevel,
-          adm0Gid: region.adm0Gid,
-          adm1Gid: region.adm1Gid,
-          adm2Gid: region.adm2Gid,
-          adm3Gid: region.adm3Gid,
-          maxStops: activityLevel === "Relaxed" ? 2 : activityLevel === "Packed" ? 4 : 3,
-          candidateLimit: 30,
-          guestsCount: 1,
-          includeMealBreaks: interests.includes("Dining"),
-          returnToStart: true,
-          avoidLongWalking: activityLevel === "Relaxed",
-          preferredLanguage: "en" as const,
+      const hasSelectedRegion = Object.values(region).some((value) => value != null);
+      const hasCustomStart = customStartLatitude !== "" && customStartLongitude !== "";
+      let origin = hasCustomStart
+        ? {
+            latitude: Number(customStartLatitude),
+            longitude: Number(customStartLongitude),
+            label: "Explicit start point",
+          }
+        : currentPosition
+        ? {
+            latitude: currentPosition.latitude,
+            longitude: currentPosition.longitude,
+            label: "Current browser location",
+          }
+        : undefined;
+      if (!origin && hasSelectedRegion) {
+        const centroid = await regionsApi.getCentroid(region);
+        origin = {
+          latitude: centroid.latitude,
+          longitude: centroid.longitude,
+          label: `${centroid.name || "Selected region"} centroid (${centroid.administrativeLevel})`,
         };
-        return plannerMode === "natural"
-          ? itinerariesApi.planNaturalLanguage({ ...common, text: naturalRequest.trim() })
-              .then((response) => response.itinerary)
-          : itinerariesApi.plan({
-              ...common,
-              categories: interests.map((category) => ({ category })),
-            });
-      }));
+      }
+      if (!origin && plannerMode === "guided") {
+        throw new Error("Select a destination or allow browser location before planning.");
+      }
 
-      const ids = [...new Set(plans.flatMap((plan) =>
-        plan.stops.flatMap((stop) => stop.experienceId ?? [])))];
+      const common = {
+        start: origin ?? { latitude: 0, longitude: 0 },
+        origin,
+        date: startDate,
+        startDate,
+        endDate,
+        destination: currentRegionLabel || undefined,
+        dayStartLocal: "09:00:00",
+        dayEndLocal: "21:00:00",
+        travelMode: "PublicTransit" as const,
+        fallbackTravelMode: "Walking" as const,
+        pace: activityLevel,
+        adm0Gid: region.adm0Gid,
+        adm1Gid: region.adm1Gid,
+        adm2Gid: region.adm2Gid,
+        adm3Gid: region.adm3Gid,
+        maxStops: activityLevel === "Relaxed" ? 2 : activityLevel === "Packed" ? 4 : 3,
+        candidateLimit: 30,
+        guestsCount: 1,
+        includeMealBreaks: interests.includes("Dining"),
+        returnToStart: true,
+        avoidLongWalking: activityLevel === "Relaxed",
+        preferredLanguage: "en" as const,
+        totalBudget: budgetValue,
+        currency: "USD",
+      };
+      const plan = plannerMode === "natural"
+        ? (await itinerariesApi.planNaturalLanguage({
+            ...common,
+            text: naturalRequest.trim(),
+          })).itinerary
+        : await itinerariesApi.plan({
+            ...common,
+            categories: interests.map((category) => ({ category })),
+          });
+      const planDays = plan.days.length > 0
+        ? plan.days
+        : [{ date: plan.date, stops: plan.stops }];
+      const ids = [...new Set(planDays.flatMap((day) =>
+        day.stops.flatMap((stop) => stop.experienceId ?? [])))];
       const fullExperiences = await Promise.all(ids.map((id) =>
         experiencesApi.getExperienceById(id)));
       const byId = new Map(fullExperiences.map((experience) => [experience.id, experience]));
-      const next: ItineraryItem[] = plans.flatMap((plan) =>
-        plan.stops.flatMap((stop) => {
+      const next: ItineraryItem[] = planDays.flatMap((day) =>
+        day.stops.flatMap((stop) => {
           if (!stop.experienceId) return [];
           const experience = byId.get(stop.experienceId);
           return experience
             ? [{
                 experience,
-                date: plan.date,
+                date: day.date,
                 time: stop.arrivalLocal.slice(0, 5),
               }]
             : [];
         }));
       setExperiencePool(approved);
       setItinerary(next);
+      setBackendPlan(plan);
       setPlanSource("ai");
       setSelectedExperienceId(next[0]?.experience.id);
       setLoadState({ status: "ready" });
 
       itinerariesApi.weather({
-        latitude: point.latitude,
-        longitude: point.longitude,
+        latitude: plan.origin.latitude,
+        longitude: plan.origin.longitude,
         location: currentRegionLabel || "Trip area",
         startDate,
         endDate,
@@ -322,10 +371,8 @@ const WhereToGo = () => {
 
       if (next.length === 0) {
         toast.error("No matching backend experiences were found. Try broader interests, region or budget.");
-      } else if (tripDates.length === 14 && startDate !== endDate) {
-        toast.info("Plans are limited to the first 14 days.");
       } else {
-        toast.success(`Built a ${next.length}-activity itinerary with the backend planner.`);
+        toast.success(`Built ${plan.days.length || 1} days in one backend planning request.`);
       }
     } catch (error) {
       try {
@@ -348,6 +395,7 @@ const WhereToGo = () => {
         });
         setExperiencePool(fallbackResult.items);
         setItinerary(fallback);
+        setBackendPlan(undefined);
         setPlanSource("local");
         setLoadState({ status: "ready" });
         toast.warning("The backend planner was unavailable. A local fallback draft is shown.");
@@ -364,6 +412,16 @@ const WhereToGo = () => {
       toast.error("Sign in as a traveler to save this itinerary.");
       return;
     }
+    if ((customStartLatitude === "") !== (customStartLongitude === "")) {
+      toast.error("Enter both custom start coordinates or leave both blank.");
+      return;
+    }
+    if (customStartLatitude !== "" &&
+        (Number(customStartLatitude) < -90 || Number(customStartLatitude) > 90 ||
+         Number(customStartLongitude) < -180 || Number(customStartLongitude) > 180)) {
+      toast.error("Custom start coordinates are outside their valid range.");
+      return;
+    }
     try {
       const saved = await itinerariesApi.save({
         title: `${currentRegionLabel || "Egypt"} itinerary`,
@@ -374,8 +432,25 @@ const WhereToGo = () => {
         preferredLanguage: "en",
         estimatedTotalCost: knownCost || undefined,
         currency: "USD",
-        items: itinerary.map((item) => ({
-          dayNumber: Math.max(1, tripDates.indexOf(item.date) + 1),
+        plannerExplanation: backendPlan?.explanation.summary,
+        warnings: backendPlan?.warnings,
+        recommendationScore: backendPlan?.score,
+        totalDistanceKm: backendPlan?.totalDistanceKm,
+        totalTravelMinutes: backendPlan?.totalTravelMinutes,
+        pace: backendPlan?.pace,
+        travelMode: backendPlan?.travelMode,
+        fallbackTravelMode: backendPlan?.fallbackTravelMode,
+        origin: backendPlan?.origin,
+        weatherLatitude: backendPlan?.origin.latitude,
+        weatherLongitude: backendPlan?.origin.longitude,
+        weatherLocation: backendPlan?.destination || currentRegionLabel,
+        items: itinerary.map((item) => {
+          const dayNumber = Math.max(1, tripDates.indexOf(item.date) + 1);
+          const backendDay = backendPlan?.days.find((day) => day.dayNumber === dayNumber);
+          const backendStop = backendDay?.stops.find((stop) => stop.experienceId === item.experience.id);
+          const incomingLeg = backendDay?.legs.find((leg) => leg.toOrder === backendStop?.order);
+          return {
+          dayNumber,
           sortOrder: itinerary
             .filter((entry) => entry.date === item.date)
             .findIndex((entry) => entry.experience.id === item.experience.id) + 1,
@@ -385,8 +460,22 @@ const WhereToGo = () => {
           latitude: item.experience.latitude ?? 0,
           longitude: item.experience.longitude ?? 0,
           startTime: `${item.time}:00`,
+          endTime: backendStop?.departureLocal ? `${backendStop.departureLocal}:00` : undefined,
+          estimatedDurationMinutes: backendStop?.durationMinutes,
           estimatedCost: item.experience.startingPricePerPerson,
-        })),
+          explanation: backendStop?.explanation,
+          category: item.experience.category,
+          rating: item.experience.rating,
+          imageUrl: item.experience.featuredImages[0]?.link,
+          travelModeFromPrevious: incomingLeg?.mode,
+          routeProviderFromPrevious: incomingLeg?.provider,
+          routeGeometryFromPrevious: incomingLeg?.geometry,
+          routeInstructionsFromPrevious: incomingLeg?.steps,
+          routeWarningsFromPrevious: incomingLeg?.warnings,
+          distanceKmFromPrevious: incomingLeg?.distanceKm,
+          travelDurationMinutesFromPrevious: incomingLeg?.durationMinutes,
+        };
+        }),
       });
       setSavedItineraryId(saved.id);
       toast.success("Itinerary saved to My Trips.");
@@ -395,7 +484,7 @@ const WhereToGo = () => {
     }
   };
 
-  const openExperienceDetails = async (id: number) => {
+  const openExperienceDetails = useCallback(async (id: number) => {
     try {
       const [experience, availability, reviews, insight] = await Promise.all([
         experiencesApi.getExperienceById(id),
@@ -407,7 +496,14 @@ const WhereToGo = () => {
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not load experience details.");
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    const experienceId = Number(searchParams.get("experienceId"));
+    if (Number.isInteger(experienceId) && experienceId > 0) {
+      void openExperienceDetails(experienceId);
+    }
+  }, [openExperienceDetails, searchParams]);
 
   const removeActivity = (experienceId: number) => {
     setItinerary((current) => current.filter((item) => item.experience.id !== experienceId));
@@ -441,6 +537,20 @@ const WhereToGo = () => {
     setSelectedExperienceId(experience.id);
     setAddSelections((current) => ({ ...current, [date]: "" }));
   };
+
+  const addRecommendedExperience = useCallback(async (id: number) => {
+    if (itinerary.some((item) => item.experience.id === id)) {
+      toast.info("That experience is already in this itinerary.");
+      return;
+    }
+    const experience = await experiencesApi.getExperienceById(id);
+    const date = tripDates[0] ?? startDate;
+    const count = itinerary.filter((item) => item.date === date).length;
+    const time = getTimeSlots(activityLevel)[count] ?? "18:00";
+    setExperiencePool((current) => current.some((item) => item.id === id) ? current : [...current, experience]);
+    setItinerary((current) => [...current, { experience, date, time }]);
+    toast.success(`${experience.name} added to Day 1.`);
+  }, [activityLevel, itinerary, startDate, tripDates]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -537,7 +647,7 @@ const WhereToGo = () => {
             </div>
 
             <label className="mt-5 block text-xs font-medium">
-              Experience budget (USD)
+              Total trip experience budget (USD)
               <div className="relative mt-1">
                 <CircleDollarSign className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                 <input
@@ -584,6 +694,17 @@ const WhereToGo = () => {
                   {currentLocation.state.regionMessage}
                 </p>
               )}
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <label className="text-[11px]">Custom start latitude
+                  <input type="number" min="-90" max="90" step="any" value={customStartLatitude} onChange={(event) => setCustomStartLatitude(event.target.value)} className="mt-1 w-full rounded-lg border border-border bg-background px-2 py-2" />
+                </label>
+                <label className="text-[11px]">Custom start longitude
+                  <input type="number" min="-180" max="180" step="any" value={customStartLongitude} onChange={(event) => setCustomStartLongitude(event.target.value)} className="mt-1 w-full rounded-lg border border-border bg-background px-2 py-2" />
+                </label>
+              </div>
+              <p className="mt-2 text-[10px] text-muted-foreground">
+                Start priority: custom point, allowed browser location, then selected region centroid.
+              </p>
               <label className={`mt-3 flex items-start gap-2 text-xs ${
                 currentPosition ? "cursor-pointer" : "cursor-not-allowed text-muted-foreground"
               }`}>
@@ -738,11 +859,44 @@ const WhereToGo = () => {
                     icon={CircleDollarSign}
                   />
                   <SummaryCard
-                    label="Budget left"
-                    value={budgetValue == null ? "No limit" : formatUsdPrice(Math.max(0, budgetValue - knownCost))}
+                    label="Budget status"
+                    value={backendPlan?.budgetApplied
+                      ? backendPlan.isWithinBudget ? "Within budget" : "Over budget"
+                      : budgetValue == null ? "No limit" : formatUsdPrice(Math.max(0, budgetValue - knownCost))}
                     icon={Compass}
                   />
+                  {backendPlan && (
+                    <>
+                      <SummaryCard label="Pace" value={backendPlan.pace} icon={Compass} />
+                      <SummaryCard label="Transport" value={backendPlan.travelMode} icon={Navigation} />
+                      <SummaryCard label="Route distance" value={`${backendPlan.totalDistanceKm.toFixed(1)} km`} icon={Route} />
+                      <SummaryCard label="Travel time" value={`${backendPlan.totalTravelMinutes} min`} icon={CalendarDays} />
+                      <SummaryCard label="Recommendation" value={`${backendPlan.score.toFixed(0)}/100`} icon={Star} />
+                    </>
+                  )}
                 </section>
+
+                {backendPlan && (
+                  <section className="rounded-2xl border border-border bg-card p-5">
+                    <h2 className="font-bold">{backendPlan.destination || "Trip"} overview</h2>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {backendPlan.startDate} – {backendPlan.endDate} · Start: {backendPlan.originSource}
+                    </p>
+                    <p className="mt-3 text-sm">{backendPlan.explanation.summary}</p>
+                    {backendPlan.explanation.reasons.length > 0 && (
+                      <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-muted-foreground">
+                        {backendPlan.explanation.reasons.map((reason) => <li key={reason}>{reason}</li>)}
+                      </ul>
+                    )}
+                    {backendPlan.warnings.length > 0 && (
+                      <div className="mt-4 space-y-2" aria-label="Itinerary warnings">
+                        {backendPlan.warnings.map((warning) => (
+                          <p key={warning} className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">{warning}</p>
+                        ))}
+                      </div>
+                    )}
+                  </section>
+                )}
 
                 {unknownPriceCount > 0 && (
                   <p className="rounded-xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-xs text-amber-300">
@@ -803,6 +957,7 @@ const WhereToGo = () => {
                     showLegend={false}
                     currentLocation={currentPosition}
                     recenterSequence={currentLocation.state.requestSequence + recenterBump}
+                    routeLines={routeLines}
                   />
                 </section>
 
@@ -846,6 +1001,15 @@ const WhereToGo = () => {
                           </span>
                         </header>
 
+                        {backendPlan?.days[dayIndex] && (
+                          <div className="border-b border-border px-4 py-3 text-xs text-muted-foreground">
+                            <p>{backendPlan.days[dayIndex].explanation.summary}</p>
+                            <p className="mt-1">
+                              {backendPlan.days[dayIndex].totalDistanceKm.toFixed(1)} km · {backendPlan.days[dayIndex].totalTravelMinutes} min travel · {backendPlan.days[dayIndex].estimatedCost == null ? "No known cost" : formatUsdPrice(backendPlan.days[dayIndex].estimatedCost)}
+                            </p>
+                          </div>
+                        )}
+
                         <div className="divide-y divide-border">
                           {items.map((item, index) => (
                             <ItineraryActivity
@@ -859,6 +1023,7 @@ const WhereToGo = () => {
                               onReplace={() => replaceActivity(item.experience.id)}
                               onMove={(direction) => setItinerary((current) =>
                                 moveItineraryItem(current, item.experience.id, direction))}
+                              onDetails={() => void openExperienceDetails(item.experience.id)}
                               currentPosition={currentPosition}
                             />
                           ))}
@@ -866,6 +1031,25 @@ const WhereToGo = () => {
                             <p className="p-5 text-sm text-muted-foreground">This day has no activities yet.</p>
                           )}
                         </div>
+
+                        {(backendPlan?.days[dayIndex]?.legs.length ?? 0) > 0 && (
+                          <div className="border-t border-border bg-background/40 p-4">
+                            <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Route legs</h4>
+                            <div className="mt-2 space-y-2">
+                              {backendPlan?.days[dayIndex].legs.map((leg, legIndex) => (
+                                <div key={`${leg.fromOrder}-${leg.toOrder}-${legIndex}`} className="rounded-lg border border-border p-3 text-xs">
+                                  <p className="font-semibold">
+                                    Stop {leg.fromOrder} → {leg.toOrder} · {leg.mode}
+                                    {leg.mode !== backendPlan.travelMode ? ` (fallback from ${backendPlan.travelMode})` : ""}
+                                  </p>
+                                  <p className="mt-1 text-muted-foreground">{leg.provider} · {leg.distanceKm.toFixed(1)} km · {leg.durationMinutes} min</p>
+                                  {leg.steps.length > 0 && <p className="mt-2 text-muted-foreground">{leg.steps.join(" → ")}</p>}
+                                  {leg.warnings.map((warning) => <p key={warning} className="mt-2 text-amber-300">{warning}</p>)}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
 
                         <div className="grid gap-2 border-t border-border bg-secondary/20 p-3 sm:grid-cols-[1fr_auto]">
                           <select
@@ -908,6 +1092,7 @@ const WhereToGo = () => {
       <ExperienceRecommendationAssistant
         region={region}
         onViewDetails={openExperienceDetails}
+        onAddToItinerary={addRecommendedExperience}
       />
       {details && (
         <ExperienceDetailsModal
@@ -963,6 +1148,7 @@ const ItineraryActivity = ({
   onRemove,
   onReplace,
   onMove,
+  onDetails,
   currentPosition,
 }: {
   item: ItineraryItem;
@@ -973,6 +1159,7 @@ const ItineraryActivity = ({
   onRemove: () => void;
   onReplace: () => void;
   onMove: (direction: -1 | 1) => void;
+  onDetails: () => void;
   currentPosition?: {
     latitude: number;
     longitude: number;
@@ -1030,6 +1217,14 @@ const ItineraryActivity = ({
         </div>
       </div>
       <div className="flex flex-wrap gap-1 sm:justify-end" onClick={(event) => event.stopPropagation()}>
+        <button
+          type="button"
+          onClick={onDetails}
+          className="rounded-lg border border-border px-2 py-1 text-xs"
+          aria-label={`View ${experience.name} details`}
+        >
+          Details
+        </button>
         <button
           type="button"
           disabled={!canMoveUp}

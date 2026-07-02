@@ -201,6 +201,7 @@ public class GroqHotelRecommendationClient(
                   "budgetLevel": 3,
                   "experienceCategories": [{"category":"Historical","weight":1}],
                   "requestedAmenities": ["WiFi"],
+                  "regionName": "Zamalek",
                   "preferredLanguage": "ar",
                   "classificationConfidence": 0.8,
                   "notes": ""
@@ -216,6 +217,7 @@ public class GroqHotelRecommendationClient(
                 WiFi, Gym, Pool, Spa, Restaurant, Bar, Parking.
 
                 Use null for budgetLevel if unclear.
+                regionName must be a human-readable place from the user, never an administrative ID.
                 Use equal category weights when the user does not imply priority.
                 Return Arabic preferredLanguage for Arabic user text, otherwise English.
                 Do not add categories or amenities that are not implied by the text.
@@ -385,7 +387,8 @@ public class GroqHotelRecommendationClient(
             BudgetLevel = ReadNullableInt(root, "budgetLevel"),
             PreferredLanguage = ReadString(root, "preferredLanguage") ?? "en",
             ClassificationConfidence = ReadNullableDouble(root, "classificationConfidence"),
-            Notes = ReadString(root, "notes")
+            Notes = ReadString(root, "notes"),
+            RegionName = ReadString(root, "regionName")
         };
 
         if (root.TryGetProperty("experienceCategories", out var categories) &&

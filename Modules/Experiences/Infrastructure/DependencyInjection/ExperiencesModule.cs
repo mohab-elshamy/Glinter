@@ -85,6 +85,7 @@ public static class ExperiencesModule
         });
 
         services.AddScoped<ExperienceService>();
+        services.AddScoped<IExperiencesAdminReadService, ExperiencesAdminReadService>();
         services.AddScoped<ExperienceRecommendationService>();
         services.AddScoped<IExperienceRecommendationService>(
             provider => provider.GetRequiredService<ExperienceRecommendationService>());

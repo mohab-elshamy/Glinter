@@ -8,8 +8,12 @@ export interface ItineraryPointRequest {
 
 export interface ItineraryPlanRequest {
   start: ItineraryPointRequest;
+  origin?: ItineraryPointRequest;
   end?: ItineraryPointRequest;
   date: string;
+  startDate?: string;
+  endDate?: string;
+  destination?: string;
   dayStartLocal?: string;
   dayEndLocal?: string;
   travelMode?: "Walking" | "Driving" | "Cycling" | "PublicTransit";
@@ -27,6 +31,9 @@ export interface ItineraryPlanRequest {
   returnToStart?: boolean;
   avoidLongWalking?: boolean;
   preferredLanguage?: "en" | "ar";
+  budgetLevel?: number;
+  totalBudget?: number;
+  currency?: string;
 }
 
 export interface ItineraryStop {
@@ -42,21 +49,82 @@ export interface ItineraryStop {
   arrivalLocal: string;
   departureLocal: string;
   durationMinutes: number;
+  estimatedCost?: number;
+  explanation?: string;
+  category?: string;
+  rating?: number;
+  imageUrl?: string;
+  travelModeFromPrevious?: string;
+  routeProviderFromPrevious?: string;
+  routeGeometryFromPrevious?: { type: "LineString"; coordinates: number[][] };
+  routeInstructionsFromPrevious?: string[];
+  routeWarningsFromPrevious?: string[];
+  distanceKmFromPrevious?: number;
+  travelDurationMinutesFromPrevious?: number;
   recommendationScore?: number;
   primaryImage?: string;
   notes: string[];
 }
 
+export interface ItineraryLeg {
+  fromOrder: number;
+  toOrder: number;
+  mode: "Walking" | "Driving" | "Cycling" | "PublicTransit";
+  provider: string;
+  distanceKm: number;
+  durationMinutes: number;
+  geometry?: {
+    type: "LineString";
+    coordinates: number[][];
+  };
+  steps: string[];
+  warnings: string[];
+}
+
+export interface ItineraryDay {
+  date: string;
+  dayNumber: number;
+  selectedStopsCount: number;
+  totalCandidateExperiences: number;
+  totalDurationMinutes: number;
+  totalTravelMinutes: number;
+  totalDistanceKm: number;
+  estimatedCost?: number;
+  unknownPriceStops: number;
+  score: number;
+  warnings: string[];
+  stops: ItineraryStop[];
+  legs: ItineraryLeg[];
+  explanation: { summary: string; reasons: string[]; isAiGenerated: boolean };
+}
+
 export interface ItineraryPlanResponse {
   date: string;
+  startDate: string;
+  endDate: string;
+  destination?: string;
+  origin: ItineraryPointRequest;
+  originSource: string;
+  travelMode: "Walking" | "Driving" | "Cycling" | "PublicTransit";
+  fallbackTravelMode: "Walking" | "Driving" | "Cycling" | "PublicTransit";
+  pace: "Relaxed" | "Balanced" | "Packed";
   totalCandidateExperiences: number;
   selectedStopsCount: number;
   totalDurationMinutes: number;
   totalTravelMinutes: number;
   totalDistanceKm: number;
   score: number;
+  estimatedTotalCost?: number;
+  unknownPriceStops: number;
+  totalBudget?: number;
+  currency: string;
+  budgetApplied: boolean;
+  isWithinBudget?: boolean;
   warnings: string[];
   stops: ItineraryStop[];
+  legs: ItineraryLeg[];
+  explanation: { summary: string; reasons: string[]; isAiGenerated: boolean };
+  days: ItineraryDay[];
 }
 
 export interface NaturalLanguageItineraryPlanResponse {
@@ -95,6 +163,22 @@ export interface SavedItinerary {
   preferredLanguage: string;
   estimatedTotalCost?: number;
   currency?: string;
+  adm0Gid?: number;
+  adm1Gid?: number;
+  adm2Gid?: number;
+  adm3Gid?: number;
+  plannerExplanation?: string;
+  warnings: string[];
+  recommendationScore?: number;
+  totalDistanceKm?: number;
+  totalTravelMinutes?: number;
+  pace?: string;
+  travelMode?: string;
+  fallbackTravelMode?: string;
+  origin?: ItineraryPointRequest;
+  weatherLatitude?: number;
+  weatherLongitude?: number;
+  weatherLocation?: string;
   createdAtUtc: string;
   updatedAtUtc: string;
   items: SavedItineraryItem[];
@@ -112,6 +196,18 @@ export interface SaveItineraryRequest {
   preferredLanguage: string;
   estimatedTotalCost?: number;
   currency?: string;
+  plannerExplanation?: string;
+  warnings?: string[];
+  recommendationScore?: number;
+  totalDistanceKm?: number;
+  totalTravelMinutes?: number;
+  pace?: string;
+  travelMode?: string;
+  fallbackTravelMode?: string;
+  origin?: ItineraryPointRequest;
+  weatherLatitude?: number;
+  weatherLongitude?: number;
+  weatherLocation?: string;
   items: Array<Omit<SavedItineraryItem, "id"> & { id?: string }>;
 }
 
@@ -127,6 +223,7 @@ export interface WeatherForecast {
     condition?: string;
     precipitationProbabilityPercent?: number;
     windSpeedKph?: number;
+    humidityPercent?: number;
     advice?: string;
   }>;
 }

@@ -6,6 +6,7 @@ using Glinter.Modules.Itineraries.Application.Abstractions;
 using Glinter.Modules.Itineraries.Application.Dtos;
 using Glinter.Modules.Itineraries.Application.Options;
 using Glinter.Modules.Itineraries.Domain.Enums;
+using Glinter.Modules.Regions.Application.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace Glinter.Modules.Itineraries.Application.Services;
@@ -15,6 +16,7 @@ public class ItineraryPlannerService : IItineraryPlannerService
     private readonly IExperienceRecommendationService _experienceRecommendationService;
     private readonly IItineraryRoutePlanner _routePlanner;
     private readonly IItineraryGroqClient _groqClient;
+    private readonly IRegionRecommendationReadService _regionReadService;
     private readonly ItineraryPlanningOptions _options;
     private readonly ILogger<ItineraryPlannerService> _logger;
 
@@ -22,12 +24,14 @@ public class ItineraryPlannerService : IItineraryPlannerService
         IExperienceRecommendationService experienceRecommendationService,
         IItineraryRoutePlanner routePlanner,
         IItineraryGroqClient groqClient,
+        IRegionRecommendationReadService regionReadService,
         IOptions<ItineraryPlanningOptions> options,
         ILogger<ItineraryPlannerService> logger)
     {
         _experienceRecommendationService = experienceRecommendationService;
         _routePlanner = routePlanner;
         _groqClient = groqClient;
+        _regionReadService = regionReadService;
         _options = options.Value;
         _logger = logger;
     }
@@ -36,7 +40,113 @@ public class ItineraryPlannerService : IItineraryPlannerService
         ItineraryPlanRequest request,
         CancellationToken cancellationToken)
     {
+        await ResolveOriginAsync(request, cancellationToken);
         var normalized = NormalizeRequest(request);
+        var startDate = normalized.StartDate ?? normalized.Date!.Value;
+        var endDate = normalized.EndDate ?? startDate;
+        var dayCount = endDate.DayNumber - startDate.DayNumber + 1;
+        if (dayCount < 1 || dayCount > Math.Clamp(_options.MaxTripDays, 1, 31))
+        {
+            throw new ArgumentException(
+                $"Trip duration must be between 1 and {Math.Clamp(_options.MaxTripDays, 1, 31)} days.");
+        }
+
+        var days = new List<ItineraryDayResponse>(dayCount);
+        var usedExperienceIds = new HashSet<int>();
+        decimal knownTripCost = 0;
+        var remainingBudget = normalized.TotalBudget;
+
+        for (var dayIndex = 0; dayIndex < dayCount; dayIndex++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var dayRequest = CloneForDate(normalized, startDate.AddDays(dayIndex));
+            decimal? dayBudget = remainingBudget is null
+                ? null
+                : remainingBudget.Value / Math.Max(1, dayCount - dayIndex);
+            var day = await PlanDayAsync(
+                dayRequest,
+                usedExperienceIds,
+                dayBudget,
+                cancellationToken);
+            day.DayNumber = dayIndex + 1;
+            days.Add(day);
+            if (normalized.Start.Label == PendingFirstStopOrigin &&
+                day.Stops.Count > 0)
+            {
+                normalized.Start = new ItineraryPointRequest
+                {
+                    Latitude = day.Stops[0].Latitude,
+                    Longitude = day.Stops[0].Longitude,
+                    Label = "First itinerary stop fallback"
+                };
+            }
+            foreach (var stop in day.Stops)
+            {
+                if (stop.ExperienceId is not null)
+                    usedExperienceIds.Add(stop.ExperienceId.Value);
+            }
+            if (day.EstimatedCost is not null)
+            {
+                knownTripCost += day.EstimatedCost.Value;
+                remainingBudget = remainingBudget is null
+                    ? null
+                    : Math.Max(0, remainingBudget.Value - day.EstimatedCost.Value);
+            }
+        }
+
+        var warnings = days.SelectMany(day => day.Warnings).Distinct().ToList();
+        var budgetApplied = normalized.TotalBudget is not null || normalized.BudgetLevel is not null;
+        var withinBudget = normalized.TotalBudget is null
+            ? (bool?)null
+            : knownTripCost <= normalized.TotalBudget.Value;
+        if (normalized.TotalBudget is not null && days.Sum(day => day.SelectedStopsCount) == 0)
+            warnings.Add("No feasible itinerary satisfied the supplied trip budget.");
+
+        var firstDay = days[0];
+        return new ItineraryPlanResponse
+        {
+            Date = firstDay.Date,
+            StartDate = startDate,
+            EndDate = endDate,
+            Destination = normalized.Destination,
+            Origin = normalized.Start,
+            OriginSource = normalized.Start.Label ?? "Explicit origin",
+            TravelMode = normalized.TravelMode,
+            FallbackTravelMode = normalized.FallbackTravelMode,
+            Pace = normalized.Pace,
+            TotalCandidateExperiences = days.Sum(day => day.TotalCandidateExperiences),
+            SelectedStopsCount = days.Sum(day => day.SelectedStopsCount),
+            TotalDurationMinutes = days.Sum(day => day.TotalDurationMinutes),
+            TotalTravelMinutes = days.Sum(day => day.TotalTravelMinutes),
+            TotalDistanceKm = Round(days.Sum(day => day.TotalDistanceKm)),
+            Score = days.Count == 0 ? 0 : Round(days.Average(day => day.Score)),
+            EstimatedTotalCost = knownTripCost,
+            UnknownPriceStops = days.Sum(day => day.UnknownPriceStops),
+            TotalBudget = normalized.TotalBudget,
+            Currency = normalized.Currency ?? "USD",
+            BudgetApplied = budgetApplied,
+            IsWithinBudget = withinBudget,
+            Warnings = warnings,
+            Stops = firstDay.Stops,
+            Legs = firstDay.Legs,
+            Explanation = new ItineraryExplanationResponse
+            {
+                Summary = days.Count == 1
+                    ? firstDay.Explanation.Summary
+                    : $"Built {days.Count} days with {days.Sum(day => day.SelectedStopsCount)} unique experience stops.",
+                Reasons = days.SelectMany(day => day.Explanation.Reasons).Distinct().Take(5).ToList(),
+                IsAiGenerated = days.Any(day => day.Explanation.IsAiGenerated)
+            },
+            Days = days
+        };
+    }
+
+    private async Task<ItineraryDayResponse> PlanDayAsync(
+        ItineraryPlanRequest normalized,
+        IReadOnlySet<int> excludedExperienceIds,
+        decimal? dayBudget,
+        CancellationToken cancellationToken)
+    {
         var dayStart = normalized.Date!.Value.ToDateTime(normalized.DayStartLocal!.Value);
         var dayEnd = normalized.Date.Value.ToDateTime(normalized.DayEndLocal!.Value);
 
@@ -49,14 +159,33 @@ public class ItineraryPlannerService : IItineraryPlannerService
         if (recommendations.TotalCandidates == 0 || recommendations.Items.Count == 0)
         {
             warnings.Add("No recommended experiences matched the itinerary constraints.");
-            return BuildEmptyResponse(normalized, warnings);
+            return BuildEmptyDayResponse(normalized, warnings);
         }
 
+        var duplicateFreeRecommendations = recommendations.Items
+            .Where(item => !excludedExperienceIds.Contains(item.ExperienceId))
+            .ToList();
+        var eligibleRecommendations = ApplyBudgetLevel(
+            duplicateFreeRecommendations,
+            normalized.BudgetLevel);
+        if (normalized.BudgetLevel is not null &&
+            eligibleRecommendations.Count < duplicateFreeRecommendations.Count)
+        {
+            warnings.Add($"Budget level {normalized.BudgetLevel} was applied to experience selection.");
+        }
+        if (normalized.Start.Label == PendingFirstStopOrigin &&
+            eligibleRecommendations.Count > 0)
+        {
+            normalized.Start = ToPoint(eligibleRecommendations[0]);
+            normalized.Start.Label = "First itinerary stop fallback";
+            warnings.Add("No explicit or region origin was available; the first itinerary stop is used as the route origin.");
+        }
         var schedule = await BuildScheduleAsync(
             normalized,
-            recommendations.Items,
+            eligibleRecommendations,
             dayStart,
             dayEnd,
+            dayBudget,
             cancellationToken);
 
         warnings.AddRange(schedule.Warnings);
@@ -68,17 +197,23 @@ public class ItineraryPlannerService : IItineraryPlannerService
         var stops = BuildStops(normalized, schedule, dayStart);
         var score = CalculateItineraryScore(schedule.ExperienceStops, schedule.Legs, recommendations.Items.Count);
 
-        return new ItineraryPlanResponse
+        var estimatedCost = schedule.ExperienceStops
+            .Where(stop => stop.Item.StartingPricePerPerson is not null)
+            .Sum(stop => stop.Item.StartingPricePerPerson!.Value * (normalized.GuestsCount ?? 1));
+        var unknownPrices = schedule.ExperienceStops.Count(stop => stop.Item.StartingPricePerPerson is null);
+        if (dayBudget is not null && estimatedCost > dayBudget)
+            warnings.Add("The selected stops exceed this day's share of the trip budget.");
+
+        return new ItineraryDayResponse
         {
             Date = normalized.Date.Value,
-            TravelMode = normalized.TravelMode,
-            FallbackTravelMode = normalized.FallbackTravelMode,
-            Pace = normalized.Pace,
-            TotalCandidateExperiences = recommendations.TotalCandidates,
+            TotalCandidateExperiences = recommendations.TotalMatchingCandidates,
             SelectedStopsCount = schedule.ExperienceStops.Count,
             TotalDurationMinutes = Math.Max(0, (int)Math.Round((schedule.EndTimeLocal - dayStart).TotalMinutes)),
             TotalTravelMinutes = schedule.Legs.Sum(x => x.DurationMinutes),
             TotalDistanceKm = Round(schedule.Legs.Sum(x => x.DistanceKm)),
+            EstimatedCost = estimatedCost,
+            UnknownPriceStops = unknownPrices,
             Score = score,
             Warnings = warnings.Distinct().ToList(),
             Stops = stops,
@@ -105,6 +240,28 @@ public class ItineraryPlannerService : IItineraryPlannerService
         var aiClassification = await _groqClient.ClassifyPlanAsync(request.Text, language, cancellationToken);
         var classified = aiClassification ?? ClassifyLocally(request.Text, language);
 
+        if (request.Adm0Gid is null && request.Adm1Gid is null &&
+            request.Adm2Gid is null && request.Adm3Gid is null &&
+            !string.IsNullOrWhiteSpace(classified.RegionName))
+        {
+            var resolution = await _regionReadService.ResolveNameAsync(
+                classified.RegionName,
+                cancellationToken);
+            if (!resolution.IsResolved)
+            {
+                throw new ArgumentException(resolution.IsAmbiguous
+                    ? $"Region “{classified.RegionName}” is ambiguous; select a region to continue."
+                    : $"Region “{classified.RegionName}” could not be resolved.");
+            }
+
+            classified.ResolvedRegionName = resolution.DisplayName;
+            request.Adm0Gid = resolution.Adm0Gid;
+            request.Adm1Gid = resolution.Adm1Gid;
+            request.Adm2Gid = resolution.Adm2Gid;
+            request.Adm3Gid = resolution.Adm3Gid;
+            request.Destination ??= resolution.DisplayName;
+        }
+
         var interpreted = BuildRequestFromClassification(request, classified, language);
         var itinerary = await PlanAsync(interpreted, cancellationToken);
 
@@ -127,6 +284,7 @@ public class ItineraryPlannerService : IItineraryPlannerService
         IReadOnlyList<ExperienceRecommendationItemResponse> recommendedItems,
         DateTime dayStart,
         DateTime dayEnd,
+        decimal? dayBudget,
         CancellationToken cancellationToken)
     {
         var candidatePoolSize = Math.Min(
@@ -140,6 +298,7 @@ public class ItineraryPlannerService : IItineraryPlannerService
         var currentPoint = request.Start;
         var currentTime = dayStart;
         var maxStops = request.MaxStops!.Value;
+        decimal knownCost = 0;
 
         while (selected.Count < maxStops && remaining.Count > 0)
         {
@@ -150,6 +309,7 @@ public class ItineraryPlannerService : IItineraryPlannerService
                 currentTime,
                 dayEnd,
                 selected,
+                dayBudget is null ? null : Math.Max(0, dayBudget.Value - knownCost),
                 cancellationToken);
 
             if (best is null)
@@ -172,6 +332,9 @@ public class ItineraryPlannerService : IItineraryPlannerService
             });
 
             selected.Add(best);
+            knownCost += best.Item.StartingPricePerPerson is null
+                ? 0
+                : best.Item.StartingPricePerPerson.Value * (request.GuestsCount ?? 1);
             remaining.RemoveAll(x => x.ExperienceId == best.Item.ExperienceId);
             warnings.AddRange(best.Leg.Warnings);
             currentPoint = ToPoint(best.Item);
@@ -225,6 +388,7 @@ public class ItineraryPlannerService : IItineraryPlannerService
         DateTime currentTime,
         DateTime dayEnd,
         IReadOnlyList<ScheduledExperience> selected,
+        decimal? remainingBudget,
         CancellationToken cancellationToken)
     {
         ScheduledExperience? best = null;
@@ -235,6 +399,16 @@ public class ItineraryPlannerService : IItineraryPlannerService
 
         foreach (var candidate in candidates)
         {
+            var candidateCost = candidate.StartingPricePerPerson is null
+                ? (decimal?)null
+                : candidate.StartingPricePerPerson.Value * (request.GuestsCount ?? 1);
+            if (remainingBudget is not null &&
+                candidateCost is not null &&
+                candidateCost > remainingBudget)
+            {
+                continue;
+            }
+
             var route = await _routePlanner.GetRouteAsync(new ItineraryRouteRequest
             {
                 From = currentPoint,
@@ -306,6 +480,10 @@ public class ItineraryPlannerService : IItineraryPlannerService
                 ArrivalLocal = FormatLocalTime(scheduled.ArrivalLocal),
                 DepartureLocal = FormatLocalTime(scheduled.DepartureLocal),
                 DurationMinutes = scheduled.DurationMinutes,
+                EstimatedCost = item.StartingPricePerPerson is null
+                    ? null
+                    : item.StartingPricePerPerson.Value * (request.GuestsCount ?? 1),
+                Explanation = item.Explanation.ShortExplanation,
                 RecommendationScore = item.FinalScore,
                 PrimaryImage = item.PrimaryImage,
                 Notes = BuildStopNotes(item)
@@ -343,8 +521,12 @@ public class ItineraryPlannerService : IItineraryPlannerService
         return NormalizeRequest(new ItineraryPlanRequest
         {
             Start = request.Start,
+            Origin = request.Origin,
             End = request.End,
             Date = request.Date,
+            StartDate = request.StartDate,
+            EndDate = request.EndDate,
+            Destination = request.Destination ?? classified.ResolvedRegionName,
             DayStartLocal = request.DayStartLocal ?? classified.DayStartLocal,
             DayEndLocal = request.DayEndLocal ?? classified.DayEndLocal,
             TravelMode = request.TravelMode ?? classified.TravelMode ?? ItineraryTravelMode.PublicTransit,
@@ -362,7 +544,10 @@ public class ItineraryPlannerService : IItineraryPlannerService
             IncludeMealBreaks = classified.IncludeMealBreaks ?? false,
             ReturnToStart = classified.ReturnToStart ?? true,
             AvoidLongWalking = classified.AvoidLongWalking ?? false,
-            PreferredLanguage = preferredLanguage
+            PreferredLanguage = preferredLanguage,
+            BudgetLevel = request.BudgetLevel,
+            TotalBudget = request.TotalBudget,
+            Currency = request.Currency
         });
     }
 
@@ -391,8 +576,8 @@ public class ItineraryPlannerService : IItineraryPlannerService
         return new ExperienceRecommendationRequest
         {
             Categories = categories,
-            Latitude = request.Start.Latitude,
-            Longitude = request.Start.Longitude,
+            Latitude = request.Start.Label == PendingFirstStopOrigin ? null : request.Start.Latitude,
+            Longitude = request.Start.Label == PendingFirstStopOrigin ? null : request.Start.Longitude,
             Adm0Gid = request.Adm0Gid,
             Adm1Gid = request.Adm1Gid,
             Adm2Gid = request.Adm2Gid,
@@ -416,6 +601,19 @@ public class ItineraryPlannerService : IItineraryPlannerService
         }
 
         request.Date ??= DateOnly.FromDateTime(DateTime.Today);
+        request.StartDate ??= request.Date;
+        request.EndDate ??= request.StartDate;
+        if (request.EndDate.Value < request.StartDate.Value)
+            throw new ArgumentException("Trip end date must be on or after the start date.");
+        if (request.TotalBudget is < 0)
+            throw new ArgumentException("Total trip budget cannot be negative.");
+        if (request.BudgetLevel is < 1 or > 5)
+            throw new ArgumentException("Budget level must be between 1 and 5.");
+        request.Currency = string.IsNullOrWhiteSpace(request.Currency)
+            ? "USD"
+            : request.Currency.Trim().ToUpperInvariant();
+        if (request.Currency.Length != 3)
+            throw new ArgumentException("Currency must use a three-letter code.");
         request.DayStartLocal ??= new TimeOnly(9, 0);
         request.DayEndLocal ??= new TimeOnly(21, 0);
         if (request.DayEndLocal <= request.DayStartLocal)
@@ -463,6 +661,81 @@ public class ItineraryPlannerService : IItineraryPlannerService
 
         return request;
     }
+
+    private async Task ResolveOriginAsync(
+        ItineraryPlanRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request.Origin is not null)
+        {
+            request.Start = request.Origin;
+            request.Start.Label ??= "Explicit start point";
+            return;
+        }
+
+        if (request.Start.Latitude != 0 || request.Start.Longitude != 0)
+        {
+            request.Start.Label ??= "Selected start point";
+            return;
+        }
+
+        var centroid = await _regionReadService.ResolveCentroidAsync(
+            request.Adm0Gid,
+            request.Adm1Gid,
+            request.Adm2Gid,
+            request.Adm3Gid,
+            cancellationToken);
+        if (centroid is null)
+        {
+            request.Start = new ItineraryPointRequest
+            {
+                Label = PendingFirstStopOrigin
+            };
+            return;
+        }
+
+        request.Start = new ItineraryPointRequest
+        {
+            Latitude = centroid.Latitude,
+            Longitude = centroid.Longitude,
+            Label = $"{centroid.Name ?? "Selected region"} centroid ({centroid.AdministrativeLevel})"
+        };
+    }
+
+    private static ItineraryPlanRequest CloneForDate(
+        ItineraryPlanRequest source,
+        DateOnly date) =>
+        new()
+        {
+            Start = source.Start,
+            Origin = source.Origin,
+            End = source.End,
+            Date = date,
+            StartDate = source.StartDate,
+            EndDate = source.EndDate,
+            Destination = source.Destination,
+            DayStartLocal = source.DayStartLocal,
+            DayEndLocal = source.DayEndLocal,
+            TravelMode = source.TravelMode,
+            FallbackTravelMode = source.FallbackTravelMode,
+            Pace = source.Pace,
+            Categories = source.Categories,
+            Adm0Gid = source.Adm0Gid,
+            Adm1Gid = source.Adm1Gid,
+            Adm2Gid = source.Adm2Gid,
+            Adm3Gid = source.Adm3Gid,
+            MaxStops = source.MaxStops,
+            CandidateLimit = source.CandidateLimit,
+            GuestsCount = source.GuestsCount,
+            CrowdPreference = source.CrowdPreference,
+            IncludeMealBreaks = source.IncludeMealBreaks,
+            ReturnToStart = source.ReturnToStart,
+            AvoidLongWalking = source.AvoidLongWalking,
+            PreferredLanguage = source.PreferredLanguage,
+            BudgetLevel = source.BudgetLevel,
+            TotalBudget = source.TotalBudget,
+            Currency = source.Currency
+        };
 
     private List<ItineraryCategoryPreference> NormalizeCategories(
         IReadOnlyList<ItineraryCategoryPreference> categories)
@@ -523,6 +796,7 @@ public class ItineraryPlannerService : IItineraryPlannerService
             FallbackTravelMode = ItineraryTravelMode.Walking,
             ReturnToStart = true
         };
+        preferences.RegionName = FirstMentionedRegion(normalized);
 
         AddCategoryIfMentioned(preferences, normalized, ExperienceCategory.Historical, "historical", "history", "تاريخي", "اثري", "آثار", "اثار");
         AddCategoryIfMentioned(preferences, normalized, ExperienceCategory.Nature, "nature", "park", "beach", "طبيعة", "حديقة", "بحر");
@@ -571,13 +845,10 @@ public class ItineraryPlannerService : IItineraryPlannerService
         return preferences;
     }
 
-    private ItineraryPlanResponse BuildEmptyResponse(ItineraryPlanRequest request, List<string> warnings) =>
+    private ItineraryDayResponse BuildEmptyDayResponse(ItineraryPlanRequest request, List<string> warnings) =>
         new()
         {
             Date = request.Date!.Value,
-            TravelMode = request.TravelMode,
-            FallbackTravelMode = request.FallbackTravelMode,
-            Pace = request.Pace,
             Warnings = warnings,
             Stops =
             [
@@ -765,6 +1036,47 @@ public class ItineraryPlannerService : IItineraryPlannerService
     private static bool ContainsAny(string text, params string[] terms) =>
         terms.Any(term => text.Contains(NormalizeForMatching(term), StringComparison.OrdinalIgnoreCase));
 
+    private static string? FirstMentionedRegion(string text)
+    {
+        var aliases = new (string Match, string Region)[]
+        {
+            ("downtown cairo", "Downtown Cairo"), ("وسط البلد", "Downtown Cairo"),
+            ("zamalek", "Zamalek"), ("الزمالك", "Zamalek"),
+            ("alexandria", "Alexandria"), ("الاسكندرية", "Alexandria"),
+            ("giza", "Giza"), ("الجيزه", "Giza"),
+            ("luxor", "Luxor"), ("الاقصر", "Luxor"),
+            ("aswan", "Aswan"), ("اسوان", "Aswan"),
+            ("cairo", "Cairo"), ("القاهره", "Cairo")
+        };
+        return aliases.FirstOrDefault(x =>
+            text.Contains(NormalizeForMatching(x.Match), StringComparison.OrdinalIgnoreCase)).Region;
+    }
+
+    private static List<ExperienceRecommendationItemResponse> ApplyBudgetLevel(
+        IReadOnlyList<ExperienceRecommendationItemResponse> items,
+        int? requestedLevel)
+    {
+        if (requestedLevel is null)
+            return items.ToList();
+        var priced = items
+            .Where(item => item.StartingPricePerPerson is > 0)
+            .OrderBy(item => item.StartingPricePerPerson)
+            .Select((item, index) => new
+            {
+                item.ExperienceId,
+                Level = Math.Clamp(
+                    (int)Math.Ceiling((index + 1) * 5.0 / Math.Max(1, items.Count(value => value.StartingPricePerPerson is > 0))),
+                    1,
+                    5)
+            })
+            .ToDictionary(value => value.ExperienceId, value => value.Level);
+        var filtered = items
+            .Where(item => !priced.TryGetValue(item.ExperienceId, out var level) ||
+                           Math.Abs(level - requestedLevel.Value) <= 1)
+            .ToList();
+        return filtered.Count > 0 ? filtered : items.ToList();
+    }
+
     private static string NormalizeForMatching(string value) =>
         value.Trim()
             .ToLowerInvariant()
@@ -780,6 +1092,7 @@ public class ItineraryPlannerService : IItineraryPlannerService
 
     private const string LocalFallbackNotes =
         "Local fallback classification was used because Groq was unavailable or returned invalid JSON.";
+    private const string PendingFirstStopOrigin = "Pending first itinerary stop fallback";
 
     private sealed record ScheduledExperience(
         ExperienceRecommendationItemResponse Item,

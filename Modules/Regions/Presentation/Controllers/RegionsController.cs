@@ -9,6 +9,7 @@ using Glinter.Modules.Regions.Application.Governorates.Queries;
 using Glinter.Modules.Regions.Application.Neighbourhoods.Commands;
 using Glinter.Modules.Regions.Application.Neighbourhoods.Queries;
 using Glinter.Modules.Regions.Application.PointLookup.Queries;
+using Glinter.Modules.Regions.Application.Abstractions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -45,9 +46,31 @@ public class RegionsController(
     UpdateNeighbourhoodHandler updateNeighbourhood,
     DeleteNeighbourhoodHandler deleteNeighbourhood,
     // Point lookup
-    GetRegionsByPointHandler getRegionsByPoint
+    GetRegionsByPointHandler getRegionsByPoint,
+    IRegionRecommendationReadService regionReadService
 ) : ControllerBase
 {
+    [HttpGet("centroid")]
+    public async Task<IActionResult> GetCentroid(
+        [FromQuery] RegionHierarchyGidsDto request,
+        CancellationToken cancellationToken)
+    {
+        var result = await regionReadService.ResolveCentroidAsync(
+            request.Adm0Gid,
+            request.Adm1Gid,
+            request.Adm2Gid,
+            request.Adm3Gid,
+            cancellationToken);
+        return result is null
+            ? NotFound(new ProblemDetails
+            {
+                Status = StatusCodes.Status404NotFound,
+                Title = "Region centroid unavailable.",
+                Detail = "The selected region has no usable boundary geometry.",
+                Instance = Request.Path
+            })
+            : Ok(result);
+    }
     [HttpGet("by-point")]
     public async Task<IActionResult> GetByPoint([FromQuery] RegionByPointRequest request, CancellationToken ct)
     {

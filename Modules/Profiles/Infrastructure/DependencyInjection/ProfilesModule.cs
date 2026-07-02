@@ -38,6 +38,7 @@ public static class ProfilesModule
         services.AddScoped<IProfilesDbContext>(sp =>
             sp.GetRequiredService<ProfilesDbContext>());
         services.AddScoped<IProfilesReadService, ProfilesReadService>();
+        services.AddScoped<IProfilesAdminReadService, ProfilesAdminReadService>();
         services.AddScoped<UpsertTravelerProfileCommandHandler>();
         services.AddScoped<GetMyProfileQueryHandler>();
         services.AddScoped<UpsertLocalBuddyProfileCommandHandler>();

@@ -15,6 +15,20 @@ public sealed class SavedItinerary
     public string PreferredLanguage { get; set; } = "en";
     public decimal? EstimatedTotalCost { get; set; }
     public string? Currency { get; set; }
+    public string? PlannerExplanation { get; set; }
+    public string? WarningsJson { get; set; }
+    public double? RecommendationScore { get; set; }
+    public double? TotalDistanceKm { get; set; }
+    public int? TotalTravelMinutes { get; set; }
+    public string? Pace { get; set; }
+    public string? TravelMode { get; set; }
+    public string? FallbackTravelMode { get; set; }
+    public double? OriginLatitude { get; set; }
+    public double? OriginLongitude { get; set; }
+    public string? OriginLabel { get; set; }
+    public double? WeatherLatitude { get; set; }
+    public double? WeatherLongitude { get; set; }
+    public string? WeatherLocation { get; set; }
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
     public List<SavedItineraryItem> Items { get; set; } = [];

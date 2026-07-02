@@ -26,6 +26,12 @@ public class UpsertTravelerProfileCommandValidator
 
         if (!string.IsNullOrWhiteSpace(command.PreferredInterests) && command.PreferredInterests.Length > 1000)
             errors.Add("Preferred interests must not exceed 1000 characters.");
+        if (!string.IsNullOrWhiteSpace(command.PreferredVibes) && command.PreferredVibes.Length > 300)
+            errors.Add("Preferred vibes must not exceed 300 characters.");
+        if (!string.IsNullOrWhiteSpace(command.ComfortLevel) && command.ComfortLevel.Length > 50)
+            errors.Add("Comfort level must not exceed 50 characters.");
+        if (!string.IsNullOrWhiteSpace(command.SafetyPriority) && command.SafetyPriority.Length > 50)
+            errors.Add("Safety priority must not exceed 50 characters.");
 
         return errors;
     }

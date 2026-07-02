@@ -17,6 +17,9 @@ export interface TravelerProfileResponse {
   preferredBudgetLevel?: string;
   travelStyle?: string;
   preferredInterests?: string;
+  preferredVibes?: string;
+  comfortLevel?: string;
+  safetyPriority?: string;
   profileImageUrl?: string;
   interests: InterestResponse[];
   followersCount: number;
@@ -125,6 +128,9 @@ export interface TravelerProfileRequest {
   preferredBudgetLevel?: string;
   travelStyle?: string;
   preferredInterests?: string;
+  preferredVibes?: string;
+  comfortLevel?: string;
+  safetyPriority?: string;
   interestIds: string[];
 }
 
@@ -765,6 +771,8 @@ export interface HotelRecommendationPreferences {
   preferredLanguage: string;
   classificationConfidence?: number | null;
   notes?: string | null;
+  regionName?: string | null;
+  resolvedRegionName?: string | null;
 }
 
 export interface HotelRecommendationRegionResponse {
@@ -834,6 +842,8 @@ export interface HotelRecommendationItemResponse {
 export interface HotelRecommendationResponse {
   preferences: HotelRecommendationPreferences;
   totalCandidates: number;
+  totalMatchingCandidates: number;
+  evaluatedCandidates: number;
   returnedCount: number;
   items: HotelRecommendationItemResponse[];
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CalendarDays, Heart, MapPin, Pencil, Route, Trash2 } from "lucide-react";
+import { CalendarDays, Eye, Heart, LoaderCircle, MapPin, Pencil, Route, Trash2 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { staysApi } from "@/shared/services/api-stays";
@@ -8,24 +8,32 @@ import type { SavedItinerary } from "@/shared/types/itineraries";
 import { formatUsdPrice } from "@/shared/lib/price";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import HotelDetailsModal from "@/components/HotelDetailsModal";
+import { toHotel } from "@/features/where-to-stay/hooks";
+import type { Hotel } from "@/features/where-to-stay/types";
+import { useNavigate } from "react-router-dom";
 
 type FavoriteStay = Awaited<ReturnType<typeof staysApi.getFavorites>>["items"][number];
 
 const SavedPage = () => {
+  const navigate = useNavigate();
   const [tab, setTab] = useState<"trips" | "hotels">("trips");
   const [trips, setTrips] = useState<SavedItinerary[]>([]);
   const [hotels, setHotels] = useState<FavoriteStay[]>([]);
   const [loading, setLoading] = useState(true);
-  const [expandedId, setExpandedId] = useState<string>();
   const [deleteTrip, setDeleteTrip] = useState<SavedItinerary>();
   const [renamingId, setRenamingId] = useState<string>();
   const [renameValue, setRenameValue] = useState("");
+  const [favoriteTotal, setFavoriteTotal] = useState(0);
+  const [selectedHotel, setSelectedHotel] = useState<Hotel | null>(null);
+  const [hotelDetailsLoading, setHotelDetailsLoading] = useState<number>();
 
   useEffect(() => {
-    Promise.all([itinerariesApi.list(), staysApi.getFavorites()])
+    Promise.all([itinerariesApi.list(), staysApi.getAllFavorites()])
       .then(([savedTrips, savedHotels]) => {
         setTrips(savedTrips);
         setHotels(savedHotels.items);
+        setFavoriteTotal(savedHotels.totalCount);
       })
       .catch((error: unknown) =>
         toast.error(error instanceof Error ? error.message : "Could not load saved items."))
@@ -64,9 +72,21 @@ const SavedPage = () => {
     try {
       await staysApi.removeFavorite(hotel.id);
       setHotels((current) => current.filter((item) => item.id !== hotel.id));
+      setFavoriteTotal((current) => Math.max(0, current - 1));
       toast.success(`${hotel.name} removed from favorites.`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not update favorites.");
+    }
+  };
+
+  const openHotel = async (stayId: number) => {
+    setHotelDetailsLoading(stayId);
+    try {
+      setSelectedHotel(toHotel(await staysApi.getStayById(stayId)));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "This hotel is no longer available.");
+    } finally {
+      setHotelDetailsLoading(undefined);
     }
   };
 
@@ -85,7 +105,7 @@ const SavedPage = () => {
             Trips ({trips.length})
           </button>
           <button type="button" onClick={() => setTab("hotels")} className={`rounded-lg px-4 py-2 text-sm ${tab === "hotels" ? "bg-primary text-primary-foreground" : ""}`}>
-            Hotels ({hotels.length})
+            Hotels ({favoriteTotal})
           </button>
         </div>
 
@@ -120,28 +140,13 @@ const SavedPage = () => {
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <button type="button" onClick={() => setExpandedId(expandedId === trip.id ? undefined : trip.id)} className="rounded-lg border border-border px-3 py-2 text-xs">
-                      <Route className="mr-1 inline h-3.5 w-3.5" /> {expandedId === trip.id ? "Close" : "Open"}
+                    <button type="button" onClick={() => navigate(`/itineraries/${trip.id}`)} className="rounded-lg border border-border px-3 py-2 text-xs">
+                      <Route className="mr-1 inline h-3.5 w-3.5" /> Open editor
                     </button>
                     <button type="button" onClick={() => { setRenamingId(trip.id); setRenameValue(trip.title); }} aria-label={`Rename ${trip.title}`} className="rounded-lg border border-border p-2"><Pencil className="h-4 w-4" /></button>
                     <button type="button" onClick={() => setDeleteTrip(trip)} aria-label={`Delete ${trip.title}`} className="rounded-lg border border-destructive/30 p-2 text-destructive"><Trash2 className="h-4 w-4" /></button>
                   </div>
                 </div>
-                {expandedId === trip.id && (
-                  <div className="border-t border-border bg-secondary/20 p-5">
-                    <div className="space-y-3">
-                      {trip.items.map((item) => (
-                        <div key={item.id} className="flex gap-3 rounded-xl bg-background p-3 text-sm">
-                          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-primary/15 text-xs font-bold text-primary">{item.sortOrder}</span>
-                          <div>
-                            <p className="font-semibold">{item.name}</p>
-                            <p className="text-xs text-muted-foreground">Day {item.dayNumber}{item.startTime ? ` · ${item.startTime.slice(0, 5)}` : ""}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </article>
             ))}
             {trips.length === 0 && <Empty icon={Route} text="No saved trips yet. Build and save one in Where to Go." />}
@@ -158,6 +163,17 @@ const SavedPage = () => {
                     <span className="font-semibold">{hotel.price == null ? "Price unavailable" : `${formatUsdPrice(hotel.price)} / night`}</span>
                     <button type="button" onClick={() => void removeHotel(hotel)} aria-label={`Remove ${hotel.name} from favorites`} className="rounded-full bg-primary/10 p-2 text-primary"><Heart className="h-4 w-4 fill-current" /></button>
                   </div>
+                  <button
+                    type="button"
+                    disabled={hotelDetailsLoading === hotel.id}
+                    onClick={() => void openHotel(hotel.id)}
+                    className="mt-3 flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-border text-xs font-semibold disabled:opacity-60"
+                  >
+                    {hotelDetailsLoading === hotel.id
+                      ? <LoaderCircle className="h-4 w-4 animate-spin" />
+                      : <Eye className="h-4 w-4" />}
+                    View details
+                  </button>
                 </div>
               </article>
             ))}
@@ -177,6 +193,22 @@ const SavedPage = () => {
           setDeleteTrip(undefined);
         }}
       />
+      {selectedHotel && (
+        <HotelDetailsModal
+          hotel={selectedHotel}
+          checkin=""
+          checkout=""
+          guests={1}
+          onClose={() => setSelectedHotel(null)}
+          onFavoriteChange={(stayId, isFavorite) => {
+            if (!isFavorite) {
+              setHotels((current) => current.filter((hotel) => hotel.id !== stayId));
+              setFavoriteTotal((current) => Math.max(0, current - 1));
+              setSelectedHotel(null);
+            }
+          }}
+        />
+      )}
       <Footer />
     </div>
   );

@@ -4,6 +4,7 @@ using Glinter.Modules.Stays.Application.Services;
 using Glinter.Modules.Stays.Infrastructure.External.Groq;
 using Glinter.Modules.Stays.Infrastructure.Files;
 using Glinter.Modules.Stays.Infrastructure.Persistence;
+using Glinter.Modules.Stays.Infrastructure.Services;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -90,6 +91,7 @@ public static class StaysModule
         });
 
         services.AddScoped<StayService>();
+        services.AddScoped<IStaysAdminReadService, StaysAdminReadService>();
         services.AddScoped<HotelRecommendationService>();
         services.AddSingleton<StayImageStorage>();
 

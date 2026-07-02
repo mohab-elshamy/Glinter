@@ -27,6 +27,7 @@ import {
   buildStructuredRecommendationRequest,
   NATURAL_LANGUAGE_MAX_CHARACTERS,
 } from "../recommendation-form";
+import { mapInterestsToCategories } from "@/shared/lib/interest-mapping";
 
 const categories = ["Historical", "Nature", "Shopping", "Nightlife", "Dining"] as const;
 const amenities = ["WiFi", "Gym", "Pool", "Spa", "Restaurant", "Bar", "Parking"] as const;
@@ -74,6 +75,9 @@ const HotelRecommendationPanel = ({
     if (manuallyChangedBudget.current || profileQuery.data?.profileType !== "Traveler") return;
     const profileBudget = parseBudgetLevel(profileQuery.data.preferredBudgetLevel);
     if (profileBudget) setBudgetLevel(profileBudget);
+    setSelectedCategories((current) => current.length > 0
+      ? current
+      : mapInterestsToCategories(profileQuery.data.interests.map((interest) => interest.name)));
   }, [profileQuery.data]);
 
   useEffect(() => {
@@ -413,7 +417,7 @@ const HotelRecommendationPanel = ({
                 <div className="mb-3 flex items-start gap-2.5">
                   <div className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-violet-500/15 text-violet-300"><Bot className="h-3.5 w-3.5" /></div>
                   <p className="rounded-2xl rounded-tl-md border border-white/8 bg-white/[0.045] px-3.5 py-3 text-xs leading-5 text-slate-300">
-                    I found <strong className="text-white">{state.response.returnedCount} ranked match{state.response.returnedCount === 1 ? "" : "es"}</strong>. Here are the strongest options.
+                    I found <strong className="text-white">{state.response.returnedCount} ranked match{state.response.returnedCount === 1 ? "" : "es"}</strong> from {state.response.evaluatedCandidates} evaluated and {state.response.totalMatchingCandidates ?? state.response.totalCandidates} eligible stays.
                   </p>
                 </div>
                 <div className="space-y-3">

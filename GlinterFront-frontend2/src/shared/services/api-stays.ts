@@ -131,6 +131,24 @@ export const staysApi = {
       favoritedAtUtc: string;
     }>>(`/stays/favorites?page=${page}&pageSize=${pageSize}`),
 
+  getAllFavorites: async () => {
+    const items: Awaited<ReturnType<typeof staysApi.getFavorites>>["items"] = [];
+    let totalCount = 0;
+    for (let page = 1; page <= 100; page += 1) {
+      const result = await staysApi.getFavorites(page, 50);
+      totalCount = result.totalCount;
+      items.push(...result.items);
+      if (items.length >= totalCount || result.items.length === 0) break;
+    }
+    return { items, totalCount };
+  },
+
+  getFavoriteStatuses: (stayIds: number[]) =>
+    request<{ favoriteStayIds: number[] }>("/stays/favorite-statuses", {
+      method: "POST",
+      body: { stayIds },
+    }),
+
   getFavoriteStatus: (stayId: number) =>
     request<{ stayId: number; isFavorite: boolean }>(
       `/stays/${stayId}/favorite-status`,

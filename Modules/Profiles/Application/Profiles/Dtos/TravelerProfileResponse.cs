@@ -19,6 +19,9 @@ public class TravelerProfileResponse
     public string? TravelStyle { get; set; }
 
     public string? PreferredInterests { get; set; }
+    public string? PreferredVibes { get; set; }
+    public string? ComfortLevel { get; set; }
+    public string? SafetyPriority { get; set; }
 
     public string? ProfileImageUrl { get; set; }
 

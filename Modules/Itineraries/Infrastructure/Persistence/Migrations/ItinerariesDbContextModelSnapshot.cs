@@ -59,10 +59,35 @@ namespace Glinter.Modules.Itineraries.Infrastructure.Persistence.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
 
+                    b.Property<string>("FallbackTravelMode")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("OriginLabel")
+                        .HasMaxLength(240)
+                        .HasColumnType("character varying(240)");
+
+                    b.Property<double?>("OriginLatitude")
+                        .HasColumnType("double precision");
+
+                    b.Property<double?>("OriginLongitude")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("Pace")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("PlannerExplanation")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
                     b.Property<string>("PreferredLanguage")
                         .IsRequired()
                         .HasMaxLength(10)
                         .HasColumnType("character varying(10)");
+
+                    b.Property<double?>("RecommendationScore")
+                        .HasColumnType("double precision");
 
                     b.Property<DateOnly>("StartDate")
                         .HasColumnType("date");
@@ -72,12 +97,35 @@ namespace Glinter.Modules.Itineraries.Infrastructure.Persistence.Migrations
                         .HasMaxLength(160)
                         .HasColumnType("character varying(160)");
 
+                    b.Property<double?>("TotalDistanceKm")
+                        .HasColumnType("double precision");
+
+                    b.Property<int?>("TotalTravelMinutes")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("TravelMode")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
                     b.Property<DateTime>("UpdatedAtUtc")
                         .IsConcurrencyToken()
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("WarningsJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<double?>("WeatherLatitude")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("WeatherLocation")
+                        .HasMaxLength(240)
+                        .HasColumnType("character varying(240)");
+
+                    b.Property<double?>("WeatherLongitude")
+                        .HasColumnType("double precision");
 
                     b.HasKey("Id");
 
@@ -91,6 +139,10 @@ namespace Glinter.Modules.Itineraries.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
+
+                    b.Property<string>("Category")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
 
                     b.Property<int>("DayNumber")
                         .HasColumnType("integer");
@@ -120,6 +172,10 @@ namespace Glinter.Modules.Itineraries.Infrastructure.Persistence.Migrations
                         .HasMaxLength(1500)
                         .HasColumnType("character varying(1500)");
 
+                    b.Property<string>("ImageUrl")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
                     b.Property<Guid>("ItineraryId")
                         .HasColumnType("uuid");
 
@@ -133,6 +189,23 @@ namespace Glinter.Modules.Itineraries.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(240)
                         .HasColumnType("character varying(240)");
+
+                    b.Property<decimal?>("Rating")
+                        .HasPrecision(4, 2)
+                        .HasColumnType("numeric(4,2)");
+
+                    b.Property<string>("RouteGeometryJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("RouteInstructionsJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("RouteProviderFromPrevious")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<string>("RouteWarningsJson")
+                        .HasColumnType("jsonb");
 
                     b.Property<int>("SortOrder")
                         .HasColumnType("integer");

@@ -20,6 +20,9 @@ public static class ProfilesMappings
             PreferredBudgetLevel = profile.PreferredBudgetLevel,
             TravelStyle = profile.TravelStyle,
             PreferredInterests = profile.PreferredInterests,
+            PreferredVibes = profile.PreferredVibes,
+            ComfortLevel = profile.ComfortLevel,
+            SafetyPriority = profile.SafetyPriority,
             ProfileImageUrl = profile.ProfileImageUrl,
             Interests = profile.Interests
                 .Select(x => ToInterestResponse(x.Interest))

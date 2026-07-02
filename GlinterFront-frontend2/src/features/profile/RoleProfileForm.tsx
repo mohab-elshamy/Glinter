@@ -119,6 +119,9 @@ const RoleProfileForm = ({
           preferredBudgetLevel: budgetLevelToProfileString(budget),
           travelStyle,
           preferredInterests: selectedNames.join(", ") || undefined,
+          preferredVibes: traveler?.preferredVibes,
+          comfortLevel: traveler?.comfortLevel,
+          safetyPriority: traveler?.safetyPriority,
           interestIds: selectedInterestIds,
         });
       } else if (role === "LocalBuddy") {

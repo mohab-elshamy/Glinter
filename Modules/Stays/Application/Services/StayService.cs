@@ -182,6 +182,34 @@ public class StayService
         };
     }
 
+    public async Task<StayFavoriteStatusesResponse> GetFavoriteStatusesAsync(
+        StayFavoriteStatusesRequest request,
+        CancellationToken cancellationToken)
+    {
+        var userId = RequireCurrentUserId();
+        var stayIds = request.StayIds
+            .Where(id => id > 0)
+            .Distinct()
+            .Take(200)
+            .ToArray();
+        if (stayIds.Length == 0)
+        {
+            return new StayFavoriteStatusesResponse();
+        }
+
+        return new StayFavoriteStatusesResponse
+        {
+            FavoriteStayIds = await _dbContext.StayFavorites
+                .AsNoTracking()
+                .Where(x => x.UserId == userId &&
+                            stayIds.Contains(x.StayId) &&
+                            x.Stay.IsActive)
+                .OrderBy(x => x.StayId)
+                .Select(x => x.StayId)
+                .ToListAsync(cancellationToken)
+        };
+    }
+
     public async Task<PagedResponse<StayFavoriteSummaryResponse>> GetFavoritesAsync(
         StayFavoriteListRequest request,
         CancellationToken cancellationToken)
@@ -200,6 +228,7 @@ public class StayService
             TotalCount = await query.CountAsync(cancellationToken),
             Items = await query
                 .OrderByDescending(x => x.CreatedAtUtc)
+                .ThenBy(x => x.StayId)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .Select(x => new StayFavoriteSummaryResponse

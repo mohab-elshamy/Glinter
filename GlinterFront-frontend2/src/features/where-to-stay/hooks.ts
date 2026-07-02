@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { staysApi } from "@/shared/services/api-stays";
@@ -174,7 +174,7 @@ export function useWhereToStay() {
 
   const filteredHotels = apiHotels;
 
-  const selectHotelById = async (hotelId: number) => {
+  const selectHotelById = useCallback(async (hotelId: number) => {
     let detail: Hotel;
     try {
       detail = toHotel(await staysApi.getStayById(hotelId));
@@ -203,12 +203,12 @@ export function useWhereToStay() {
     } catch {
       setSelectedHotel(detail);
     }
-  };
+  }, []);
 
-  const selectHotel = async (hotel: Hotel) => {
+  const selectHotel = useCallback(async (hotel: Hotel) => {
     if (!hotel.id) return;
     await selectHotelById(hotel.id);
-  };
+  }, [selectHotelById]);
 
   const resolveRegionByPoint = async (lat: number, lng: number) => {
     setLocatingRegion(true);
