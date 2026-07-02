@@ -1,10 +1,13 @@
 ﻿using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 
 #nullable disable
 
 namespace Glinter.Modules.Experiences.Infrastructure.Persistence.Migrations
 {
     /// <inheritdoc />
+    [DbContext(typeof(ExperiencesDbContext))]
+    [Migration("20260702090000_SplitExperienceAmenityNames")]
     public partial class SplitExperienceAmenityNames : Migration
     {
         /// <inheritdoc />
