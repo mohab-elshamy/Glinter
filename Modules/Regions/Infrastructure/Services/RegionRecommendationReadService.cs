@@ -7,6 +7,60 @@ namespace Glinter.Modules.Regions.Infrastructure.Services;
 public sealed class RegionRecommendationReadService(
     RegionsDbContext dbContext) : IRegionRecommendationReadService
 {
+    public async Task<RegionNameResolution> ResolveNameAsync(
+        string name,
+        CancellationToken cancellationToken = default)
+    {
+        var normalized = name.Trim().ToLower();
+        if (normalized.Length is < 2 or > 120)
+            return new RegionNameResolution(false, false, null, null, null, null, null);
+
+        var adm3 = await dbContext.Adm3
+            .AsNoTracking()
+            .Where(x =>
+                (x.NameEn != null && x.NameEn.ToLower() == normalized) ||
+                (x.NameAr != null && x.NameAr.ToLower() == normalized))
+            .Select(x => new RegionNameMatch(
+                x.District.Governorate.Country.Gid,
+                x.District.Governorate.Gid,
+                x.District.Gid,
+                x.Gid,
+                x.NameEn ?? x.NameAr))
+            .Take(2)
+            .ToListAsync(cancellationToken);
+        if (adm3.Count > 0) return ToResolution(adm3);
+
+        var adm2 = await dbContext.Adm2
+            .AsNoTracking()
+            .Where(x =>
+                x.NameEn.ToLower() == normalized ||
+                (x.NameAr != null && x.NameAr.ToLower() == normalized))
+            .Select(x => new RegionNameMatch(
+                x.Governorate.Country.Gid,
+                x.Governorate.Gid,
+                x.Gid,
+                null,
+                x.NameEn ?? x.NameAr))
+            .Take(2)
+            .ToListAsync(cancellationToken);
+        if (adm2.Count > 0) return ToResolution(adm2);
+
+        var adm1 = await dbContext.Adm1
+            .AsNoTracking()
+            .Where(x =>
+                x.NameEn.ToLower() == normalized ||
+                (x.NameAr != null && x.NameAr.ToLower() == normalized))
+            .Select(x => new RegionNameMatch(
+                x.Country.Gid,
+                x.Gid,
+                null,
+                null,
+                x.NameEn ?? x.NameAr))
+            .Take(2)
+            .ToListAsync(cancellationToken);
+        return ToResolution(adm1);
+    }
+
     public async Task<IReadOnlyDictionary<int, RegionRecommendationNames>> ResolveAsync(
         IReadOnlyCollection<RegionRecommendationReference> references,
         CancellationToken cancellationToken = default)
@@ -105,4 +159,29 @@ public sealed class RegionRecommendationReadService(
     }
 
     private sealed record RegionName(int Gid, string? NameEn, string? NameAr);
+
+    private static RegionNameResolution ToResolution(
+        IReadOnlyList<RegionNameMatch> matches)
+    {
+        if (matches.Count == 0)
+            return new RegionNameResolution(false, false, null, null, null, null, null);
+        if (matches.Count > 1)
+            return new RegionNameResolution(false, true, null, null, null, null, null);
+        var match = matches[0];
+        return new RegionNameResolution(
+            true,
+            false,
+            match.Adm0Gid,
+            match.Adm1Gid,
+            match.Adm2Gid,
+            match.Adm3Gid,
+            match.DisplayName);
+    }
+
+    private sealed record RegionNameMatch(
+        int? Adm0Gid,
+        int? Adm1Gid,
+        int? Adm2Gid,
+        int? Adm3Gid,
+        string? DisplayName);
 }

@@ -121,6 +121,107 @@ public class StayService
         return ToResponse(stay);
     }
 
+    public async Task AddFavoriteAsync(
+        int stayId,
+        CancellationToken cancellationToken)
+    {
+        var userId = RequireCurrentUserId();
+        var stayExists = await _dbContext.Stays
+            .AsNoTracking()
+            .AnyAsync(x => x.Id == stayId && x.IsActive, cancellationToken);
+        if (!stayExists)
+        {
+            throw new KeyNotFoundException("Active stay not found.");
+        }
+
+        if (await _dbContext.StayFavorites.AnyAsync(
+                x => x.UserId == userId && x.StayId == stayId,
+                cancellationToken))
+        {
+            return;
+        }
+
+        _dbContext.StayFavorites.Add(new StayFavorite
+        {
+            UserId = userId,
+            StayId = stayId
+        });
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task RemoveFavoriteAsync(
+        int stayId,
+        CancellationToken cancellationToken)
+    {
+        var userId = RequireCurrentUserId();
+        var favorite = await _dbContext.StayFavorites.FindAsync(
+            [userId, stayId],
+            cancellationToken);
+        if (favorite is null)
+        {
+            return;
+        }
+
+        _dbContext.StayFavorites.Remove(favorite);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<StayFavoriteStatusResponse> GetFavoriteStatusAsync(
+        int stayId,
+        CancellationToken cancellationToken)
+    {
+        var userId = RequireCurrentUserId();
+        return new StayFavoriteStatusResponse
+        {
+            StayId = stayId,
+            IsFavorite = await _dbContext.StayFavorites
+                .AsNoTracking()
+                .AnyAsync(
+                    x => x.UserId == userId && x.StayId == stayId,
+                    cancellationToken)
+        };
+    }
+
+    public async Task<PagedResponse<StayFavoriteSummaryResponse>> GetFavoritesAsync(
+        StayFavoriteListRequest request,
+        CancellationToken cancellationToken)
+    {
+        var userId = RequireCurrentUserId();
+        var page = Math.Max(1, request.Page);
+        var pageSize = Math.Clamp(request.PageSize, 1, 50);
+        var query = _dbContext.StayFavorites
+            .AsNoTracking()
+            .Where(x => x.UserId == userId && x.Stay.IsActive);
+
+        return new PagedResponse<StayFavoriteSummaryResponse>
+        {
+            Page = page,
+            PageSize = pageSize,
+            TotalCount = await query.CountAsync(cancellationToken),
+            Items = await query
+                .OrderByDescending(x => x.CreatedAtUtc)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(x => new StayFavoriteSummaryResponse
+                {
+                    Id = x.Stay.Id,
+                    Name = x.Stay.Name,
+                    Price = x.Stay.Price,
+                    Rating = x.Stay.Rating,
+                    Reviews = x.Stay.Reviews,
+                    PrimaryImage = x.Stay.Images
+                        .OrderBy(image => image.Id)
+                        .Select(image => image.Link)
+                        .FirstOrDefault(),
+                    LocationSummaryDescription = x.Stay.LocationSummaryDescription,
+                    Latitude = x.Stay.Latitude,
+                    Longitude = x.Stay.Longitude,
+                    FavoritedAtUtc = x.CreatedAtUtc
+                })
+                .ToListAsync(cancellationToken)
+        };
+    }
+
     public async Task<List<StayResponse>> GetMyStaysAsync(CancellationToken cancellationToken)
     {
         var userId = RequireCurrentUserId();

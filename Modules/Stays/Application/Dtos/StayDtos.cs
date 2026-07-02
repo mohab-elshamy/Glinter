@@ -68,6 +68,32 @@ public class StayListRequest
     public int PageSize { get; set; } = 20;
 }
 
+public class StayFavoriteListRequest
+{
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 20;
+}
+
+public class StayFavoriteStatusResponse
+{
+    public int StayId { get; set; }
+    public bool IsFavorite { get; set; }
+}
+
+public class StayFavoriteSummaryResponse
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public decimal? Price { get; set; }
+    public decimal? Rating { get; set; }
+    public int? Reviews { get; set; }
+    public string? PrimaryImage { get; set; }
+    public string? LocationSummaryDescription { get; set; }
+    public double? Latitude { get; set; }
+    public double? Longitude { get; set; }
+    public DateTime FavoritedAtUtc { get; set; }
+}
+
 public class CreateStayBookingRequest
 {
     public DateOnly CheckInDate { get; set; }

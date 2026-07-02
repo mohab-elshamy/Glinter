@@ -1,6 +1,6 @@
 using System.Globalization;
+using Glinter.Modules.Experiences.Application.Abstractions;
 using Glinter.Modules.Experiences.Application.Dtos;
-using Glinter.Modules.Experiences.Application.Services;
 using Glinter.Modules.Experiences.Domain.Enums;
 using Glinter.Modules.Itineraries.Application.Abstractions;
 using Glinter.Modules.Itineraries.Application.Dtos;
@@ -10,16 +10,16 @@ using Microsoft.Extensions.Options;
 
 namespace Glinter.Modules.Itineraries.Application.Services;
 
-public class ItineraryPlannerService
+public class ItineraryPlannerService : IItineraryPlannerService
 {
-    private readonly ExperienceRecommendationService _experienceRecommendationService;
+    private readonly IExperienceRecommendationService _experienceRecommendationService;
     private readonly IItineraryRoutePlanner _routePlanner;
     private readonly IItineraryGroqClient _groqClient;
     private readonly ItineraryPlanningOptions _options;
     private readonly ILogger<ItineraryPlannerService> _logger;
 
     public ItineraryPlannerService(
-        ExperienceRecommendationService experienceRecommendationService,
+        IExperienceRecommendationService experienceRecommendationService,
         IItineraryRoutePlanner routePlanner,
         IItineraryGroqClient groqClient,
         IOptions<ItineraryPlanningOptions> options,
@@ -94,6 +94,11 @@ public class ItineraryPlannerService
         if (string.IsNullOrWhiteSpace(request.Text))
         {
             throw new ArgumentException("Natural-language itinerary text is required.");
+        }
+        if (request.Text.Length > _options.NaturalLanguageMaxCharacters)
+        {
+            throw new ArgumentException(
+                $"Natural-language itinerary text cannot exceed {_options.NaturalLanguageMaxCharacters} characters.");
         }
 
         var language = NormalizeLanguage(request.PreferredLanguage) ?? DetectLanguage(request.Text);
@@ -424,14 +429,35 @@ public class ItineraryPlannerService
             request.FallbackTravelMode = ItineraryTravelMode.Walking;
         }
 
-        request.MaxStops = Math.Clamp(
-            request.MaxStops ?? _options.DefaultMaxStops,
-            1,
-            Math.Max(1, _options.MaxStops));
-        request.CandidateLimit = Math.Clamp(
-            request.CandidateLimit ?? _options.DefaultCandidateLimit,
+        var maxStops = Math.Max(1, _options.MaxStops);
+        if (request.MaxStops is not null &&
+            (request.MaxStops < 1 || request.MaxStops > maxStops))
+        {
+            throw new ArgumentException($"Maximum stops must be between 1 and {maxStops}.");
+        }
+        request.MaxStops ??= Math.Clamp(_options.DefaultMaxStops, 1, maxStops);
+
+        var maxCandidateLimit = Math.Max(request.MaxStops.Value, _options.MaxCandidateLimit);
+        if (request.CandidateLimit is not null &&
+            (request.CandidateLimit < request.MaxStops || request.CandidateLimit > maxCandidateLimit))
+        {
+            throw new ArgumentException(
+                $"Candidate limit must be between {request.MaxStops} and {maxCandidateLimit}.");
+        }
+        request.CandidateLimit ??= Math.Clamp(
+            _options.DefaultCandidateLimit,
             request.MaxStops.Value,
-            Math.Max(request.MaxStops.Value, _options.MaxCandidateLimit));
+            maxCandidateLimit);
+        if (request.GuestsCount is < 1 || request.GuestsCount > _options.MaxTravelers)
+        {
+            throw new ArgumentException(
+                $"Traveler count must be between 1 and {_options.MaxTravelers}.");
+        }
+        if (request.Categories.Count > _options.MaxSelectedCategories)
+        {
+            throw new ArgumentException(
+                $"No more than {_options.MaxSelectedCategories} categories may be selected.");
+        }
         request.PreferredLanguage = NormalizeLanguage(request.PreferredLanguage) ?? "en";
         request.Categories = NormalizeCategories(request.Categories);
 

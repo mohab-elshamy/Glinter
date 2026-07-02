@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using System.Threading.RateLimiting;
 using Glinter.Modules.Experiences.Application.Abstractions;
 using Glinter.Modules.Experiences.Application.Options;
 using Glinter.Modules.Experiences.Application.Services;
@@ -42,8 +44,50 @@ public static class ExperiencesModule
                 "https://api.groq.com/openai/v1");
         });
 
+        var rateLimitPermit = configuration.GetValue<int?>(
+            "ExperienceRecommendations:RateLimiting:PermitLimit") ?? 10;
+        var rateLimitWindowSeconds = configuration.GetValue<int?>(
+            "ExperienceRecommendations:RateLimiting:WindowSeconds") ?? 60;
+        var naturalLanguageMaxCharacters = configuration.GetValue<int?>(
+            "ExperienceRecommendations:NaturalLanguageMaxCharacters") ?? 1000;
+        var maxRequestedCategories = configuration.GetValue<int?>(
+            "ExperienceRecommendations:MaxRequestedCategories") ?? 5;
+
+        if (rateLimitPermit <= 0 || rateLimitWindowSeconds <= 0 ||
+            naturalLanguageMaxCharacters <= 0 || maxRequestedCategories <= 0)
+        {
+            throw new InvalidOperationException(
+                "Experience recommendation limits must all be greater than zero.");
+        }
+
+        services.AddRateLimiter(options =>
+        {
+            options.AddPolicy(
+                ExperienceRecommendationRateLimitPolicies.AiRequests,
+                httpContext =>
+                {
+                    var userId = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
+                    var partitionKey = !string.IsNullOrWhiteSpace(userId)
+                        ? $"user:{userId}"
+                        : $"ip:{httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown"}";
+
+                    return RateLimitPartition.GetFixedWindowLimiter(
+                        partitionKey,
+                        _ => new FixedWindowRateLimiterOptions
+                        {
+                            PermitLimit = rateLimitPermit,
+                            Window = TimeSpan.FromSeconds(rateLimitWindowSeconds),
+                            QueueLimit = 0,
+                            QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                            AutoReplenishment = true
+                        });
+                });
+        });
+
         services.AddScoped<ExperienceService>();
         services.AddScoped<ExperienceRecommendationService>();
+        services.AddScoped<IExperienceRecommendationService>(
+            provider => provider.GetRequiredService<ExperienceRecommendationService>());
         services.AddScoped<
             IExperienceRecommendationReadService,
             ExperienceRecommendationReadService>();

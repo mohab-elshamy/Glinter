@@ -46,6 +46,7 @@ public class ExperienceRecommendationResponse
 {
     public ExperienceRecommendationPreferences Preferences { get; set; } = new();
     public int TotalCandidates { get; set; }
+    public int EvaluatedCandidates { get; set; }
     public int ReturnedCount { get; set; }
     public List<ExperienceRecommendationItemResponse> Items { get; set; } = [];
 }
@@ -74,6 +75,7 @@ public class ExperienceRecommendationPreferences
     public string PreferredLanguage { get; set; } = "en";
     public double? ClassificationConfidence { get; set; }
     public string? Notes { get; set; }
+    public string? RegionName { get; set; }
 }
 
 public class WeightedExperienceRecommendationCategory

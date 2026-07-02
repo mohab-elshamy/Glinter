@@ -30,6 +30,12 @@ public class ItineraryPlanningOptions
 
     public int MaxCandidateLimit { get; set; } = 50;
 
+    public int NaturalLanguageMaxCharacters { get; set; } = 1500;
+
+    public int MaxSelectedCategories { get; set; } = 5;
+
+    public int MaxTravelers { get; set; } = 50;
+
     public int MinimumMealBreakMinutes { get; set; } = 45;
 
     public string GroqApiKey { get; set; } = string.Empty;
@@ -45,4 +51,13 @@ public class ItineraryPlanningOptions
     public int GroqErrorBodyLogCharacters { get; set; } = 800;
 
     public int GroqClassificationMaxTokens { get; set; } = 700;
+
+    public ItineraryPlanningRateLimitingOptions RateLimiting { get; set; } = new();
+}
+
+public class ItineraryPlanningRateLimitingOptions
+{
+    public int PermitLimit { get; set; } = 10;
+
+    public int WindowSeconds { get; set; } = 60;
 }

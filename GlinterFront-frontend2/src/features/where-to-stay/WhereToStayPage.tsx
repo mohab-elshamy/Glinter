@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Car,
   DollarSign,
@@ -13,6 +13,7 @@ import {
   Star,
   UtensilsCrossed,
   Wifi,
+  Heart,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import Navbar from "@/components/Navbar";
@@ -83,6 +84,48 @@ const WhereToStayPage = () => {
   const [mapMode, setMapMode] = useState<StayMapMode>("standard");
   const [safetyPeriod, setSafetyPeriod] = useState<SafetyPeriod>("weekly");
   const [showFilters, setShowFilters] = useState(false);
+  const [favoriteIds, setFavoriteIds] = useState<Set<number>>(new Set());
+  const [favoritePending, setFavoritePending] = useState<Set<number>>(new Set());
+
+  useEffect(() => {
+    if (!authStorage.isAuthenticated() || !authStorage.hasAnyRole(["Traveler"])) return;
+    staysApi.getFavorites(1, 50)
+      .then((pageResult) => setFavoriteIds(new Set(pageResult.items.map((item) => item.id))))
+      .catch(() => undefined);
+  }, []);
+
+  const toggleFavorite = async (hotel: Hotel) => {
+    if (!hotel.id) return;
+    if (!authStorage.isAuthenticated()) {
+      toast.error("Sign in as a traveler to save hotels.");
+      return;
+    }
+    const id = hotel.id;
+    const wasFavorite = favoriteIds.has(id);
+    setFavoritePending((current) => new Set(current).add(id));
+    setFavoriteIds((current) => {
+      const next = new Set(current);
+      if (wasFavorite) next.delete(id); else next.add(id);
+      return next;
+    });
+    try {
+      if (wasFavorite) await staysApi.removeFavorite(id);
+      else await staysApi.addFavorite(id);
+    } catch (error) {
+      setFavoriteIds((current) => {
+        const next = new Set(current);
+        if (wasFavorite) next.add(id); else next.delete(id);
+        return next;
+      });
+      toast.error(error instanceof Error ? error.message : "Could not update favorites.");
+    } finally {
+      setFavoritePending((current) => {
+        const next = new Set(current);
+        next.delete(id);
+        return next;
+      });
+    }
+  };
 
   const safety = useStayMapSafety(
       region,
@@ -431,6 +474,9 @@ const WhereToStayPage = () => {
                         checkin={checkin}
                         checkout={checkout}
                         onSelectHotel={(hotel) => void selectHotel(hotel)}
+                        favoriteIds={favoriteIds}
+                        favoritePending={favoritePending}
+                        onToggleFavorite={(hotel) => void toggleFavorite(hotel)}
                     />
                 )}
                 {staysState.status === "ready" && totalPages > 1 && (
@@ -478,11 +524,15 @@ const Metric = ({ label, value }: { label: string; value: string | number }) => 
 
 const HotelGrid = ({
                      hotels, checkin, checkout, onSelectHotel,
+                     favoriteIds, favoritePending, onToggleFavorite,
                    }: {
   hotels: Hotel[];
   checkin: string;
   checkout: string;
   onSelectHotel: (hotel: Hotel) => void;
+  favoriteIds: Set<number>;
+  favoritePending: Set<number>;
+  onToggleFavorite: (hotel: Hotel) => void;
 }) => (
     <div className="mb-16 grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
       <AnimatePresence mode="popLayout">
@@ -512,6 +562,17 @@ const HotelGrid = ({
                     {formatUsdPrice(hotel.price)}
                     {hotel.price != null && hotel.price > 0 && <span className="text-[10px] font-normal text-gray-300">/night</span>}
                   </div>
+                  {hotel.id != null && (
+                    <button
+                      type="button"
+                      disabled={favoritePending.has(hotel.id)}
+                      onClick={() => onToggleFavorite(hotel)}
+                      aria-label={`${favoriteIds.has(hotel.id) ? "Remove" : "Add"} ${hotel.name} ${favoriteIds.has(hotel.id) ? "from" : "to"} favorites`}
+                      className="absolute bottom-3 right-3 rounded-full bg-black/75 p-2 text-white backdrop-blur transition hover:text-primary disabled:opacity-50"
+                    >
+                      <Heart className={`h-4 w-4 ${favoriteIds.has(hotel.id) ? "fill-primary text-primary" : ""}`} />
+                    </button>
+                  )}
                   {hotel.images.length > 1 && (
                       <span className="absolute bottom-3 left-3 flex items-center gap-1 rounded-full bg-black/70 px-2 py-1 text-[10px] text-white backdrop-blur">
                   <Images className="h-3 w-3" /> {hotel.images.length}

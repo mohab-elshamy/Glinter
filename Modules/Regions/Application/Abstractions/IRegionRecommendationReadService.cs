@@ -5,6 +5,10 @@ public interface IRegionRecommendationReadService
     Task<IReadOnlyDictionary<int, RegionRecommendationNames>> ResolveAsync(
         IReadOnlyCollection<RegionRecommendationReference> references,
         CancellationToken cancellationToken = default);
+
+    Task<RegionNameResolution> ResolveNameAsync(
+        string name,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed record RegionRecommendationReference(
@@ -23,4 +27,13 @@ public sealed record RegionRecommendationNames(
     string? DistrictNameAr,
     string? NeighbourhoodNameEn,
     string? NeighbourhoodNameAr,
+    string? DisplayName);
+
+public sealed record RegionNameResolution(
+    bool IsResolved,
+    bool IsAmbiguous,
+    int? Adm0Gid,
+    int? Adm1Gid,
+    int? Adm2Gid,
+    int? Adm3Gid,
     string? DisplayName);

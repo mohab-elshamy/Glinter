@@ -7,6 +7,7 @@ import {
   ChevronRight,
   ExternalLink,
   Globe2,
+  Heart,
   Images,
   MapPin,
   Navigation,
@@ -63,10 +64,41 @@ const HotelDetailsModal = ({
   const [loadingMore, setLoadingMore] = useState(false);
   const [rating, setRating] = useState(5);
   const [reviewText, setReviewText] = useState("");
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [favoritePending, setFavoritePending] = useState(false);
   const dialogRef = useRef<HTMLElement>(null);
   const onCloseRef = useRef(onClose);
   const titleId = useId();
   const activeHotelId = hotel?.id;
+
+  useEffect(() => {
+    setIsFavorite(false);
+    if (!activeHotelId || !authStorage.isAuthenticated() ||
+        !authStorage.hasAnyRole(["Traveler"])) return;
+    staysApi.getFavoriteStatus(activeHotelId)
+      .then((status) => setIsFavorite(status.isFavorite))
+      .catch(() => undefined);
+  }, [activeHotelId]);
+
+  const toggleFavorite = async () => {
+    if (!activeHotelId) return;
+    if (!authStorage.isAuthenticated()) {
+      toast.error("Sign in as a traveler to save hotels.");
+      return;
+    }
+    const previous = isFavorite;
+    setIsFavorite(!previous);
+    setFavoritePending(true);
+    try {
+      if (previous) await staysApi.removeFavorite(activeHotelId);
+      else await staysApi.addFavorite(activeHotelId);
+    } catch (error) {
+      setIsFavorite(previous);
+      toast.error(error instanceof Error ? error.message : "Could not update favorites.");
+    } finally {
+      setFavoritePending(false);
+    }
+  };
 
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -227,6 +259,18 @@ const HotelDetailsModal = ({
         >
           <X className="h-5 w-5" />
         </button>
+        {activeHotelId && (
+          <button
+            type="button"
+            onClick={() => void toggleFavorite()}
+            disabled={favoritePending}
+            aria-label={`${isFavorite ? "Remove" : "Add"} ${hotel.name} ${isFavorite ? "from" : "to"} favorites`}
+            className="absolute right-16 top-4 flex h-10 items-center gap-2 rounded-full border border-white/15 bg-black/75 px-3 text-xs font-semibold text-white backdrop-blur transition hover:bg-black disabled:opacity-50"
+          >
+            <Heart className={`h-4 w-4 ${isFavorite ? "fill-brand-gold text-brand-gold" : ""}`} />
+            <span className="hidden sm:inline">{isFavorite ? "Saved" : "Save"}</span>
+          </button>
+        )}
 
         <div className="relative h-64 overflow-hidden rounded-t-2xl bg-white/5 sm:h-80">
           <img
