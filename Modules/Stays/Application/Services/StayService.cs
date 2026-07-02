@@ -18,6 +18,40 @@ namespace Glinter.Modules.Stays.Application.Services;
 
 public class StayService
 {
+    private static readonly IReadOnlyDictionary<string, string> AmenityNameEnByNameAr =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["خدمة غسيل"] = "Laundry service",
+            ["مكيّف هواء"] = "Air conditioning",
+            ["خدمة غرف"] = "Room service",
+            ["اتصال Wi-Fi مجاني"] = "Free Wi-Fi",
+            ["مطعم"] = "Restaurant",
+            ["حافلة للمطار"] = "Airport shuttle",
+            ["مناسب للأطفال"] = "Kid-friendly",
+            ["مُناسب لذوي الاحتياجات الخاصة"] = "Accessible",
+            ["موقف سيارات مجاني"] = "Free parking",
+            ["إفطار مجاني"] = "Free breakfast",
+            ["Wi-Fi"] = "Wi-Fi",
+            ["حمام سباحة خارجي"] = "Outdoor pool",
+            ["صالة رياضة"] = "Fitness center",
+            ["بار"] = "Bar",
+            ["مطابخ في بعض الغرف"] = "Kitchen in some rooms",
+            ["منتجع صحي"] = "Spa",
+            ["إفطار مدفوع"] = "Paid breakfast",
+            ["حوض استحمام ساخن"] = "Hot tub",
+            ["موقف سيارات برسوم مدفوعة"] = "Paid parking",
+            ["مركز أعمال"] = "Business center",
+            ["الفطور"] = "Breakfast",
+            ["يُحظر التدخين"] = "No smoking",
+            ["مسبح"] = "Pool",
+            ["مطبخ في جميع الغرف"] = "Kitchen in all rooms",
+            ["موقف سيارات"] = "Parking",
+            ["يُسمح بحيوانات أليفة"] = "Pet-friendly",
+            ["حمام سباحة داخلي وخارجي"] = "Indoor and outdoor pool",
+            ["ملعب غولف"] = "Golf course",
+            ["اتصال Wi-Fi برسوم مدفوعة"] = "Paid Wi-Fi"
+        };
+
     private readonly StaysDbContext _dbContext;
     private readonly ICurrentUserService _currentUserService;
     private readonly IProfilesReadService _profilesReadService;
@@ -1102,7 +1136,11 @@ public class StayService
     private static StayAmenity CreateAmenity(string name)
     {
         return ContainsArabic(name)
-            ? new StayAmenity { NameAr = name }
+            ? new StayAmenity
+            {
+                NameAr = name,
+                NameEn = AmenityNameEnByNameAr.GetValueOrDefault(name)
+            }
             : new StayAmenity { NameEn = name };
     }
 

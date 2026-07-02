@@ -12,11 +12,43 @@ using Glinter.Modules.IdentityAccess.Domain.Constants;
 using Glinter.Modules.Profiles.Application.Abstractions;
 using Glinter.Modules.Regions.Application.Abstractions;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace Glinter.Modules.Experiences.Application.Services;
 
 public class ExperienceService
 {
+    private static readonly IReadOnlyDictionary<string, string> AmenityNameEnByNameAr =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["مرحاض"] = "Toilet",
+            ["اتصال Wi-Fi"] = "Wi-Fi access",
+            ["Wi-Fi"] = "Wi-Fi",
+            ["دورة مياه للجنسين"] = "Gender-neutral restroom",
+            ["بار داخل المكان"] = "On-site bar",
+            ["حمّامات عامة"] = "Public restrooms",
+            ["طاولات للنزهات"] = "Picnic tables",
+            ["أراجيح"] = "Swings",
+            ["مطعم"] = "Restaurant",
+            ["شواية"] = "Grill",
+            ["زحاليق"] = "Slides",
+            ["ممرات للدرّاجات"] = "Bicycle paths",
+            ["منطقة تزلّج على الألواح"] = "Skateboarding area",
+            ["ملعب كرة سلة"] = "Basketball court",
+            ["ملعب لكرة الطائرة"] = "Volleyball court",
+            ["مسبح"] = "Pool",
+            ["يتوفّر ملعب تنس"] = "Tennis court available",
+            ["ميكانيكي"] = "Mechanic",
+            ["تخزين الأمتعة"] = "Luggage storage",
+            ["حمام سباحة"] = "Swimming pool",
+            ["حوض استحمام ساخن"] = "Hot tub",
+            ["خدمات الحفلات"] = "Event services",
+            ["ماكينة صراف آلي"] = "ATM",
+            ["مساحة خارجية"] = "Outdoor space",
+            ["مضخة هواء"] = "Air pump",
+            ["يسمح باصطحاب الحيوانات الأليفة"] = "Pet-friendly"
+        };
+
     private readonly ExperiencesDbContext _dbContext;
     private readonly ICurrentUserService _currentUserService;
     private readonly IProfilesReadService _profilesReadService;
@@ -619,6 +651,7 @@ public class ExperienceService
         CancellationToken cancellationToken)
     {
         var response = new ImportExperiencesResponse();
+        var importedCids = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var item in items)
         {
@@ -640,6 +673,18 @@ public class ExperienceService
             var latitude = GetNestedDouble(item, "coordinates", "latitude");
             var longitude = GetNestedDouble(item, "coordinates", "longitude");
             var address = CleanText(GetString(item, "address"));
+
+            if (!string.IsNullOrWhiteSpace(cid))
+            {
+                if (!importedCids.Add(cid) ||
+                    await _dbContext.Experiences
+                        .AsNoTracking()
+                        .AnyAsync(x => x.Cid == cid, cancellationToken))
+                {
+                    response.Skipped++;
+                    continue;
+                }
+            }
 
             var existing = await FindExistingImportedExperienceAsync(
                 cid,
@@ -677,18 +722,33 @@ public class ExperienceService
             if (isNew)
             {
                 _dbContext.Experiences.Add(experience);
-                response.Created++;
             }
             else
             {
-                response.Updated++;
                 ClearChildCollections(experience);
             }
 
             AddImportedChildren(experience, item);
-        }
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
+            try
+            {
+                await _dbContext.SaveChangesAsync(cancellationToken);
+
+                if (isNew)
+                {
+                    response.Created++;
+                }
+                else
+                {
+                    response.Updated++;
+                }
+            }
+            catch (DbUpdateException ex) when (IsUniqueViolation(ex))
+            {
+                response.Skipped++;
+                _dbContext.ChangeTracker.Clear();
+            }
+        }
 
         return response;
     }
@@ -1284,8 +1344,21 @@ public class ExperienceService
         _dbContext.ExperiencePopularTimes.RemoveRange(experience.PopularTimes);
         _dbContext.ExperienceReviewsPerRatings.RemoveRange(experience.ReviewsPerRatings);
         _dbContext.ExperienceAmenities.RemoveRange(experience.Amenities);
-        _dbContext.ExperienceReviews.RemoveRange(
-            experience.ExperienceReviews.Where(x => x.SourceList != "glinter"));
+        var importedReviews = experience.ExperienceReviews
+            .Where(x => x.SourceList != "glinter")
+            .ToList();
+        _dbContext.ExperienceReviews.RemoveRange(importedReviews);
+
+        experience.FeaturedImages.Clear();
+        experience.Hours.Clear();
+        experience.PopularTimes.Clear();
+        experience.ReviewsPerRatings.Clear();
+        experience.Amenities.Clear();
+
+        foreach (var review in importedReviews)
+        {
+            experience.ExperienceReviews.Remove(review);
+        }
     }
 
     private static ExperienceResponse ToResponse(Experience experience, DateTime now)
@@ -1349,8 +1422,10 @@ public class ExperienceService
                 .ToList(),
             Website = experience.Website,
             Amenities = experience.Amenities
-                .OrderBy(x => x.Name)
-                .Select(x => x.Name)
+                .Select(GetAmenityDisplayName)
+                .Where(x => x is not null)
+                .OrderBy(x => x)
+                .Select(x => x!)
                 .ToList(),
             FeaturedReviews = experience.ExperienceReviews
                 .OrderByDescending(x => x.PublishedAtDate)
@@ -1468,6 +1543,8 @@ public class ExperienceService
             return;
         }
 
+        var importedHours = new HashSet<(DayOfWeek DayOfWeek, TimeOnly OpensAt, TimeOnly ClosesAt)>();
+
         foreach (var day in hoursElement.Value.EnumerateArray())
         {
             var dayOfWeek = ParseDayName(GetString(day, "day"));
@@ -1498,6 +1575,11 @@ public class ExperienceService
                     continue;
                 }
 
+                if (!importedHours.Add((dayOfWeek.Value, range.Value.OpensAt, range.Value.ClosesAt)))
+                {
+                    continue;
+                }
+
                 experience.Hours.Add(new ExperienceHour
                 {
                     DayOfWeek = dayOfWeek.Value,
@@ -1517,6 +1599,8 @@ public class ExperienceService
             return;
         }
 
+        var importedPopularTimes = new HashSet<(DayOfWeek DayOfWeek, int HourOfDay)>();
+
         foreach (var day in popularTimes.Value.EnumerateObject())
         {
             var dayOfWeek = ParseDayName(day.Name);
@@ -1532,6 +1616,11 @@ public class ExperienceService
                 var percentage = GetInt(slot, "popularity_percentage");
 
                 if (hour is null or < 0 or > 23 || percentage is null)
+                {
+                    continue;
+                }
+
+                if (!importedPopularTimes.Add((dayOfWeek.Value, hour.Value)))
                 {
                     continue;
                 }
@@ -1555,9 +1644,16 @@ public class ExperienceService
             return;
         }
 
+        var importedRatings = new HashSet<int>();
+
         foreach (var rating in reviewsPerRating.Value.EnumerateObject())
         {
             if (!int.TryParse(rating.Name, NumberStyles.Integer, CultureInfo.InvariantCulture, out var ratingValue))
+            {
+                continue;
+            }
+
+            if (!importedRatings.Add(ratingValue))
             {
                 continue;
             }
@@ -1574,6 +1670,10 @@ public class ExperienceService
             });
         }
     }
+
+    private static bool IsUniqueViolation(DbUpdateException exception) =>
+        exception.InnerException is PostgresException postgresException &&
+        postgresException.SqlState == PostgresErrorCodes.UniqueViolation;
 
     private static List<string> GetAmenityNames(JsonElement item)
     {
@@ -1627,8 +1727,31 @@ public class ExperienceService
     {
         foreach (var name in names.Select(CleanText).Where(x => x is not null).Distinct())
         {
-            experience.Amenities.Add(new ExperienceAmenity { Name = name! });
+            experience.Amenities.Add(CreateAmenity(name!));
         }
+    }
+
+    private static ExperienceAmenity CreateAmenity(string name)
+    {
+        return ContainsArabic(name)
+            ? new ExperienceAmenity
+            {
+                NameAr = name,
+                NameEn = AmenityNameEnByNameAr.GetValueOrDefault(name)
+            }
+            : new ExperienceAmenity { NameEn = name };
+    }
+
+    private static string? GetAmenityDisplayName(ExperienceAmenity amenity)
+    {
+        return !string.IsNullOrWhiteSpace(amenity.NameEn)
+            ? amenity.NameEn
+            : amenity.NameAr;
+    }
+
+    private static bool ContainsArabic(string value)
+    {
+        return value.Any(c => c is >= '\u0600' and <= '\u06FF');
     }
 
     private static void AddReviews(Experience experience, JsonElement item, string propertyName)

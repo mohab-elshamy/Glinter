@@ -170,8 +170,11 @@ namespace Glinter.Modules.Experiences.Infrastructure.Persistence.Migrations
                     b.Property<int>("ExperienceId")
                         .HasColumnType("integer");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
+                    b.Property<string>("NameAr")
+                        .HasMaxLength(250)
+                        .HasColumnType("character varying(250)");
+
+                    b.Property<string>("NameEn")
                         .HasMaxLength(250)
                         .HasColumnType("character varying(250)");
 
@@ -179,7 +182,7 @@ namespace Glinter.Modules.Experiences.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ExperienceId");
 
-                    b.HasIndex("ExperienceId", "Name")
+                    b.HasIndex("ExperienceId", "NameAr", "NameEn")
                         .IsUnique();
 
                     b.ToTable("experience_amenities", "experiences");
