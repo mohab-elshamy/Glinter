@@ -130,6 +130,7 @@ public class GroqItineraryClient(
                   "returnToStart":true,
                   "avoidLongWalking":false,
                   "crowdPreference":"Quiet",
+                  "regionName":"Luxor",
                   "preferredLanguage":"ar",
                   "classificationConfidence":0.8,
                   "notes":""
@@ -139,6 +140,7 @@ public class GroqItineraryClient(
                 pace: Relaxed, Balanced, Packed.
                 crowdPreference: Quiet, Balanced, Lively, or null.
                 Do not invent coordinates, exact places, or unavailable facts.
+                regionName is a human-readable location from the request, never an administrative ID.
                 Return Arabic preferredLanguage for Arabic text, otherwise English.
                 """
             },
@@ -168,7 +170,8 @@ public class GroqItineraryClient(
             AvoidLongWalking = ReadNullableBool(root, "avoidLongWalking"),
             PreferredLanguage = ReadString(root, "preferredLanguage") ?? "en",
             ClassificationConfidence = ReadNullableDouble(root, "classificationConfidence"),
-            Notes = ReadString(root, "notes")
+            Notes = ReadString(root, "notes"),
+            RegionName = ReadString(root, "regionName")
         };
 
         if (Enum.TryParse<ItineraryTravelMode>(ReadString(root, "travelMode"), true, out var travelMode))

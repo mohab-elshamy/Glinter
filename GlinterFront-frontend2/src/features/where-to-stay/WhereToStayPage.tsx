@@ -37,6 +37,7 @@ import { getComfortScore, type StayMapMode } from "./map-modes";
 import { staysApi } from "@/shared/services/api-stays";
 import type { SafetyPeriod } from "@/shared/types/safety";
 import HotelRecommendationPanel from "./components/HotelRecommendationPanel";
+import { useSearchParams } from "react-router-dom";
 
 const mapModes: Array<{
   value: StayMapMode;
@@ -51,6 +52,7 @@ const mapModes: Array<{
 ];
 
 const WhereToStayPage = () => {
+  const [searchParams] = useSearchParams();
   const {
     searchQuery, setSearchQuery,
     checkin, setCheckin,
@@ -88,11 +90,23 @@ const WhereToStayPage = () => {
   const [favoritePending, setFavoritePending] = useState<Set<number>>(new Set());
 
   useEffect(() => {
+    const stayId = Number(searchParams.get("stayId"));
+    if (Number.isInteger(stayId) && stayId > 0) {
+      void selectHotelById(stayId);
+    }
+  }, [searchParams, selectHotelById]);
+
+  useEffect(() => {
     if (!authStorage.isAuthenticated() || !authStorage.hasAnyRole(["Traveler"])) return;
-    staysApi.getFavorites(1, 50)
-      .then((pageResult) => setFavoriteIds(new Set(pageResult.items.map((item) => item.id))))
+    const stayIds = filteredHotels.flatMap((hotel) => hotel.id ? [hotel.id] : []);
+    if (stayIds.length === 0) {
+      setFavoriteIds(new Set());
+      return;
+    }
+    staysApi.getFavoriteStatuses(stayIds)
+      .then((result) => setFavoriteIds(new Set(result.favoriteStayIds)))
       .catch(() => undefined);
-  }, []);
+  }, [filteredHotels]);
 
   const toggleFavorite = async (hotel: Hotel) => {
     if (!hotel.id) return;
@@ -111,6 +125,9 @@ const WhereToStayPage = () => {
     try {
       if (wasFavorite) await staysApi.removeFavorite(id);
       else await staysApi.addFavorite(id);
+      window.dispatchEvent(new CustomEvent("stay-favorites-change", {
+        detail: { stayId: id, isFavorite: !wasFavorite },
+      }));
     } catch (error) {
       setFavoriteIds((current) => {
         const next = new Set(current);

@@ -80,6 +80,16 @@ public class StayFavoriteStatusResponse
     public bool IsFavorite { get; set; }
 }
 
+public sealed class StayFavoriteStatusesRequest
+{
+    public List<int> StayIds { get; set; } = [];
+}
+
+public sealed class StayFavoriteStatusesResponse
+{
+    public List<int> FavoriteStayIds { get; set; } = [];
+}
+
 public class StayFavoriteSummaryResponse
 {
     public int Id { get; set; }
@@ -233,5 +243,8 @@ public class PagedResponse<T>
     public int Page { get; set; }
     public int PageSize { get; set; }
     public int TotalCount { get; set; }
+    public int TotalPages => PageSize <= 0
+        ? 0
+        : (int)Math.Ceiling(TotalCount / (double)PageSize);
     public List<T> Items { get; set; } = [];
 }

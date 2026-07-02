@@ -42,7 +42,7 @@ public sealed class OpenMeteoWeatherForecastService(
             $"/v1/forecast?latitude={request.Latitude.ToString(System.Globalization.CultureInfo.InvariantCulture)}" +
             $"&longitude={request.Longitude.ToString(System.Globalization.CultureInfo.InvariantCulture)}" +
             $"&start_date={start:yyyy-MM-dd}&end_date={end:yyyy-MM-dd}" +
-            "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max" +
+            "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max,relative_humidity_2m_mean" +
             "&timezone=auto";
 
         try
@@ -94,6 +94,7 @@ public sealed class OpenMeteoWeatherForecastService(
         var min = At(daily.TemperatureMin, index);
         var max = At(daily.TemperatureMax, index);
         var wind = At(daily.WindSpeed, index);
+        var humidity = At(daily.Humidity, index);
         return new DailyWeatherResponse
         {
             Date = DateOnly.Parse(daily.Time[index]),
@@ -104,6 +105,7 @@ public sealed class OpenMeteoWeatherForecastService(
                 ? null
                 : (int)Math.Round(precipitation.Value),
             WindSpeedKph = wind,
+            HumidityPercent = humidity is null ? null : (int)Math.Round(humidity.Value),
             Advice = Advice(precipitation, max, wind)
         };
     }
@@ -170,5 +172,7 @@ public sealed class OpenMeteoWeatherForecastService(
         public List<double?> PrecipitationProbability { get; set; } = [];
         [JsonPropertyName("wind_speed_10m_max")]
         public List<double?> WindSpeed { get; set; } = [];
+        [JsonPropertyName("relative_humidity_2m_mean")]
+        public List<double?> Humidity { get; set; } = [];
     }
 }

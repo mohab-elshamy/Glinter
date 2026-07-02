@@ -4,6 +4,7 @@ import {
   GeoJSON,
   MapContainer,
   Marker,
+  Polyline,
   TileLayer,
   Tooltip,
   useMap,
@@ -82,6 +83,14 @@ export interface MapOverlayArea {
   dashArray?: string;
 }
 
+export interface MapRouteLine {
+  id: string;
+  positions: Array<[number, number]>;
+  color?: string;
+  dashed?: boolean;
+  label?: string;
+}
+
 interface LeafletMapProps {
   center: [number, number];
   zoom: number;
@@ -102,6 +111,7 @@ interface LeafletMapProps {
     accuracy?: number;
   };
   recenterSequence?: number;
+  routeLines?: MapRouteLine[];
 }
 
 function MapClickHandler({ onMapClick }: { onMapClick?: (lat: number, lng: number) => void }) {
@@ -448,6 +458,26 @@ function MapBounds({
   return null;
 }
 
+function RouteBounds({
+  routeLines,
+  markers,
+}: {
+  routeLines: MapRouteLine[];
+  markers: MapMarker[];
+}) {
+  const map = useMap();
+  useEffect(() => {
+    const points = [
+      ...routeLines.flatMap((line) => line.positions),
+      ...markers.map((marker) => [marker.lat, marker.lng] as [number, number]),
+    ];
+    if (points.length < 2) return;
+    const bounds = L.latLngBounds(points);
+    if (bounds.isValid()) map.fitBounds(bounds, { padding: [36, 36], maxZoom: 14 });
+  }, [map, markers, routeLines]);
+  return null;
+}
+
 // Marker legend for the map
 function MarkerLegend() {
   const items = [
@@ -498,6 +528,7 @@ const LeafletMap: React.FC<LeafletMapProps> = ({
   overlayAreas = [],
   currentLocation,
   recenterSequence,
+  routeLines = [],
 }) => {
   return (
     <div
@@ -544,6 +575,21 @@ const LeafletMap: React.FC<LeafletMapProps> = ({
           location={currentLocation}
           recenterSequence={recenterSequence}
         />
+        <RouteBounds routeLines={routeLines} markers={markers} />
+        {routeLines.map((line, index) => (
+          <Polyline
+            key={line.id}
+            positions={line.positions}
+            pathOptions={{
+              color: line.color ?? ["#8b5cf6", "#0ea5e9", "#f59e0b", "#10b981"][index % 4],
+              weight: 4,
+              opacity: 0.8,
+              dashArray: line.dashed ? "7 7" : undefined,
+            }}
+          >
+            {line.label && <Tooltip sticky>{line.label}</Tooltip>}
+          </Polyline>
+        ))}
         <MapBounds 
           comparisonMarkers={comparisonMarkers} 
           selectedMarker={selectedMarker}

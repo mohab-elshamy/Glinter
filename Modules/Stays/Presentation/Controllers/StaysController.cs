@@ -119,6 +119,28 @@ public class StaysController : ControllerBase
         return Ok(await _stayService.GetFavoriteStatusAsync(id, cancellationToken));
     }
 
+    [Authorize(
+        AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme,
+        Roles = RoleNames.Traveler)]
+    [HttpPost("favorite-statuses")]
+    public async Task<IActionResult> GetFavoriteStatuses(
+        [FromBody] StayFavoriteStatusesRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request.StayIds.Count > 200)
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Status = StatusCodes.Status400BadRequest,
+                Title = "Too many stay IDs.",
+                Detail = "No more than 200 stay IDs may be checked at once.",
+                Instance = Request.Path
+            });
+        }
+
+        return Ok(await _stayService.GetFavoriteStatusesAsync(request, cancellationToken));
+    }
+
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetById(int id, CancellationToken cancellationToken)
     {

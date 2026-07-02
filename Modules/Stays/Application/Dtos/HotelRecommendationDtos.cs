@@ -33,8 +33,12 @@ public class NaturalLanguageHotelRecommendationRequest
 public class HotelRecommendationResponse
 {
     public HotelRecommendationPreferences Preferences { get; set; } = new();
+    // Compatibility alias for TotalMatchingCandidates.
     public int TotalCandidates { get; set; }
+    public int TotalMatchingCandidates { get; set; }
+    public int EvaluatedCandidates { get; set; }
     public int ReturnedCount { get; set; }
+    public int ReturnedRecommendations => ReturnedCount;
     public List<HotelRecommendationItemResponse> Items { get; set; } = [];
 }
 
@@ -58,6 +62,8 @@ public class HotelRecommendationPreferences
     public string PreferredLanguage { get; set; } = "en";
     public double? ClassificationConfidence { get; set; }
     public string? Notes { get; set; }
+    public string? RegionName { get; set; }
+    public string? ResolvedRegionName { get; set; }
 }
 
 public class WeightedExperienceCategoryPreference

@@ -3,6 +3,7 @@ using Glinter.Modules.Itineraries.Application.Dtos;
 using Glinter.Modules.Itineraries.Domain.Entities;
 using Glinter.Modules.Itineraries.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace Glinter.Modules.Itineraries.Application.Services;
 
@@ -29,6 +30,20 @@ public sealed class SavedItineraryService(
             PreferredLanguage = NormalizeLanguage(request.PreferredLanguage),
             EstimatedTotalCost = request.EstimatedTotalCost,
             Currency = request.Currency?.Trim().ToUpperInvariant(),
+            PlannerExplanation = request.PlannerExplanation?.Trim(),
+            WarningsJson = JsonSerializer.Serialize(request.Warnings),
+            RecommendationScore = request.RecommendationScore,
+            TotalDistanceKm = request.TotalDistanceKm,
+            TotalTravelMinutes = request.TotalTravelMinutes,
+            Pace = request.Pace,
+            TravelMode = request.TravelMode,
+            FallbackTravelMode = request.FallbackTravelMode,
+            OriginLatitude = request.Origin?.Latitude,
+            OriginLongitude = request.Origin?.Longitude,
+            OriginLabel = request.Origin?.Label,
+            WeatherLatitude = request.WeatherLatitude,
+            WeatherLongitude = request.WeatherLongitude,
+            WeatherLocation = request.WeatherLocation,
             Items = request.Items.Select(ToEntity).ToList()
         };
         dbContext.Itineraries.Add(entity);
@@ -200,6 +215,18 @@ public sealed class SavedItineraryService(
             EstimatedDurationMinutes = request.EstimatedDurationMinutes,
             EstimatedCost = request.EstimatedCost,
             Explanation = request.Explanation?.Trim()
+            ,Category = request.Category
+            ,Rating = request.Rating
+            ,ImageUrl = request.ImageUrl
+            ,TravelModeFromPrevious = request.TravelModeFromPrevious
+            ,RouteProviderFromPrevious = request.RouteProviderFromPrevious
+            ,RouteGeometryJson = request.RouteGeometryFromPrevious is null
+                ? null
+                : JsonSerializer.Serialize(request.RouteGeometryFromPrevious)
+            ,RouteInstructionsJson = JsonSerializer.Serialize(request.RouteInstructionsFromPrevious)
+            ,RouteWarningsJson = JsonSerializer.Serialize(request.RouteWarningsFromPrevious)
+            ,DistanceKmFromPrevious = request.DistanceKmFromPrevious
+            ,TravelDurationMinutesFromPrevious = request.TravelDurationMinutesFromPrevious
         };
 
     private static SavedItineraryResponse ToResponse(SavedItinerary entity) =>
@@ -213,6 +240,29 @@ public sealed class SavedItineraryService(
             PreferredLanguage = entity.PreferredLanguage,
             EstimatedTotalCost = entity.EstimatedTotalCost,
             Currency = entity.Currency,
+            Adm0Gid = entity.Adm0Gid,
+            Adm1Gid = entity.Adm1Gid,
+            Adm2Gid = entity.Adm2Gid,
+            Adm3Gid = entity.Adm3Gid,
+            PlannerExplanation = entity.PlannerExplanation,
+            Warnings = Deserialize<List<string>>(entity.WarningsJson) ?? [],
+            RecommendationScore = entity.RecommendationScore,
+            TotalDistanceKm = entity.TotalDistanceKm,
+            TotalTravelMinutes = entity.TotalTravelMinutes,
+            Pace = entity.Pace,
+            TravelMode = entity.TravelMode,
+            FallbackTravelMode = entity.FallbackTravelMode,
+            Origin = entity.OriginLatitude is null || entity.OriginLongitude is null
+                ? null
+                : new ItineraryPointRequest
+                {
+                    Latitude = entity.OriginLatitude.Value,
+                    Longitude = entity.OriginLongitude.Value,
+                    Label = entity.OriginLabel
+                },
+            WeatherLatitude = entity.WeatherLatitude,
+            WeatherLongitude = entity.WeatherLongitude,
+            WeatherLocation = entity.WeatherLocation,
             CreatedAtUtc = entity.CreatedAtUtc,
             UpdatedAtUtc = entity.UpdatedAtUtc,
             Items = entity.Items
@@ -232,10 +282,34 @@ public sealed class SavedItineraryService(
                     EndTime = x.EndTime,
                     EstimatedDurationMinutes = x.EstimatedDurationMinutes,
                     EstimatedCost = x.EstimatedCost,
-                    Explanation = x.Explanation
+                    Explanation = x.Explanation,
+                    Category = x.Category,
+                    Rating = x.Rating,
+                    ImageUrl = x.ImageUrl,
+                    TravelModeFromPrevious = x.TravelModeFromPrevious,
+                    RouteProviderFromPrevious = x.RouteProviderFromPrevious,
+                    RouteGeometryFromPrevious = Deserialize<ItineraryLegGeometryResponse>(x.RouteGeometryJson),
+                    RouteInstructionsFromPrevious = Deserialize<List<string>>(x.RouteInstructionsJson) ?? [],
+                    RouteWarningsFromPrevious = Deserialize<List<string>>(x.RouteWarningsJson) ?? [],
+                    DistanceKmFromPrevious = x.DistanceKmFromPrevious,
+                    TravelDurationMinutesFromPrevious = x.TravelDurationMinutesFromPrevious
                 })
                 .ToList()
         };
+
+    private static T? Deserialize<T>(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return default;
+        try
+        {
+            return JsonSerializer.Deserialize<T>(value);
+        }
+        catch (JsonException)
+        {
+            return default;
+        }
+    }
 
     private static void EnsureCurrent(
         SavedItinerary entity,

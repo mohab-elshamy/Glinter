@@ -299,7 +299,9 @@ public sealed class BuddyEngagementService(
         if (booking.TravelerUserId != travelerUserId)
             throw new ForbiddenException("You cannot cancel another traveler's buddy request.");
         if (booking.Status is not (BuddyBookingStatus.Pending or BuddyBookingStatus.Accepted))
-            throw new ValidationException("This buddy request can no longer be cancelled.");
+            throw new ConflictException("This buddy request can no longer be cancelled.");
+        if (booking.Availability.StartTimeUtc <= DateTime.UtcNow)
+            throw new ConflictException("A buddy request cannot be cancelled after its start time.");
 
         booking.Status = BuddyBookingStatus.Cancelled;
         booking.UpdatedAtUtc = DateTime.UtcNow;

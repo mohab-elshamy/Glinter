@@ -33,6 +33,9 @@ public class TravelerProfileConfiguration : IEntityTypeConfiguration<TravelerPro
 
         builder.Property(x => x.PreferredInterests)
             .HasMaxLength(1000);
+        builder.Property(x => x.PreferredVibes).HasMaxLength(300);
+        builder.Property(x => x.ComfortLevel).HasMaxLength(50);
+        builder.Property(x => x.SafetyPriority).HasMaxLength(50);
 
         builder.Property(x => x.ProfileImageUrl)
             .HasMaxLength(1000);

@@ -16,7 +16,14 @@ public sealed class SavedItineraryItem
     public int? EstimatedDurationMinutes { get; set; }
     public decimal? EstimatedCost { get; set; }
     public string? Explanation { get; set; }
+    public string? Category { get; set; }
+    public decimal? Rating { get; set; }
+    public string? ImageUrl { get; set; }
     public string? TravelModeFromPrevious { get; set; }
+    public string? RouteProviderFromPrevious { get; set; }
+    public string? RouteGeometryJson { get; set; }
+    public string? RouteInstructionsJson { get; set; }
+    public string? RouteWarningsJson { get; set; }
     public double? DistanceKmFromPrevious { get; set; }
     public int? TravelDurationMinutesFromPrevious { get; set; }
     public SavedItinerary Itinerary { get; set; } = null!;

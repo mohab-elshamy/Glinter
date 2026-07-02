@@ -39,6 +39,23 @@ const listAll = async <T>(path: string, params?: RegionListQuery): Promise<T[]> 
 };
 
 export const regionsApi = {
+  getCentroid: (region: {
+    adm0Gid?: number;
+    adm1Gid?: number;
+    adm2Gid?: number;
+    adm3Gid?: number;
+  }) => request<{
+    regionId: number;
+    administrativeLevel: string;
+    name?: string;
+    latitude: number;
+    longitude: number;
+  }>(`/regions/centroid?${new URLSearchParams(
+    Object.entries(region).reduce<Record<string, string>>((result, [key, value]) => {
+      if (value != null) result[key] = String(value);
+      return result;
+    }, {}),
+  )}`),
   getCountries: (params?: RegionListQuery) =>
     listAll<CountryDto>("/regions/countries", params),
 

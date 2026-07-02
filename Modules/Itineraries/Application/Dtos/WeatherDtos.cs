@@ -26,5 +26,6 @@ public sealed class DailyWeatherResponse
     public string? Condition { get; set; }
     public int? PrecipitationProbabilityPercent { get; set; }
     public double? WindSpeedKph { get; set; }
+    public int? HumidityPercent { get; set; }
     public string? Advice { get; set; }
 }

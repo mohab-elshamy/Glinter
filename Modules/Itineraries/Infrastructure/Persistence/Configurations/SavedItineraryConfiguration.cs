@@ -15,6 +15,13 @@ public sealed class SavedItineraryConfiguration : IEntityTypeConfiguration<Saved
         builder.Property(x => x.PreferredLanguage).IsRequired().HasMaxLength(10);
         builder.Property(x => x.Currency).HasMaxLength(8);
         builder.Property(x => x.EstimatedTotalCost).HasPrecision(18, 2);
+        builder.Property(x => x.PlannerExplanation).HasMaxLength(4000);
+        builder.Property(x => x.WarningsJson).HasColumnType("jsonb");
+        builder.Property(x => x.Pace).HasMaxLength(40);
+        builder.Property(x => x.TravelMode).HasMaxLength(40);
+        builder.Property(x => x.FallbackTravelMode).HasMaxLength(40);
+        builder.Property(x => x.OriginLabel).HasMaxLength(240);
+        builder.Property(x => x.WeatherLocation).HasMaxLength(240);
         builder.Property(x => x.UpdatedAtUtc).IsConcurrencyToken();
         builder.HasIndex(x => new { x.UserId, x.UpdatedAtUtc });
         builder.HasMany(x => x.Items)

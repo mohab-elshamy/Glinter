@@ -45,6 +45,7 @@ public class ExperienceRecommendationService : IExperienceRecommendationService
         {
             Preferences = preferences,
             TotalCandidates = result.TotalCandidates,
+            TotalMatchingCandidates = result.TotalCandidates,
             EvaluatedCandidates = result.EvaluatedCandidates,
             ReturnedCount = result.Items.Count,
             Items = result.Items
@@ -69,14 +70,16 @@ public class ExperienceRecommendationService : IExperienceRecommendationService
         var classified = await _groqClient.ClassifyAsync(request.Text, language, cancellationToken)
                          ?? ClassifyLocally(request.Text, language);
 
-        classified.Latitude ??= request.Latitude;
-        classified.Longitude ??= request.Longitude;
-        classified.Adm0Gid ??= request.Adm0Gid;
-        classified.Adm1Gid ??= request.Adm1Gid;
-        classified.Adm2Gid ??= request.Adm2Gid;
-        classified.Adm3Gid ??= request.Adm3Gid;
-        classified.VisitAtLocal ??= request.VisitAtLocal;
-        classified.GuestsCount ??= request.GuestsCount;
+        classified.Latitude = request.Latitude ?? classified.Latitude;
+        classified.Longitude = request.Longitude ?? classified.Longitude;
+        classified.Adm0Gid = request.Adm0Gid ?? classified.Adm0Gid;
+        classified.Adm1Gid = request.Adm1Gid ?? classified.Adm1Gid;
+        classified.Adm2Gid = request.Adm2Gid ?? classified.Adm2Gid;
+        classified.Adm3Gid = request.Adm3Gid ?? classified.Adm3Gid;
+        classified.VisitAtLocal = request.VisitAtLocal ?? classified.VisitAtLocal;
+        classified.GuestsCount = request.GuestsCount ?? classified.GuestsCount;
+        classified.CrowdPreference = request.CrowdPreference ?? classified.CrowdPreference;
+        classified.BookableOnly = request.BookableOnly ?? classified.BookableOnly;
         classified.ForItinerary = request.ForItinerary ?? classified.ForItinerary;
         classified.Limit = NormalizeLimit(request.Limit ?? classified.Limit, classified.ForItinerary);
         classified.PreferredLanguage = language;
@@ -112,6 +115,7 @@ public class ExperienceRecommendationService : IExperienceRecommendationService
             ClassificationNotes = classified.Notes,
             Preferences = preferences,
             TotalCandidates = result.TotalCandidates,
+            TotalMatchingCandidates = result.TotalCandidates,
             EvaluatedCandidates = result.EvaluatedCandidates,
             ReturnedCount = result.Items.Count,
             Items = result.Items
@@ -122,11 +126,6 @@ public class ExperienceRecommendationService : IExperienceRecommendationService
         ExperienceRecommendationPreferences preferences,
         CancellationToken cancellationToken)
     {
-        if (preferences.BookableOnly)
-        {
-            return new RecommendationComputation(0, 0, []);
-        }
-
         var candidateResult = await GetCandidatesAsync(preferences, cancellationToken);
         var candidates = candidateResult.Items;
         if (candidates.Count == 0)
@@ -184,6 +183,26 @@ public class ExperienceRecommendationService : IExperienceRecommendationService
             .Where(x => x.IsActive && x.ModerationStatus == ExperienceModerationStatus.Approved)
             .Where(x => x.Latitude != null && x.Longitude != null);
 
+        var nowUtc = DateTime.UtcNow;
+        var requestedGuests = preferences.GuestsCount ?? 1;
+        var requestedAtUtc = preferences.VisitAtLocal is null
+            ? (DateTime?)null
+            : DateTime.SpecifyKind(preferences.VisitAtLocal.Value, DateTimeKind.Utc);
+
+        if (preferences.BookableOnly)
+        {
+            query = query.Where(x => x.AvailabilitySlots.Any(slot =>
+                slot.IsActive &&
+                slot.StartTimeUtc > nowUtc &&
+                (requestedAtUtc == null ||
+                 (slot.StartTimeUtc <= requestedAtUtc && slot.EndTimeUtc > requestedAtUtc)) &&
+                slot.Capacity - slot.Bookings
+                    .Where(booking =>
+                        booking.Status == ExperienceBookingStatus.Pending ||
+                        booking.Status == ExperienceBookingStatus.Confirmed)
+                    .Sum(booking => (int?)booking.GuestsCount) >= requestedGuests));
+        }
+
         if (preferences.Categories.Count > 0)
         {
             var categories = preferences.Categories.Select(x => x.Category).ToArray();
@@ -222,9 +241,9 @@ public class ExperienceRecommendationService : IExperienceRecommendationService
             .ToListAsync(cancellationToken);
         var pricedIds = await query
             .Where(x => x.AvailabilitySlots.Any(slot =>
-                slot.IsActive && slot.EndTimeUtc > DateTime.UtcNow))
+                slot.IsActive && slot.StartTimeUtc > nowUtc))
             .OrderBy(x => x.AvailabilitySlots
-                .Where(slot => slot.IsActive && slot.EndTimeUtc > DateTime.UtcNow)
+                .Where(slot => slot.IsActive && slot.StartTimeUtc > nowUtc)
                 .Min(slot => slot.PricePerPerson))
             .ThenByDescending(x => x.Rating)
             .Select(x => x.Id)
@@ -311,9 +330,26 @@ public class ExperienceRecommendationService : IExperienceRecommendationService
                     .ToList(),
                 HasReviews = x.ExperienceReviews.Any()
                 ,StartingPricePerPerson = x.AvailabilitySlots
-                    .Where(slot => slot.IsActive && slot.EndTimeUtc > DateTime.UtcNow)
+                    .Where(slot => slot.IsActive && slot.StartTimeUtc > nowUtc)
                     .Select(slot => (decimal?)slot.PricePerPerson)
-                    .Min()
+                    .Min(),
+                AvailabilitySlots = x.AvailabilitySlots
+                    .Where(slot => slot.IsActive && slot.StartTimeUtc > nowUtc)
+                    .OrderBy(slot => slot.StartTimeUtc)
+                    .Select(slot => new AvailabilityCandidate
+                    {
+                        Id = slot.Id,
+                        StartTimeUtc = slot.StartTimeUtc,
+                        EndTimeUtc = slot.EndTimeUtc,
+                        Capacity = slot.Capacity,
+                        ReservedCapacity = slot.Bookings
+                            .Where(booking =>
+                                booking.Status == ExperienceBookingStatus.Pending ||
+                                booking.Status == ExperienceBookingStatus.Confirmed)
+                            .Sum(booking => (int?)booking.GuestsCount) ?? 0,
+                        PricePerPerson = slot.PricePerPerson
+                    })
+                    .ToList()
             })
             .ToListAsync(cancellationToken);
 
@@ -332,6 +368,7 @@ public class ExperienceRecommendationService : IExperienceRecommendationService
         var timing = CalculateTimingScore(candidate, preferences);
         var crowdScore = CalculateCrowdScore(candidate, preferences);
         var contentScore = CalculateContentCompletenessScore(candidate);
+        var availability = CalculateAvailability(candidate, preferences);
 
         var weightedScores = new List<(double Weight, double Score)>();
         AddScore(weightedScores, 0.20, categoryScore);
@@ -339,6 +376,7 @@ public class ExperienceRecommendationService : IExperienceRecommendationService
         AddScore(weightedScores, 0.20, qualityScore);
         AddScore(weightedScores, 0.15, timing.Score);
         AddScore(weightedScores, 0.10, crowdScore);
+        AddScore(weightedScores, 0.10, availability.Score);
         AddScore(weightedScores, 0.05, contentScore);
 
         var totalWeight = weightedScores.Sum(x => x.Weight);
@@ -360,6 +398,7 @@ public class ExperienceRecommendationService : IExperienceRecommendationService
             ExperienceId = candidate.Id,
             Name = candidate.Name,
             Category = candidate.Category,
+            Source = candidate.SourceType.ToString(),
             Address = candidate.Address,
             Description = Truncate(candidate.Description, 500),
             Adm0Gid = candidate.Adm0Gid,
@@ -382,12 +421,15 @@ public class ExperienceRecommendationService : IExperienceRecommendationService
             OpenHoursDataAvailable = candidate.Hours.Count > 0,
             PopularTimesDataAvailable = preferences.VisitAtLocal is not null &&
                                         FindPopularTime(candidate, preferences.VisitAtLocal.Value) is not null,
-            AvailabilityDataAvailable = candidate.StartingPricePerPerson is not null,
-            NextAvailableSlot = null,
+            AvailabilityDataAvailable = candidate.AvailabilitySlots.Count > 0,
+            IsBookable = availability.IsBookable,
+            AvailableCapacity = availability.NextSlot?.RemainingCapacity,
+            MatchingSlotCount = availability.MatchingSlotCount,
+            NextAvailableSlot = availability.NextSlot,
             RoutingHints = new ExperienceRoutingHintsResponse
             {
                 MustVisitAtFixedTime = false,
-                RequiresBooking = false,
+                RequiresBooking = candidate.AvailabilitySlots.Count > 0,
                 ClusterKey = clusterKey,
                 TimeOfDayPreference = GetTimeOfDayPreference(candidate.Category)
             },
@@ -399,7 +441,7 @@ public class ExperienceRecommendationService : IExperienceRecommendationService
                 QualityScore = Round(qualityScore),
                 TimingOpenScore = timing.Score is null ? null : Round(timing.Score.Value),
                 CrowdPreferenceScore = crowdScore is null ? null : Round(crowdScore.Value),
-                AvailabilityScore = null,
+                AvailabilityScore = availability.Score is null ? null : Round(availability.Score.Value),
                 ContentCompletenessScore = Round(contentScore)
             },
             Amenities = candidate.Amenities
@@ -947,6 +989,71 @@ public class ExperienceRecommendationService : IExperienceRecommendationService
         return terms.Any(term => value.Contains(term, StringComparison.OrdinalIgnoreCase));
     }
 
+    private static AvailabilityScoreResult CalculateAvailability(
+        ExperienceCandidate candidate,
+        ExperienceRecommendationPreferences preferences)
+    {
+        if (candidate.AvailabilitySlots.Count == 0)
+        {
+            return new AvailabilityScoreResult(null, false, 0, null);
+        }
+
+        var guests = preferences.GuestsCount ?? 1;
+        var capacityEligible = candidate.AvailabilitySlots
+            .Where(slot => slot.Capacity - slot.ReservedCapacity >= guests)
+            .OrderBy(slot => slot.StartTimeUtc)
+            .ToList();
+        var eligible = capacityEligible
+            .Where(slot => preferences.VisitAtLocal is null ||
+                (slot.StartTimeUtc <= preferences.VisitAtLocal.Value &&
+                 slot.EndTimeUtc > preferences.VisitAtLocal.Value))
+            .ToList();
+
+        if (eligible.Count == 0)
+        {
+            var nearest = capacityEligible.FirstOrDefault();
+            return new AvailabilityScoreResult(
+                0,
+                false,
+                0,
+                nearest is null
+                    ? null
+                    : new ExperienceNextAvailableSlotResponse
+                    {
+                        AvailabilityId = nearest.Id,
+                        StartTimeUtc = nearest.StartTimeUtc,
+                        EndTimeUtc = nearest.EndTimeUtc,
+                        RemainingCapacity = nearest.Capacity - nearest.ReservedCapacity,
+                        PricePerPerson = nearest.PricePerPerson
+                    });
+        }
+
+        var next = eligible[0];
+        var remaining = next.Capacity - next.ReservedCapacity;
+        var capacityFit = Math.Clamp((double)remaining / Math.Max(guests, 1), 0, 2) / 2;
+        var slotBreadth = Math.Clamp(eligible.Count / 5.0, 0, 1);
+        var exactTime = preferences.VisitAtLocal is null
+            ? 1
+            : next.StartTimeUtc <= preferences.VisitAtLocal.Value &&
+              next.EndTimeUtc > preferences.VisitAtLocal.Value
+                ? 1
+                : 0.5;
+        var score = 0.5 * exactTime + 0.3 * capacityFit + 0.2 * slotBreadth;
+
+        return new AvailabilityScoreResult(
+            Math.Clamp(score, 0, 1),
+            true,
+            eligible.Count,
+            new ExperienceNextAvailableSlotResponse
+            {
+                AvailabilityId = next.Id,
+                StartTimeUtc = next.StartTimeUtc,
+                EndTimeUtc = next.EndTimeUtc,
+                RemainingCapacity = remaining,
+                PricePerPerson = next.PricePerPerson
+            });
+    }
+
     private static string? FirstMentionedRegion(string text)
     {
         if (ContainsAny(text, "zamalek", "الزمالك")) return text.Contains("الزمالك") ? "الزمالك" : "Zamalek";
@@ -1017,6 +1124,12 @@ public class ExperienceRecommendationService : IExperienceRecommendationService
         double? Score,
         ExperienceOpeningWindowResponse? OpeningWindow);
 
+    private sealed record AvailabilityScoreResult(
+        double? Score,
+        bool IsBookable,
+        int MatchingSlotCount,
+        ExperienceNextAvailableSlotResponse? NextSlot);
+
     private sealed class ExperienceCandidate
     {
         public int Id { get; set; }
@@ -1042,6 +1155,17 @@ public class ExperienceRecommendationService : IExperienceRecommendationService
         public List<string> Amenities { get; set; } = [];
         public bool HasReviews { get; set; }
         public decimal? StartingPricePerPerson { get; set; }
+        public List<AvailabilityCandidate> AvailabilitySlots { get; set; } = [];
+    }
+
+    private sealed class AvailabilityCandidate
+    {
+        public Guid Id { get; set; }
+        public DateTime StartTimeUtc { get; set; }
+        public DateTime EndTimeUtc { get; set; }
+        public int Capacity { get; set; }
+        public int ReservedCapacity { get; set; }
+        public decimal PricePerPerson { get; set; }
     }
 
     private sealed class HourCandidate

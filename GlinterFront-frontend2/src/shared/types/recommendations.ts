@@ -32,6 +32,8 @@ export interface NaturalLanguageExperienceRecommendationRequest {
   adm3Gid?: number;
   visitAtLocal?: string;
   guestsCount?: number;
+  crowdPreference?: "Quiet" | "Balanced" | "Lively";
+  bookableOnly?: boolean;
   forItinerary?: boolean;
   limit?: number;
   preferredLanguage?: "en" | "ar";
@@ -42,6 +44,7 @@ export interface ExperienceRecommendationItem {
   experienceId: number;
   name: string;
   category: ExperienceCategory;
+  source: string;
   address?: string;
   description?: string;
   regionDisplayName?: string;
@@ -53,7 +56,33 @@ export interface ExperienceRecommendationItem {
   priceRange?: string;
   startingPricePerPerson?: number;
   primaryImage?: string;
+  estimatedDurationMinutes: number;
+  durationSource: string;
+  recommendedVisitWindow?: { startLocal?: string; endLocal?: string };
+  openingWindow?: { opensAt?: string; closesAt?: string };
+  openHoursDataAvailable: boolean;
+  popularTimesDataAvailable: boolean;
+  availabilityDataAvailable: boolean;
+  isBookable: boolean;
+  availableCapacity?: number;
+  matchingSlotCount: number;
+  nextAvailableSlot?: {
+    availabilityId: string;
+    startTimeUtc: string;
+    endTimeUtc: string;
+    remainingCapacity: number;
+    pricePerPerson: number;
+  };
   finalScore: number;
+  scores: {
+    categoryMatchScore?: number;
+    distanceScore?: number;
+    qualityScore?: number;
+    timingOpenScore?: number;
+    crowdPreferenceScore?: number;
+    availabilityScore?: number;
+    contentCompletenessScore?: number;
+  };
   amenities: string[];
   explanation: {
     shortExplanation: string;
@@ -65,6 +94,7 @@ export interface ExperienceRecommendationItem {
 
 export interface ExperienceRecommendationResponse {
   totalCandidates: number;
+  totalMatchingCandidates: number;
   evaluatedCandidates: number;
   returnedCount: number;
   items: ExperienceRecommendationItem[];

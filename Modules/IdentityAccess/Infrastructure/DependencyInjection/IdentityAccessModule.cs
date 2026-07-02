@@ -194,6 +194,7 @@ public static class IdentityAccessModule
         });
 
         services.AddScoped<IIdentityUserReadService, IdentityUserReadService>();
+        services.AddScoped<IIdentityAdminReadService, IdentityAdminReadService>();
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
         services.AddScoped<ITokenRevocationService, TokenRevocationService>();
         services.AddScoped<IAuthTokenService, AuthTokenService>();

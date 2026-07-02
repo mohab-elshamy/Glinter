@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Calendar, Clock3 } from "lucide-react";
+import { Calendar, Clock3, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { authStorage } from "@/shared/lib/auth";
 import { profilesApi } from "@/shared/services/api-profiles";
@@ -9,6 +9,7 @@ import type {
   BuddyBookingStatus,
 } from "@/shared/types/api";
 import type { LoadState } from "@/shared/types/async-state";
+import { Dialog } from "@/components/ui/dialog";
 
 const localInputToUtc = (value: string) => new Date(value).toISOString();
 
@@ -20,6 +21,11 @@ const MyBuddyScheduleTab = () => {
   const [endTime, setEndTime] = useState("");
   const [price, setPrice] = useState(0);
   const [state, setState] = useState<LoadState>({ status: "loading" });
+  const [editing, setEditing] = useState<BuddyAvailabilityDto>();
+  const [editStart, setEditStart] = useState("");
+  const [editEnd, setEditEnd] = useState("");
+  const [editPrice, setEditPrice] = useState(0);
+  const [editSaving, setEditSaving] = useState(false);
 
   const load = useCallback(async () => {
     setState({ status: "loading" });
@@ -70,6 +76,42 @@ const MyBuddyScheduleTab = () => {
     }
   };
 
+  const toLocalInput = (value: string) => {
+    const date = new Date(value);
+    const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+    return local.toISOString().slice(0, 16);
+  };
+
+  const beginEdit = (slot: BuddyAvailabilityDto) => {
+    setEditing(slot);
+    setEditStart(toLocalInput(slot.startTimeUtc));
+    setEditEnd(toLocalInput(slot.endTimeUtc));
+    setEditPrice(slot.price);
+  };
+
+  const saveEdit = async () => {
+    if (!editing || !editStart || !editEnd) return;
+    if (new Date(editStart) >= new Date(editEnd)) {
+      toast.error("End time must be after start time.");
+      return;
+    }
+    setEditSaving(true);
+    try {
+      const updated = await profilesApi.updateBuddyAvailability(editing.id, {
+        startTimeUtc: localInputToUtc(editStart),
+        endTimeUtc: localInputToUtc(editEnd),
+        price: editPrice,
+      });
+      setSlots((current) => current.map((slot) => slot.id === updated.id ? updated : slot));
+      setEditing(undefined);
+      toast.success("Availability updated.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not update availability.");
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
   const updateBooking = async (booking: BuddyBookingDto, status: BuddyBookingStatus) => {
     try {
       const updated = await profilesApi.updateBuddyBookingStatus(booking.id, status);
@@ -113,6 +155,9 @@ const MyBuddyScheduleTab = () => {
                 <span>{new Date(slot.startTimeUtc).toLocaleString()} – {new Date(slot.endTimeUtc).toLocaleTimeString()} · ${slot.price}</span>
                 <span className="flex items-center gap-3">
                   <small className={slot.isBooked ? "text-amber-300" : "text-muted-foreground"}>{slot.isBooked ? "Requested" : slot.isActive ? "Active" : "Inactive"}</small>
+                  <button disabled={slot.isBooked} onClick={() => beginEdit(slot)} className="flex items-center gap-1 text-xs text-accent disabled:opacity-40">
+                    <Pencil className="h-3 w-3" /> Edit
+                  </button>
                   <button disabled={slot.isBooked} onClick={() => void toggleSlot(slot)} className="text-xs text-accent disabled:opacity-40">{slot.isActive ? "Deactivate" : "Activate"}</button>
                 </span>
               </div>
@@ -120,6 +165,22 @@ const MyBuddyScheduleTab = () => {
           </div>
         )}
       </section>
+
+      <Dialog open={Boolean(editing)} onOpenChange={(open) => { if (!open) setEditing(undefined); }} title="Edit availability">
+          <>
+            <div className="mt-4 grid gap-3">
+              <label className="text-xs">Starts<input type="datetime-local" value={editStart} onChange={(event) => setEditStart(event.target.value)} className="input-glass mt-1 w-full" /></label>
+              <label className="text-xs">Ends<input type="datetime-local" value={editEnd} onChange={(event) => setEditEnd(event.target.value)} className="input-glass mt-1 w-full" /></label>
+              <label className="text-xs">Price<input type="number" min="0" step="0.01" value={editPrice} onChange={(event) => setEditPrice(Number(event.target.value))} className="input-glass mt-1 w-full" /></label>
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" onClick={() => setEditing(undefined)} className="rounded-lg border border-border px-4 py-2 text-sm">Cancel</button>
+              <button type="button" disabled={editSaving} onClick={() => void saveEdit()} className="btn-accent rounded-lg px-4 py-2 text-sm disabled:opacity-60">
+                {editSaving ? "Saving…" : "Save changes"}
+              </button>
+            </div>
+          </>
+      </Dialog>
 
       <section className="card-glass p-6">
         <h2 className="mb-4 font-bold">Traveler requests</h2>

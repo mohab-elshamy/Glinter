@@ -5,12 +5,14 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { staysApi } from "@/shared/services/api-stays";
 import { experiencesApi } from "@/shared/services/api-experiences";
+import { profilesApi } from "@/shared/services/api-profiles";
 import { formatUsdPrice } from "@/shared/lib/price";
 import type { LoadState } from "@/shared/types/async-state";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 interface BookingView {
   id: string;
-  type: "stay" | "experience";
+  type: "stay" | "experience" | "buddy";
   name: string;
   startsAt: string;
   endsAt: string;
@@ -32,10 +34,15 @@ const MyBookingsTab = () => {
   const navigate = useNavigate();
   const [bookings, setBookings] = useState<BookingView[]>([]);
   const [loadState, setLoadState] = useState<LoadState>({ status: "loading" });
+  const [pendingCancellation, setPendingCancellation] = useState<BookingView>();
 
   useEffect(() => {
-    Promise.all([staysApi.getMyBookings(), experiencesApi.getMyBookings()])
-      .then(([stayBookings, experienceBookings]) => {
+    Promise.all([
+      staysApi.getMyBookings(),
+      experiencesApi.getMyBookings(),
+      profilesApi.getMyBuddyBookings(),
+    ])
+      .then(([stayBookings, experienceBookings, buddyBookings]) => {
         setBookings([
           ...stayBookings.map((booking): BookingView => ({
           id: booking.id,
@@ -55,6 +62,15 @@ const MyBookingsTab = () => {
           totalPrice: booking.totalPrice,
           status: booking.status,
           })),
+          ...buddyBookings.map((booking): BookingView => ({
+            id: booking.id,
+            type: "buddy",
+            name: booking.buddyName,
+            startsAt: booking.startTimeUtc,
+            endsAt: booking.endTimeUtc,
+            totalPrice: booking.totalPrice,
+            status: booking.status === "Accepted" ? "Confirmed" : booking.status,
+          })),
         ]);
         setLoadState({ status: "ready" });
       })
@@ -69,8 +85,10 @@ const MyBookingsTab = () => {
     try {
       if (booking.type === "stay") {
         await staysApi.cancelBooking(booking.id);
-      } else {
+      } else if (booking.type === "experience") {
         await experiencesApi.cancelBooking(booking.id);
+      } else {
+        await profilesApi.cancelBuddyBooking(booking.id);
       }
       setBookings(prev => prev.map(b => b.id === booking.id ? { ...b, status: "Cancelled" } : b));
       toast.info("Booking cancelled");
@@ -128,7 +146,7 @@ const MyBookingsTab = () => {
                 </div>
                 {booking.status !== "Cancelled" && booking.status !== "Completed" && (
                   <button
-                    onClick={() => void handleCancelBooking(booking)}
+                    onClick={() => setPendingCancellation(booking)}
                     className="text-xs text-red-500 hover:text-red-400 ml-2"
                   >
                     Cancel
@@ -139,6 +157,20 @@ const MyBookingsTab = () => {
           </div>
         )}
       </div>
+      <ConfirmDialog
+        open={Boolean(pendingCancellation)}
+        title="Cancel booking?"
+        description={pendingCancellation?.type === "buddy"
+          ? "The local buddy will be notified and this time will become available again."
+          : "This booking will be cancelled according to its cancellation policy."}
+        confirmLabel="Cancel booking"
+        destructive
+        onOpenChange={(open) => { if (!open) setPendingCancellation(undefined); }}
+        onConfirm={() => {
+          if (pendingCancellation) void handleCancelBooking(pendingCancellation);
+          setPendingCancellation(undefined);
+        }}
+      />
     </motion.div>
   );
 };
