@@ -6,6 +6,9 @@ import { toast } from "sonner";
 import { useState, useEffect } from "react";
 import { useMyProfile } from "@/shared/hooks/use-my-profile";
 import { createInitialsAvatar } from "@/shared/lib/avatar";
+import { notificationsApi } from "@/shared/services/api-communication";
+import { getSafeNotificationLink } from "@/shared/lib/notification-links";
+import type { NotificationDto } from "@/shared/types/api";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -14,6 +17,9 @@ const Dashboard = () => {
     ? profileQuery.data
     : undefined;
   const displayName = profile?.displayName ?? "Traveler";
+  const [recentNotifications, setRecentNotifications] = useState<NotificationDto[]>([]);
+  const [notificationUnread, setNotificationUnread] = useState(0);
+  const [notificationsLoading, setNotificationsLoading] = useState(true);
 
   // Load saved preferences from localStorage
   const [selectedVibes, setSelectedVibes] = useState<string[]>(() => {
@@ -40,6 +46,19 @@ const Dashboard = () => {
     localStorage.setItem("safetyPriority", selectedSafety);
     localStorage.setItem("budgetRange", selectedBudget);
   }, [selectedVibes, selectedComfort, selectedSafety, selectedBudget]);
+
+  useEffect(() => {
+    notificationsApi.getNotifications(1, 3)
+      .then((page) => {
+        setRecentNotifications(page.items);
+        setNotificationUnread(page.unreadCount);
+      })
+      .catch(() => {
+        setRecentNotifications([]);
+        setNotificationUnread(0);
+      })
+      .finally(() => setNotificationsLoading(false));
+  }, []);
 
   const handleEditPreferences = () => {
     // Create a modal element
@@ -256,14 +275,11 @@ const Dashboard = () => {
               <Link to="/where-to-go" className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-primary to-accent text-white text-sm font-medium rounded-lg hover:opacity-90 transition-opacity shadow-lg">
                 <Sparkles className="w-4 h-4" /> Start New Trip
               </Link>
-              <button 
-                onClick={() => {
-                  toast.info("No saved trips found. Start planning a new trip!");
-                  navigate("/where-to-go");
-                }}
+              <button
+                onClick={() => navigate("/where-to-go")}
                 className="inline-flex items-center gap-2 px-4 py-2.5 bg-secondary text-foreground text-sm font-medium rounded-lg hover:bg-accent/20 transition-opacity"
               >
-                <Calendar className="w-4 h-4" /> Continue Last Trip
+                <Calendar className="w-4 h-4" /> Open Trip Planner
               </button>
             </div>
           </div>
@@ -273,19 +289,15 @@ const Dashboard = () => {
               className="w-9 h-9 rounded-full bg-card border border-border flex items-center justify-center hover:bg-secondary transition-colors relative"
             >
               <Bell className="w-4 h-4 text-muted-foreground" />
-              <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-accent" />
+              {notificationUnread > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-2.5 h-2.5 rounded-full bg-accent" />
+              )}
             </button>
             <button 
               onClick={() => navigate("/messages")}
               className="w-9 h-9 rounded-full bg-card border border-border flex items-center justify-center hover:bg-secondary transition-colors"
             >
               <MessageSquare className="w-4 h-4 text-muted-foreground" />
-            </button>
-            <button 
-              onClick={() => navigate("/admin")}
-              className="w-9 h-9 rounded-full bg-card border border-border flex items-center justify-center hover:bg-secondary transition-colors"
-            >
-              <Settings className="w-4 h-4 text-muted-foreground" />
             </button>
           </div>
         </div>
@@ -360,9 +372,9 @@ const Dashboard = () => {
             <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center mb-3">
               <Bookmark className="w-5 h-5 text-purple-500" />
             </div>
-            <h3 className="font-bold">Saved Itineraries</h3>
-            <p className="text-xs text-muted-foreground mb-3">Review or modify past trips</p>
-            <span className="text-xs text-purple-500 font-medium">View Saved →</span>
+            <h3 className="font-bold">Trip Planner</h3>
+            <p className="text-xs text-muted-foreground mb-3">Arrange activities into a day-by-day plan</p>
+            <span className="text-xs text-purple-500 font-medium">Build a Plan →</span>
           </motion.div>
         </div>
 
@@ -371,7 +383,7 @@ const Dashboard = () => {
           <div className="md:col-span-2">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-bold flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-primary" /> AI-Powered Recommendations
+                <Sparkles className="w-4 h-4 text-primary" /> Travel Recommendations
               </h2>
               <span 
                 onClick={() => navigate("/explore")}
@@ -384,7 +396,7 @@ const Dashboard = () => {
               <Sparkles className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
               <h3 className="text-sm font-semibold">No personalized recommendations yet</h3>
               <p className="mt-1 text-xs text-muted-foreground">
-                Recommendations will appear here when the backend recommendation module is available.
+                Personalized dashboard recommendations are not configured yet.
               </p>
               <Link to="/explore" className="mt-4 inline-block text-xs font-medium text-accent">
                 Explore available content →
@@ -426,11 +438,10 @@ const Dashboard = () => {
                     alt={displayName}
                     className="w-14 h-14 rounded-full object-cover border-2 border-accent shadow-lg"
                   />
-                  <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-green-500 border-2 border-white"></div>
                 </div>
                 <div>
                   <p className="font-bold text-base">{displayName}</p>
-                  <span className="text-[10px] bg-gold/20 text-gold px-2 py-0.5 rounded-full font-medium">Explorer Level</span>
+                  <span className="text-[10px] bg-gold/20 text-gold px-2 py-0.5 rounded-full font-medium">Traveler profile</span>
                 </div>
               </div>
               <div className="space-y-2 text-xs">
@@ -464,22 +475,24 @@ const Dashboard = () => {
                 <Bell className="w-3.5 h-3.5" /> Recent Updates
               </h3>
               <div className="space-y-3">
-                <motion.div 
-                  whileHover={{ x: 5 }}
-                  className="p-2.5 rounded-lg bg-secondary/50 cursor-pointer"
-                  onClick={() => navigate("/where-to-stay")}
-                >
-                  <p className="text-xs font-medium">New heatmap update</p>
-                  <p className="text-[10px] text-muted-foreground">Available for Giza area</p>
-                </motion.div>
-                <motion.div 
-                  whileHover={{ x: 5 }}
-                  className="p-2.5 rounded-lg bg-accent/10 border border-accent/20 cursor-pointer"
-                  onClick={() => navigate("/where-to-stay")}
-                >
-                  <p className="text-xs font-medium">Price drop detected</p>
-                  <p className="text-[10px] text-muted-foreground">In your saved area</p>
-                </motion.div>
+                {notificationsLoading && (
+                  <p className="text-xs text-muted-foreground">Loading notifications…</p>
+                )}
+                {!notificationsLoading && recentNotifications.length === 0 && (
+                  <p className="text-xs text-muted-foreground">No notifications yet.</p>
+                )}
+                {recentNotifications.map((notification) => (
+                  <motion.button
+                    key={notification.id}
+                    type="button"
+                    whileHover={{ x: 5 }}
+                    className="block w-full rounded-lg bg-secondary/50 p-2.5 text-left"
+                    onClick={() => navigate(getSafeNotificationLink(notification.linkUrl) ?? "/messages")}
+                  >
+                    <p className="text-xs font-medium">{notification.title}</p>
+                    <p className="line-clamp-2 text-[10px] text-muted-foreground">{notification.body}</p>
+                  </motion.button>
+                ))}
               </div>
               <Link to="/messages" className="text-xs text-muted-foreground mt-3 inline-block cursor-pointer hover:text-foreground transition-colors">
                 View All Notifications

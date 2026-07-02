@@ -1,13 +1,17 @@
 using System.Text;
+using System.Security.Cryptography;
 using Glinter.Modules.Communication.Infrastructure.Persistence;
 using Glinter.Modules.Experiences.Infrastructure.Persistence;
+using Glinter.Modules.IdentityAccess.Domain.Entities;
 using Glinter.Modules.IdentityAccess.Infrastructure.Persistence;
 using Glinter.Modules.IdentityAccess.Infrastructure.Security;
 using Glinter.Modules.Profiles.Infrastructure.Persistence;
 using Glinter.Modules.Regions.Infrastructure.Persistence;
+using Glinter.Modules.SafetyIndex.Infrastructure.Persistence;
 using Glinter.Modules.Stays.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
@@ -62,14 +66,18 @@ public sealed class GlinterApiFactory : WebApplicationFactory<Program>, IAsyncLi
         var testBuilder = new NpgsqlConnectionStringBuilder(configuredConnection)
         {
             Database = _databaseName,
-            Pooling = false
+            Pooling = false,
+            Timeout = 15,
+            CommandTimeout = 30
         };
         ConnectionString = testBuilder.ConnectionString;
 
         var adminBuilder = new NpgsqlConnectionStringBuilder(configuredConnection)
         {
             Database = "postgres",
-            Pooling = false
+            Pooling = false,
+            Timeout = 15,
+            CommandTimeout = 30
         };
         _adminConnectionString = adminBuilder.ConnectionString;
 
@@ -109,6 +117,10 @@ public sealed class GlinterApiFactory : WebApplicationFactory<Program>, IAsyncLi
                 ["Jwt:SecretKey"] = JwtSecret,
                 ["Jwt:ExpiryMinutes"] = "60",
                 ["IdentityEmail:SmtpHost"] = string.Empty,
+                ["HotelRecommendations:GroqApiKey"] = string.Empty,
+                ["Cleanup:Enabled"] = "false",
+                ["SafetyIndex:EnableWeeklyService"] = "false",
+                ["SafetyIndex:RunInitialHistoricalCollectionOnStartup"] = "false",
                 ["RateLimiting:PermitLimit"] = "10000",
                 ["RateLimiting:WindowMinutes"] = "1",
                 ["Communication:RateLimiting:DirectThreadPermitLimit"] = "5",
@@ -121,6 +133,7 @@ public sealed class GlinterApiFactory : WebApplicationFactory<Program>, IAsyncLi
             ReplaceDbContext<IdentityAccessDbContext>(services, false);
             ReplaceDbContext<ProfilesDbContext>(services, false);
             ReplaceDbContext<RegionsDbContext>(services, true);
+            ReplaceDbContext<SafetyIndexDbContext>(services, false);
             ReplaceDbContext<StaysDbContext>(services, false);
             ReplaceDbContext<ExperiencesDbContext>(services, false);
             ReplaceDbContext<CommunicationDbContext>(services, false);
@@ -141,6 +154,8 @@ public sealed class GlinterApiFactory : WebApplicationFactory<Program>, IAsyncLi
                     options.TokenValidationParameters.IssuerSigningKey =
                         new SymmetricSecurityKey(Encoding.UTF8.GetBytes(JwtSecret));
                 });
+            services.RemoveAll<IPasswordHasher<ApplicationUser>>();
+            services.AddSingleton<IPasswordHasher<ApplicationUser>, FastTestPasswordHasher>();
         });
     }
 
@@ -212,6 +227,12 @@ public sealed class GlinterApiFactory : WebApplicationFactory<Program>, IAsyncLi
         await using (var context = new RegionsDbContext(regionOptions))
             await context.Database.MigrateAsync();
 
+        var safetyOptions = new DbContextOptionsBuilder<SafetyIndexDbContext>()
+            .UseNpgsql(ConnectionString)
+            .Options;
+        await using (var context = new SafetyIndexDbContext(safetyOptions))
+            await context.Database.MigrateAsync();
+
         var stayOptions = new DbContextOptionsBuilder<StaysDbContext>()
             .UseNpgsql(ConnectionString)
             .Options;
@@ -251,5 +272,34 @@ public sealed class GlinterApiFactory : WebApplicationFactory<Program>, IAsyncLi
                 options.UseNpgsql(ConnectionString);
             }
         });
+    }
+
+    private sealed class FastTestPasswordHasher
+        : IPasswordHasher<ApplicationUser>
+    {
+        private const string Prefix = "integration-sha256:";
+
+        public string HashPassword(ApplicationUser user, string password)
+        {
+            ArgumentNullException.ThrowIfNull(password);
+            return Prefix + Convert.ToBase64String(
+                SHA256.HashData(Encoding.UTF8.GetBytes(password)));
+        }
+
+        public PasswordVerificationResult VerifyHashedPassword(
+            ApplicationUser user,
+            string hashedPassword,
+            string providedPassword)
+        {
+            if (!hashedPassword.StartsWith(Prefix, StringComparison.Ordinal))
+                return PasswordVerificationResult.Failed;
+
+            var expected = HashPassword(user, providedPassword);
+            return CryptographicOperations.FixedTimeEquals(
+                Encoding.UTF8.GetBytes(hashedPassword),
+                Encoding.UTF8.GetBytes(expected))
+                ? PasswordVerificationResult.Success
+                : PasswordVerificationResult.Failed;
+        }
     }
 }
