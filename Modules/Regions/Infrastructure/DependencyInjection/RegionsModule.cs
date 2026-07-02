@@ -34,6 +34,9 @@ public static class RegionsModule
         services.AddScoped<IAdm3Repository, Adm3Repository>();
         services.AddScoped<IRegionsPointLookupRepository, RegionsPointLookupRepository>();
         services.AddScoped<IRegionReferenceService, RegionReferenceService>();
+        services.AddScoped<
+            IRegionRecommendationReadService,
+            RegionRecommendationReadService>();
 
         // Services
         services.AddScoped<IGeoJsonImportService, GeoJsonImportService>();

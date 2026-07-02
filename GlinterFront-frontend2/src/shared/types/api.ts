@@ -719,3 +719,126 @@ export type UpdateNotificationPreferencesRequest = Omit<
   NotificationPreferencesDto,
   "updatedAtUtc"
 >;
+
+export interface HotelRecommendationCategoryPreference {
+  category: string;
+  weight?: number | null;
+}
+
+export interface HotelRecommendationRequest {
+  budgetLevel?: number | null;
+  experienceCategories: HotelRecommendationCategoryPreference[];
+  requestedAmenities: string[];
+  adm0Gid?: number | null;
+  adm1Gid?: number | null;
+  adm2Gid?: number | null;
+  adm3Gid?: number | null;
+  limit?: number | null;
+  preferredLanguage?: string | null;
+}
+
+export interface NaturalLanguageHotelRecommendationRequest {
+  text: string;
+  limit?: number | null;
+  adm0Gid?: number | null;
+  adm1Gid?: number | null;
+  adm2Gid?: number | null;
+  adm3Gid?: number | null;
+  preferredLanguage?: string | null;
+}
+
+export interface WeightedExperienceCategoryPreference {
+  category: string;
+  weight: number;
+}
+
+export interface HotelRecommendationPreferences {
+  budgetLevel?: number | null;
+  budgetLabel?: string | null;
+  experienceCategories: WeightedExperienceCategoryPreference[];
+  requestedAmenities: string[];
+  adm0Gid?: number | null;
+  adm1Gid?: number | null;
+  adm2Gid?: number | null;
+  adm3Gid?: number | null;
+  limit: number;
+  preferredLanguage: string;
+  classificationConfidence?: number | null;
+  notes?: string | null;
+}
+
+export interface HotelRecommendationRegionResponse {
+  countryNameEn?: string | null;
+  countryNameAr?: string | null;
+  governorateNameEn?: string | null;
+  governorateNameAr?: string | null;
+  districtNameEn?: string | null;
+  districtNameAr?: string | null;
+  neighbourhoodNameEn?: string | null;
+  neighbourhoodNameAr?: string | null;
+  displayName?: string | null;
+}
+
+export interface HotelRecommendationScoreBreakdown {
+  interestProximityScore?: number | null;
+  budgetMatchScore?: number | null;
+  hotelQualityScore?: number | null;
+  amenityMatchScore?: number | null;
+}
+
+export interface NearbyExperienceSummaryResponse {
+  experienceId: number;
+  name: string;
+  category: string;
+  distanceKm: number;
+  rating?: number | null;
+  reviews?: number | null;
+}
+
+export interface HotelRecommendationExplanationResponse {
+  shortExplanation: string;
+  reasons: string[];
+  bestFor: string[];
+  isAiGenerated: boolean;
+}
+
+export interface HotelRecommendationItemResponse {
+  ranking: number;
+  hotelId: number;
+  name: string;
+  price?: number | null;
+  description?: string | null;
+  locationSummaryDescription?: string | null;
+  budgetLevel?: number | null;
+  budgetLabel?: string | null;
+  rating?: number | null;
+  reviews?: number | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  adm0Gid?: number | null;
+  adm1Gid?: number | null;
+  adm2Gid?: number | null;
+  adm3Gid?: number | null;
+  region?: HotelRecommendationRegionResponse | null;
+  googleMapsLink?: string | null;
+  website?: string | null;
+  phoneInternational?: string | null;
+  finalScore: number;
+  scores: HotelRecommendationScoreBreakdown;
+  amenities: string[];
+  matchedAmenities: string[];
+  nearbyExperiences: NearbyExperienceSummaryResponse[];
+  explanation: HotelRecommendationExplanationResponse;
+}
+
+export interface HotelRecommendationResponse {
+  preferences: HotelRecommendationPreferences;
+  totalCandidates: number;
+  returnedCount: number;
+  items: HotelRecommendationItemResponse[];
+}
+
+export interface NaturalLanguageHotelRecommendationResponse extends HotelRecommendationResponse {
+  inputText: string;
+  classificationNotes?: string | null;
+}

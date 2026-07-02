@@ -14,7 +14,7 @@ const GlobalApiLoadingIndicator = () => {
     <div
       role="progressbar"
       aria-label="Loading data"
-      className="fixed inset-x-0 top-0 z-[100] h-0.5 overflow-hidden bg-primary/20"
+      className="layer-toast fixed inset-x-0 top-0 h-0.5 overflow-hidden bg-primary/20"
     >
       <div className="h-full w-1/3 animate-pulse bg-primary" />
     </div>

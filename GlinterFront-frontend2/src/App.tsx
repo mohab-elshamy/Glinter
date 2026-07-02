@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -75,19 +75,19 @@ const ApiFailureHandler = () => {
 
   return null;
 };
-import Auth from "./features/auth/AuthPage";
-import Explore from "./pages/Explore";
-import LocalBuddies from "./features/local-buddies/LocalBuddiesPage";
-import Messages from "./features/messages/MessagesPage";
-import About from "./pages/About";
-import WhereToGo from "./features/where-to-go/WhereToGoPage";
-import WhereToStay from "./features/where-to-stay/WhereToStayPage";
-import Dashboard from "./pages/Dashboard";
-import Admin from "./features/admin/AdminPage";
-import ProfilePage from "./features/profile/ProfilePage";
-import EditProfilePage from "./features/profile/EditProfilePage";
-import ProfileSetupPage from "./features/profile/ProfileSetupPage";
-import NotFound from "./pages/NotFound";
+const Auth = lazy(() => import("./features/auth/AuthPage"));
+const Explore = lazy(() => import("./pages/Explore"));
+const LocalBuddies = lazy(() => import("./features/local-buddies/LocalBuddiesPage"));
+const Messages = lazy(() => import("./features/messages/MessagesPage"));
+const About = lazy(() => import("./pages/About"));
+const WhereToGo = lazy(() => import("./features/where-to-go/WhereToGoPage"));
+const WhereToStay = lazy(() => import("./features/where-to-stay/WhereToStayPage"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Admin = lazy(() => import("./features/admin/AdminPage"));
+const ProfilePage = lazy(() => import("./features/profile/ProfilePage"));
+const EditProfilePage = lazy(() => import("./features/profile/EditProfilePage"));
+const ProfileSetupPage = lazy(() => import("./features/profile/ProfileSetupPage"));
+const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient();
 
@@ -102,6 +102,11 @@ const App = () => (
         <SessionExpirationHandler />
         <ApiFailureHandler />
         <ScrollToTop />
+        <Suspense fallback={(
+          <div role="status" aria-live="polite" className="flex min-h-screen items-center justify-center bg-background text-sm text-muted-foreground">
+            Loading page…
+          </div>
+        )}>
         <Routes>
           <Route path="/" element={<Explore />} />
           <Route path="/auth" element={<RedirectIfAuthenticated><Auth /></RedirectIfAuthenticated>} />
@@ -151,6 +156,7 @@ const App = () => (
           />
           <Route path="*" element={<NotFound />} />
         </Routes>
+        </Suspense>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

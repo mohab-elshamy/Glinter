@@ -9,6 +9,14 @@ import { createInitialsAvatar } from "@/shared/lib/avatar";
 import { notificationsApi } from "@/shared/services/api-communication";
 import { getSafeNotificationLink } from "@/shared/lib/notification-links";
 import type { NotificationDto } from "@/shared/types/api";
+import {
+  BUDGET_LEVEL_STORAGE_KEY,
+  budgetLevelLabel,
+  budgetLevelOptions,
+  parseBudgetLevel,
+  readStoredBudgetLevel,
+  type BudgetLevel,
+} from "@/shared/lib/budget-levels";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -35,16 +43,20 @@ const Dashboard = () => {
     return localStorage.getItem("safetyPriority") || "Very High";
   });
   
-  const [selectedBudget, setSelectedBudget] = useState<string>(() => {
-    return localStorage.getItem("budgetRange") || "$30-50";
-  });
+  const [selectedBudget, setSelectedBudget] = useState<BudgetLevel>(() =>
+    readStoredBudgetLevel(localStorage));
+
+  useEffect(() => {
+    const profileBudget = parseBudgetLevel(profile?.preferredBudgetLevel);
+    if (profileBudget) setSelectedBudget(profileBudget);
+  }, [profile?.preferredBudgetLevel]);
 
   // Save preferences to localStorage whenever they change
   useEffect(() => {
     localStorage.setItem("preferredVibes", JSON.stringify(selectedVibes));
     localStorage.setItem("comfortLevel", selectedComfort);
     localStorage.setItem("safetyPriority", selectedSafety);
-    localStorage.setItem("budgetRange", selectedBudget);
+    localStorage.setItem(BUDGET_LEVEL_STORAGE_KEY, String(selectedBudget));
   }, [selectedVibes, selectedComfort, selectedSafety, selectedBudget]);
 
   useEffect(() => {
@@ -63,7 +75,7 @@ const Dashboard = () => {
   const handleEditPreferences = () => {
     // Create a modal element
     const modal = document.createElement('div');
-    modal.className = 'fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4';
+    modal.className = 'layer-modal-backdrop fixed inset-0 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm';
     modal.style.position = 'fixed';
     modal.style.top = '0';
     modal.style.left = '0';
@@ -71,7 +83,6 @@ const Dashboard = () => {
     modal.style.bottom = '0';
     modal.style.backgroundColor = 'rgba(0,0,0,0.5)';
     modal.style.backdropFilter = 'blur(4px)';
-    modal.style.zIndex = '9999';
     
     modal.innerHTML = `
       <div class="bg-background border border-border rounded-2xl shadow-2xl p-6 max-w-md max-h-[90vh] overflow-y-auto" style="background: var(--background); max-width: 28rem; width: 90%;">
@@ -132,12 +143,12 @@ const Dashboard = () => {
 
           <!-- Budget Range -->
           <div>
-            <label class="text-sm font-semibold block mb-3" style="color: var(--foreground)">Budget Range (per day)</label>
+            <label class="text-sm font-semibold block mb-3" style="color: var(--foreground)">Preferred hotel budget</label>
             <div class="flex gap-2 flex-wrap">
-              ${["$20-30", "$30-50", "$50-80", "$80+"].map(budget => `
-                <button class="budget-btn text-sm px-4 py-2 rounded-full transition-all duration-200 flex items-center gap-1 ${selectedBudget === budget ? 'bg-accent text-accent-foreground shadow-md' : 'bg-secondary text-muted-foreground hover:bg-accent/20'}" data-budget="${budget}">
-                  ${budget}
-                  ${selectedBudget === budget ? '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>' : ''}
+              ${budgetLevelOptions.map(option => `
+                <button class="budget-btn text-sm px-4 py-2 rounded-full transition-all duration-200 flex items-center gap-1 ${selectedBudget === option.level ? 'bg-accent text-accent-foreground shadow-md' : 'bg-secondary text-muted-foreground hover:bg-accent/20'}" data-budget="${option.level}">
+                  ${option.label}
+                  ${selectedBudget === option.level ? '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>' : ''}
                 </button>
               `).join('')}
             </div>
@@ -224,12 +235,12 @@ const Dashboard = () => {
     const budgetBtns = modal.querySelectorAll('.budget-btn');
     budgetBtns.forEach(btn => {
       btn.addEventListener('click', () => {
-        const budget = btn.getAttribute('data-budget');
+        const budget = parseBudgetLevel(btn.getAttribute('data-budget')) ?? 3;
         currentBudget = budget;
         budgetBtns.forEach(b => {
           b.classList.remove('bg-accent', 'text-accent-foreground', 'shadow-md');
           b.classList.add('bg-secondary', 'text-muted-foreground');
-          b.innerHTML = b.getAttribute('data-budget');
+          b.innerHTML = budgetLevelLabel(parseBudgetLevel(b.getAttribute('data-budget')) ?? 3);
         });
         btn.classList.add('bg-accent', 'text-accent-foreground', 'shadow-md');
         btn.classList.remove('bg-secondary', 'text-muted-foreground');
@@ -458,8 +469,8 @@ const Dashboard = () => {
                   <span>{selectedSafety}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground flex items-center gap-1"><DollarSign className="w-3 h-3" /> Budget Range</span>
-                  <span>{selectedBudget}/day</span>
+                  <span className="text-muted-foreground flex items-center gap-1"><DollarSign className="w-3 h-3" /> Hotel budget</span>
+                  <span>{budgetLevelLabel(selectedBudget)}</span>
                 </div>
               </div>
               <button 

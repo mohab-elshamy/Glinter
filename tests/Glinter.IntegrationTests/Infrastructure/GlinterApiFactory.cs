@@ -9,6 +9,8 @@ using Glinter.Modules.Profiles.Infrastructure.Persistence;
 using Glinter.Modules.Regions.Infrastructure.Persistence;
 using Glinter.Modules.SafetyIndex.Infrastructure.Persistence;
 using Glinter.Modules.Stays.Infrastructure.Persistence;
+using Glinter.Modules.Stays.Application.Abstractions;
+using Glinter.Modules.Stays.Application.Dtos;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
@@ -118,6 +120,12 @@ public sealed class GlinterApiFactory : WebApplicationFactory<Program>, IAsyncLi
                 ["Jwt:ExpiryMinutes"] = "60",
                 ["IdentityEmail:SmtpHost"] = string.Empty,
                 ["HotelRecommendations:GroqApiKey"] = string.Empty,
+                ["HotelRecommendations:MinLocalPriceSampleSize"] = "3",
+                ["HotelRecommendations:MaxExperiencesPerCategory"] = "1",
+                ["HotelRecommendations:NaturalLanguageMaxCharacters"] = "1000",
+                ["HotelRecommendations:MaxRequestedAmenities"] = "20",
+                ["HotelRecommendations:RateLimiting:PermitLimit"] = "5",
+                ["HotelRecommendations:RateLimiting:WindowSeconds"] = "60",
                 ["Cleanup:Enabled"] = "false",
                 ["SafetyIndex:EnableWeeklyService"] = "false",
                 ["SafetyIndex:RunInitialHistoricalCollectionOnStartup"] = "false",
@@ -156,6 +164,8 @@ public sealed class GlinterApiFactory : WebApplicationFactory<Program>, IAsyncLi
                 });
             services.RemoveAll<IPasswordHasher<ApplicationUser>>();
             services.AddSingleton<IPasswordHasher<ApplicationUser>, FastTestPasswordHasher>();
+            services.RemoveAll<IHotelRecommendationGroqClient>();
+            services.AddSingleton<IHotelRecommendationGroqClient, NullHotelRecommendationGroqClient>();
         });
     }
 
@@ -301,5 +311,22 @@ public sealed class GlinterApiFactory : WebApplicationFactory<Program>, IAsyncLi
                 ? PasswordVerificationResult.Success
                 : PasswordVerificationResult.Failed;
         }
+    }
+
+    private sealed class NullHotelRecommendationGroqClient
+        : IHotelRecommendationGroqClient
+    {
+        public Task<HotelRecommendationPreferences?> ClassifyAsync(
+            string text,
+            string? preferredLanguage,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<HotelRecommendationPreferences?>(null);
+
+        public Task<IReadOnlyDictionary<int, HotelRecommendationExplanationResponse>?>
+            GenerateExplanationsAsync(
+                HotelRecommendationRequest request,
+                IReadOnlyList<HotelRecommendationItemResponse> rankedItems,
+                CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyDictionary<int, HotelRecommendationExplanationResponse>?>(null);
     }
 }

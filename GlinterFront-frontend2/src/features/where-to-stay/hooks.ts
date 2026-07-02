@@ -174,11 +174,10 @@ export function useWhereToStay() {
 
   const filteredHotels = apiHotels;
 
-  const selectHotel = async (hotel: Hotel) => {
-    if (!hotel.id) return;
+  const selectHotelById = async (hotelId: number) => {
     let detail: Hotel;
     try {
-      detail = toHotel(await staysApi.getStayById(hotel.id));
+      detail = toHotel(await staysApi.getStayById(hotelId));
     } catch (error) {
       console.error("Could not load stay details.", error);
       toast.error("Could not load stay details.");
@@ -204,6 +203,11 @@ export function useWhereToStay() {
     } catch {
       setSelectedHotel(detail);
     }
+  };
+
+  const selectHotel = async (hotel: Hotel) => {
+    if (!hotel.id) return;
+    await selectHotelById(hotel.id);
   };
 
   const resolveRegionByPoint = async (lat: number, lng: number) => {
@@ -262,6 +266,7 @@ export function useWhereToStay() {
     locatingRegion,
     resolveRegionByPoint,
     selectHotel,
+    selectHotelById,
     staysState,
     isLoadingStays: staysState.status === "loading",
     handleSearch: () => { setAppliedSearch(searchQuery.trim()); setPage(1); },

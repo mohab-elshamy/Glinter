@@ -6,6 +6,12 @@ import {
   profilesApi,
   type MyProfileResponse,
 } from "@/shared/services/api-profiles";
+import {
+  budgetLevelOptions,
+  budgetLevelToProfileString,
+  parseBudgetLevel,
+  type BudgetLevel,
+} from "@/shared/lib/budget-levels";
 
 interface RoleProfileFormProps {
   role: ProfileRole;
@@ -44,8 +50,8 @@ const RoleProfileForm = ({
   );
   const [bio, setBio] = useState(traveler?.bio ?? buddy?.bio ?? "");
   const [nationality, setNationality] = useState(traveler?.nationality ?? "");
-  const [budget, setBudget] = useState(
-    traveler?.preferredBudgetLevel ?? "Mid-range",
+  const [budget, setBudget] = useState<BudgetLevel>(
+    parseBudgetLevel(traveler?.preferredBudgetLevel) ?? 3,
   );
   const [travelStyle, setTravelStyle] = useState(
     traveler?.travelStyle ?? "Solo",
@@ -110,7 +116,7 @@ const RoleProfileForm = ({
           displayName: displayName.trim(),
           bio: bio.trim() || undefined,
           nationality: nationality.trim() || undefined,
-          preferredBudgetLevel: budget,
+          preferredBudgetLevel: budgetLevelToProfileString(budget),
           travelStyle,
           preferredInterests: selectedNames.join(", ") || undefined,
           interestIds: selectedInterestIds,
@@ -198,12 +204,12 @@ const RoleProfileForm = ({
             Preferred budget
             <select
               value={budget}
-              onChange={(event) => setBudget(event.target.value)}
+                onChange={(event) => setBudget(Number(event.target.value) as BudgetLevel)}
               className={inputClass}
             >
-              <option>Budget</option>
-              <option>Mid-range</option>
-              <option>Luxury</option>
+                {budgetLevelOptions.map((option) => (
+                  <option key={option.level} value={option.level}>{option.label}</option>
+                ))}
             </select>
           </label>
           <label className="block text-sm font-medium">

@@ -35,6 +35,7 @@ import type { Hotel } from "./types";
 import { getComfortScore, type StayMapMode } from "./map-modes";
 import { staysApi } from "@/shared/services/api-stays";
 import type { SafetyPeriod } from "@/shared/types/safety";
+import HotelRecommendationPanel from "./components/HotelRecommendationPanel";
 
 const mapModes: Array<{
   value: StayMapMode;
@@ -60,6 +61,7 @@ const WhereToStayPage = () => {
     selectedHotel, setSelectedHotel,
     previewHotel, setPreviewHotel,
     selectHotel,
+    selectHotelById,
     region, setRegion,
     locatingRegion,
     resolveRegionByPoint,
@@ -261,6 +263,11 @@ const WhereToStayPage = () => {
                 </div>
             )}
           </section>
+
+          <HotelRecommendationPanel
+            region={region}
+            onViewDetails={selectHotelById}
+          />
 
           <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Metric label="Matching stays" value={isLoadingStays ? "…" : totalCount} />

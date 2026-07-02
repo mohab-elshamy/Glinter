@@ -1,4 +1,5 @@
 using Glinter.IntegrationTests.Infrastructure;
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 
@@ -733,13 +734,15 @@ public sealed class StaysAndExperiencesTests : ApiTestBase
         await UpsertProviderAsync(provider);
 
         var suffix = Guid.NewGuid().ToString("N");
+        var adm0Gid = Random.Shared.Next(600_000, 699_999);
         var bestStayId = await CreateStayAsync(
             owner.Token,
             $"Recommendation Best Stay {suffix}",
             price: 1500,
             latitude: 30.0500,
             longitude: 31.2400,
-            amenities: ["Wi-Fi", "Gym"]);
+            amenities: ["Wi-Fi", "Gym"],
+            adm0Gid);
 
         await CreateStayAsync(
             owner.Token,
@@ -747,7 +750,8 @@ public sealed class StaysAndExperiencesTests : ApiTestBase
             price: 1500,
             latitude: 30.4500,
             longitude: 31.7000,
-            amenities: ["Parking"]);
+            amenities: ["Parking"],
+            adm0Gid);
 
         await CreateStayAsync(
             owner.Token,
@@ -755,7 +759,8 @@ public sealed class StaysAndExperiencesTests : ApiTestBase
             price: 5000,
             latitude: 30.0520,
             longitude: 31.2420,
-            amenities: ["Wi-Fi"]);
+            amenities: ["Wi-Fi"],
+            adm0Gid);
 
         await CreateStayAsync(
             owner.Token,
@@ -763,7 +768,8 @@ public sealed class StaysAndExperiencesTests : ApiTestBase
             price: 500,
             latitude: 30.0550,
             longitude: 31.2450,
-            amenities: ["Gym"]);
+            amenities: ["Gym"],
+            adm0Gid);
 
         await CreateStayAsync(
             owner.Token,
@@ -771,23 +777,30 @@ public sealed class StaysAndExperiencesTests : ApiTestBase
             price: 1000,
             latitude: 30.0560,
             longitude: 31.2460,
-            amenities: []);
+            amenities: [],
+            adm0Gid);
 
-        await CreateExperienceAsync(
+        var historicalId = await CreateExperienceAsync(
             provider.Token,
             "Historical",
             $"Recommendation Museum {suffix}",
             latitude: 30.0505,
-            longitude: 31.2405);
+            longitude: 31.2405,
+            adm0Gid);
 
-        await CreateExperienceAsync(
+        var diningId = await CreateExperienceAsync(
             provider.Token,
             "Dining",
             $"Recommendation Restaurant {suffix}",
             latitude: 30.0510,
-            longitude: 31.2410);
+            longitude: 31.2410,
+            adm0Gid);
 
-        var response = await Client.PostAsJsonAsync("/api/stays/recommendations", new
+        var adminToken = await GetAdminTokenAsync();
+        await ModerateExperienceAsync(adminToken, historicalId, "Approved");
+        await ModerateExperienceAsync(adminToken, diningId, "Approved");
+
+        var response = await SendAsync(HttpMethod.Post, "/api/stays/recommendations", owner.Token, new
         {
             budgetLevel = 3,
             experienceCategories = new[]
@@ -796,6 +809,7 @@ public sealed class StaysAndExperiencesTests : ApiTestBase
                 new { category = "Dining", weight = 50 }
             },
             requestedAmenities = new[] { "WiFi", "Gym" },
+            adm0Gid,
             limit = 5,
             preferredLanguage = "en"
         });
@@ -820,13 +834,272 @@ public sealed class StaysAndExperiencesTests : ApiTestBase
             .GetBoolean());
     }
 
+    [Fact]
+    public async Task Recommendations_exclude_inactive_stays_and_non_approved_experiences_and_redistribute_missing_categories()
+    {
+        var owner = await CreateUserAsync("HotelOwner", "recommendation-eligibility-owner");
+        await UpsertHotelOwnerAsync(owner);
+        var provider = await CreateUserAsync("ExperienceProvider", "recommendation-eligibility-provider");
+        await UpsertProviderAsync(provider);
+        var adminToken = await GetAdminTokenAsync();
+        var adm0Gid = Random.Shared.Next(700_000, 800_000);
+        var suffix = Guid.NewGuid().ToString("N");
+
+        var activeStayId = await CreateStayAsync(
+            owner.Token, $"Eligible Stay {suffix}", 100, 27.1, 30.1, [], adm0Gid);
+        var inactiveStayId = await CreateStayAsync(
+            owner.Token, $"Inactive Stay {suffix}", 90, 27.11, 30.11, [], adm0Gid);
+        (await SendAsync(HttpMethod.Patch, $"/api/stays/{inactiveStayId}/deactivate", owner.Token))
+            .EnsureSuccessStatusCode();
+
+        var pendingId = await CreateExperienceAsync(
+            provider.Token, "Historical", $"Pending Experience {suffix}", 27.101, 30.101, adm0Gid);
+        var rejectedId = await CreateExperienceAsync(
+            provider.Token, "Historical", $"Rejected Experience {suffix}", 27.102, 30.102, adm0Gid);
+        var inactiveId = await CreateExperienceAsync(
+            provider.Token, "Historical", $"Inactive Experience {suffix}", 27.103, 30.103, adm0Gid);
+        var approvedId = await CreateExperienceAsync(
+            provider.Token, "Historical", $"Approved Experience {suffix}", 27.104, 30.104, adm0Gid);
+
+        await ModerateExperienceAsync(adminToken, rejectedId, "Rejected", "Not eligible for recommendation tests.");
+        await ModerateExperienceAsync(adminToken, inactiveId, "Approved");
+        (await SendAsync(HttpMethod.Patch, $"/api/experiences/{inactiveId}/deactivate", provider.Token))
+            .EnsureSuccessStatusCode();
+        await ModerateExperienceAsync(adminToken, approvedId, "Approved");
+
+        var historical = await SendAsync(HttpMethod.Post, "/api/stays/recommendations", owner.Token, new
+        {
+            adm0Gid,
+            experienceCategories = new[] { new { category = "Historical", weight = 1 } },
+            requestedAmenities = Array.Empty<string>(),
+            limit = 10
+        });
+        historical.EnsureSuccessStatusCode();
+        using var historicalJson = await ReadJsonAsync(historical);
+        var historicalItems = historicalJson.RootElement.GetProperty("items").EnumerateArray().ToList();
+        Assert.Contains(historicalItems, item => item.GetProperty("hotelId").GetInt32() == activeStayId);
+        Assert.DoesNotContain(historicalItems, item => item.GetProperty("hotelId").GetInt32() == inactiveStayId);
+        var activeItem = historicalItems.Single(item => item.GetProperty("hotelId").GetInt32() == activeStayId);
+        var nearbyNames = activeItem.GetProperty("nearbyExperiences")
+            .EnumerateArray()
+            .Select(item => item.GetProperty("name").GetString())
+            .ToList();
+        Assert.Contains($"Approved Experience {suffix}", nearbyNames);
+        Assert.DoesNotContain($"Pending Experience {suffix}", nearbyNames);
+        Assert.DoesNotContain($"Rejected Experience {suffix}", nearbyNames);
+        Assert.DoesNotContain($"Inactive Experience {suffix}", nearbyNames);
+
+        var redistributed = await SendAsync(HttpMethod.Post, "/api/stays/recommendations", owner.Token, new
+        {
+            adm0Gid,
+            experienceCategories = new[]
+            {
+                new { category = "Historical", weight = 0.5 },
+                new { category = "Dining", weight = 0.5 }
+            },
+            requestedAmenities = Array.Empty<string>(),
+            limit = 10
+        });
+        redistributed.EnsureSuccessStatusCode();
+        using var redistributedJson = await ReadJsonAsync(redistributed);
+        var redistributedItem = redistributedJson.RootElement.GetProperty("items")
+            .EnumerateArray()
+            .Single(item => item.GetProperty("hotelId").GetInt32() == activeStayId);
+        Assert.Equal(
+            activeItem.GetProperty("scores").GetProperty("interestProximityScore").GetDouble(),
+            redistributedItem.GetProperty("scores").GetProperty("interestProximityScore").GetDouble(),
+            precision: 6);
+
+        var unavailable = await SendAsync(HttpMethod.Post, "/api/stays/recommendations", owner.Token, new
+        {
+            adm0Gid,
+            experienceCategories = new[] { new { category = "Nature", weight = 1 } },
+            requestedAmenities = Array.Empty<string>(),
+            limit = 10
+        });
+        unavailable.EnsureSuccessStatusCode();
+        using var unavailableJson = await ReadJsonAsync(unavailable);
+        var unavailableItem = unavailableJson.RootElement.GetProperty("items")
+            .EnumerateArray()
+            .Single(item => item.GetProperty("hotelId").GetInt32() == activeStayId);
+        Assert.Equal(
+            JsonValueKind.Null,
+            unavailableItem.GetProperty("scores").GetProperty("interestProximityScore").ValueKind);
+
+        Assert.True(pendingId > 0);
+    }
+
+    [Fact]
+    public async Task Recommendation_experience_limit_is_applied_independently_per_category()
+    {
+        var owner = await CreateUserAsync("HotelOwner", "recommendation-category-owner");
+        await UpsertHotelOwnerAsync(owner);
+        var provider = await CreateUserAsync("ExperienceProvider", "recommendation-category-provider");
+        await UpsertProviderAsync(provider);
+        var adminToken = await GetAdminTokenAsync();
+        var adm0Gid = Random.Shared.Next(800_001, 900_000);
+        var suffix = Guid.NewGuid().ToString("N");
+
+        var stayId = await CreateStayAsync(owner.Token, $"Category Stay {suffix}", 100, 28, 31, [], adm0Gid);
+        foreach (var category in new[] { "Historical", "Historical", "Dining", "Dining" })
+        {
+            var experienceId = await CreateExperienceAsync(
+                provider.Token, category, $"{category} {Guid.NewGuid():N}", 28.001, 31.001, adm0Gid);
+            await ModerateExperienceAsync(adminToken, experienceId, "Approved");
+        }
+
+        var response = await SendAsync(HttpMethod.Post, "/api/stays/recommendations", owner.Token, new
+        {
+            adm0Gid,
+            experienceCategories = new[]
+            {
+                new { category = "Historical", weight = 1 },
+                new { category = "Dining", weight = 1 }
+            },
+            requestedAmenities = Array.Empty<string>(),
+            limit = 5
+        });
+        response.EnsureSuccessStatusCode();
+        using var json = await ReadJsonAsync(response);
+        var item = json.RootElement.GetProperty("items").EnumerateArray()
+            .Single(item => item.GetProperty("hotelId").GetInt32() == stayId);
+        var nearby = item.GetProperty("nearbyExperiences").EnumerateArray().ToList();
+        Assert.Equal(2, nearby.Count);
+        Assert.Single(nearby, value => value.GetProperty("category").GetString() == "Historical");
+        Assert.Single(nearby, value => value.GetProperty("category").GetString() == "Dining");
+    }
+
+    [Fact]
+    public async Task Recommendation_quintiles_use_all_active_prices_and_unbiased_global_fallback()
+    {
+        var requester = await CreateUserAsync("Traveler", "recommendation-quintiles");
+        var localAdm0 = Random.Shared.Next(900_001, 950_000);
+        var localPrefix = $"quintile-{Guid.NewGuid():N}";
+        foreach (var price in new decimal[] { 10, 20, 30, 40, 50 })
+            await InsertDistributionStayAsync(localPrefix, price, localAdm0, isActive: true, withCoordinates: true);
+        await InsertDistributionStayAsync(localPrefix, 100_000, localAdm0, isActive: false, withCoordinates: false);
+        await InsertDistributionStayAsync(localPrefix, 0, localAdm0, isActive: true, withCoordinates: true);
+        await InsertDistributionStayAsync(localPrefix, null, localAdm0, isActive: true, withCoordinates: true);
+
+        var localResponse = await SendAsync(HttpMethod.Post, "/api/stays/recommendations", requester.Token, new
+        {
+            adm0Gid = localAdm0,
+            experienceCategories = Array.Empty<object>(),
+            requestedAmenities = Array.Empty<string>(),
+            limit = 10
+        });
+        localResponse.EnsureSuccessStatusCode();
+        using var localJson = await ReadJsonAsync(localResponse);
+        var localItems = localJson.RootElement.GetProperty("items").EnumerateArray().ToList();
+        Assert.Equal(5, localItems.Single(item =>
+                item.GetProperty("price").ValueKind == JsonValueKind.Number &&
+                item.GetProperty("price").GetDecimal() == 50)
+            .GetProperty("budgetLevel").GetInt32());
+        foreach (var item in localItems.Where(item =>
+                     item.GetProperty("price").ValueKind == JsonValueKind.Null ||
+                     item.GetProperty("price").GetDecimal() == 0))
+            Assert.Equal(JsonValueKind.Null, item.GetProperty("budgetLevel").ValueKind);
+
+        var cappedAdm0 = Random.Shared.Next(1_000_000, 1_050_000);
+        var cappedPrefix = $"candidate-cap-{Guid.NewGuid():N}";
+        await Factory.ExecuteAsync($"""
+            INSERT INTO stays.stays
+                ("SourceType", "Name", "Price", "Adm0Gid", "Latitude", "Longitude", "IsActive", "CreatedAtUtc")
+            SELECT 'ThirdParty', '{cappedPrefix}-' || value, value::numeric, {cappedAdm0}, NULL, NULL, TRUE, NOW()
+            FROM generate_series(1, 301) AS value;
+            """);
+        var cappedCandidateId = await InsertDistributionStayAsync(
+            cappedPrefix, 250, cappedAdm0, isActive: true, withCoordinates: true);
+        var cappedResponse = await SendAsync(HttpMethod.Post, "/api/stays/recommendations", requester.Token, new
+        {
+            adm0Gid = cappedAdm0,
+            experienceCategories = Array.Empty<object>(),
+            requestedAmenities = Array.Empty<string>(),
+            limit = 5
+        });
+        cappedResponse.EnsureSuccessStatusCode();
+        using var cappedJson = await ReadJsonAsync(cappedResponse);
+        var cappedCandidate = cappedJson.RootElement.GetProperty("items").EnumerateArray()
+            .Single(item => item.GetProperty("hotelId").GetInt32() == cappedCandidateId);
+        Assert.Equal(5, cappedCandidate.GetProperty("budgetLevel").GetInt32());
+
+        var globalPrefix = $"global-{Guid.NewGuid():N}";
+        await Factory.ExecuteAsync($"""
+            INSERT INTO stays.stays
+                ("SourceType", "Name", "Price", "Latitude", "Longitude", "IsActive", "CreatedAtUtc")
+            SELECT 'ThirdParty', '{globalPrefix}-' || value, value::numeric, NULL, NULL, TRUE, NOW()
+            FROM generate_series(1, 6001) AS value;
+            """);
+        var fallbackAdm0 = Random.Shared.Next(950_001, 999_999);
+        var candidateId = await InsertDistributionStayAsync(
+            globalPrefix, 4500, fallbackAdm0, isActive: true, withCoordinates: true);
+
+        var globalResponse = await SendAsync(HttpMethod.Post, "/api/stays/recommendations", requester.Token, new
+        {
+            adm0Gid = fallbackAdm0,
+            experienceCategories = Array.Empty<object>(),
+            requestedAmenities = Array.Empty<string>(),
+            limit = 5
+        });
+        globalResponse.EnsureSuccessStatusCode();
+        using var globalJson = await ReadJsonAsync(globalResponse);
+        var candidate = globalJson.RootElement.GetProperty("items").EnumerateArray()
+            .Single(item => item.GetProperty("hotelId").GetInt32() == candidateId);
+        Assert.Equal(4, candidate.GetProperty("budgetLevel").GetInt32());
+    }
+
+    [Fact]
+    public async Task Recommendation_input_limits_and_named_rate_limit_are_enforced()
+    {
+        var user = await CreateUserAsync("Traveler", "recommendation-limits");
+        var overlong = await SendAsync(
+            HttpMethod.Post,
+            "/api/stays/recommendations/natural-language",
+            user.Token,
+            new { text = new string('x', 1001), limit = 3 });
+        Assert.Equal(HttpStatusCode.BadRequest, overlong.StatusCode);
+
+        var tooManyAmenities = await SendAsync(
+            HttpMethod.Post,
+            "/api/stays/recommendations",
+            user.Token,
+            new
+            {
+                experienceCategories = Array.Empty<object>(),
+                requestedAmenities = Enumerable.Range(1, 21).Select(index => $"Amenity {index}").ToArray(),
+                limit = 3
+            });
+        Assert.Equal(HttpStatusCode.BadRequest, tooManyAmenities.StatusCode);
+
+        var rateUser = await CreateUserAsync("Traveler", "recommendation-rate-limit");
+        HttpResponseMessage? last = null;
+        for (var attempt = 0; attempt < 11; attempt++)
+        {
+            last?.Dispose();
+            last = await SendAsync(
+                HttpMethod.Post,
+                "/api/stays/recommendations",
+                rateUser.Token,
+                new
+                {
+                    experienceCategories = Array.Empty<object>(),
+                    requestedAmenities = Array.Empty<string>(),
+                    limit = 1
+                });
+        }
+
+        using (last)
+            Assert.Equal(HttpStatusCode.TooManyRequests, last?.StatusCode);
+    }
+
     private async Task<int> CreateStayAsync(
         string token,
         string name,
         decimal price,
         double latitude,
         double longitude,
-        string[] amenities)
+        string[] amenities,
+        int? adm0Gid = null)
     {
         var response = await SendAsync(
             HttpMethod.Post,
@@ -839,7 +1112,8 @@ public sealed class StaysAndExperiencesTests : ApiTestBase
                 description = "Recommendation integration stay",
                 latitude,
                 longitude,
-                amenities
+                amenities,
+                adm0Gid
             });
 
         response.EnsureSuccessStatusCode();
@@ -873,7 +1147,8 @@ public sealed class StaysAndExperiencesTests : ApiTestBase
         string category,
         string name,
         double latitude,
-        double longitude)
+        double longitude,
+        int? adm0Gid = null)
     {
         var response = await SendAsync(
             HttpMethod.Post,
@@ -886,11 +1161,45 @@ public sealed class StaysAndExperiencesTests : ApiTestBase
                 description = "Recommendation integration experience",
                 address = "Recommendation integration neighbourhood",
                 latitude,
-                longitude
+                longitude,
+                adm0Gid
             });
 
         response.EnsureSuccessStatusCode();
         using var json = await ReadJsonAsync(response);
         return json.RootElement.GetProperty("id").GetInt32();
+    }
+
+    private async Task ModerateExperienceAsync(
+        string adminToken,
+        int experienceId,
+        string status,
+        string? rejectionReason = null)
+    {
+        var response = await SendAsync(
+            HttpMethod.Patch,
+            $"/api/admin/experiences/{experienceId}/moderation",
+            adminToken,
+            new { moderationStatus = status, moderationNotes = rejectionReason });
+        response.EnsureSuccessStatusCode();
+    }
+
+    private async Task<int> InsertDistributionStayAsync(
+        string prefix,
+        decimal? price,
+        int adm0Gid,
+        bool isActive,
+        bool withCoordinates)
+    {
+        var priceSql = price?.ToString(CultureInfo.InvariantCulture) ?? "NULL";
+        var coordinateSql = withCoordinates ? "29.0" : "NULL";
+        var name = $"{prefix}-{Guid.NewGuid():N}";
+        return await Factory.ScalarAsync<int>($"""
+            INSERT INTO stays.stays
+                ("SourceType", "Name", "Price", "Adm0Gid", "Latitude", "Longitude", "IsActive", "CreatedAtUtc")
+            VALUES
+                ('ThirdParty', '{name}', {priceSql}, {adm0Gid}, {coordinateSql}, {coordinateSql}, {isActive.ToString().ToUpperInvariant()}, NOW())
+            RETURNING "Id";
+            """);
     }
 }

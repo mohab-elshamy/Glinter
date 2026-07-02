@@ -99,4 +99,32 @@ describe("stays API", () => {
       expect.objectContaining({ method: "POST", body: expect.any(FormData) }),
     );
   });
+
+  it("posts structured and natural-language recommendation bodies to their backend routes", async () => {
+    const structured = {
+      budgetLevel: 3,
+      experienceCategories: [{ category: "Historical", weight: 1 }],
+      requestedAmenities: ["WiFi"],
+      adm1Gid: 12,
+      limit: 5,
+      preferredLanguage: "en",
+    };
+    await staysApi.getRecommendations(structured);
+    expect(request).toHaveBeenLastCalledWith("/stays/recommendations", {
+      method: "POST",
+      body: structured,
+    });
+
+    const natural = {
+      text: "A quiet hotel near museums",
+      adm1Gid: 12,
+      limit: 5,
+      preferredLanguage: "en",
+    };
+    await staysApi.getNaturalLanguageRecommendations(natural);
+    expect(request).toHaveBeenLastCalledWith(
+      "/stays/recommendations/natural-language",
+      { method: "POST", body: natural },
+    );
+  });
 });
