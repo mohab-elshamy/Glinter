@@ -30,6 +30,11 @@ public class Experience
     public int? Reviews { get; set; }
     public decimal? Rating { get; set; }
     public string? Website { get; set; }
+    public bool IsActive { get; set; } = true;
+    public ExperienceModerationStatus ModerationStatus { get; set; } = ExperienceModerationStatus.Approved;
+    public string? ModerationNotes { get; set; }
+    public Guid? ModeratedByUserId { get; set; }
+    public DateTime? ModeratedAtUtc { get; set; }
 
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
     public DateTime? UpdatedAtUtc { get; set; }
@@ -40,4 +45,6 @@ public class Experience
     public List<ExperienceReviewsPerRating> ReviewsPerRatings { get; set; } = [];
     public List<ExperienceAmenity> Amenities { get; set; } = [];
     public List<ExperienceReview> ExperienceReviews { get; set; } = [];
+    public List<ExperienceAvailability> AvailabilitySlots { get; set; } = [];
+    public List<ExperienceBooking> Bookings { get; set; } = [];
 }

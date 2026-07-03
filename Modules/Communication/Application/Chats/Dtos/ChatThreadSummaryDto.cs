@@ -11,6 +11,7 @@ public class ChatThreadSummaryDto
     public string? Title { get; set; }
 
     public List<Guid> ParticipantUserIds { get; set; } = [];
+    public Dictionary<Guid, string> ParticipantDisplayNames { get; set; } = [];
 
     public string? LastMessageBody { get; set; }
 

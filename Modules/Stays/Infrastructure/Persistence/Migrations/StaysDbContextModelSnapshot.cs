@@ -64,6 +64,9 @@ namespace Glinter.Modules.Stays.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("HotelOwnerProfileId")
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
                     b.Property<double?>("Latitude")
                         .HasColumnType("double precision");
 
@@ -121,6 +124,8 @@ namespace Glinter.Modules.Stays.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("HotelOwnerProfileId");
 
+                    b.HasIndex("IsActive");
+
                     b.HasIndex("Price");
 
                     b.HasIndex("Rating");
@@ -140,8 +145,11 @@ namespace Glinter.Modules.Stays.Infrastructure.Persistence.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("Name")
-                        .IsRequired()
+                    b.Property<string>("NameAr")
+                        .HasMaxLength(250)
+                        .HasColumnType("character varying(250)");
+
+                    b.Property<string>("NameEn")
                         .HasMaxLength(250)
                         .HasColumnType("character varying(250)");
 
@@ -152,10 +160,72 @@ namespace Glinter.Modules.Stays.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("StayId");
 
-                    b.HasIndex("StayId", "Name")
+                    b.HasIndex("StayId", "NameAr", "NameEn")
                         .IsUnique();
 
-                    b.ToTable("stay_amenities", "stays");
+                    NpgsqlIndexBuilderExtensions.AreNullsDistinct(b.HasIndex("StayId", "NameAr", "NameEn"), false);
+
+                    b.ToTable("stay_amenities", "stays", t =>
+                        {
+                            t.HasCheckConstraint("CK_stay_amenities_has_name", "NULLIF(BTRIM(\"NameAr\"), '') IS NOT NULL\r\nOR NULLIF(BTRIM(\"NameEn\"), '') IS NOT NULL");
+                        });
+                });
+
+            modelBuilder.Entity("Glinter.Modules.Stays.Domain.Entities.StayBooking", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("CheckInDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly>("CheckOutDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("GuestCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("GuestName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<int>("StayId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("TotalPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<Guid>("TravelerProfileId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("StayId");
+
+                    b.HasIndex("TravelerProfileId");
+
+                    b.HasIndex("StayId", "CheckInDate", "CheckOutDate");
+
+                    b.ToTable("stay_bookings", "stays");
                 });
 
             modelBuilder.Entity("Glinter.Modules.Stays.Domain.Entities.StayBookingPlatform", b =>
@@ -190,6 +260,26 @@ namespace Glinter.Modules.Stays.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("stay_booking_platforms", "stays");
+                });
+
+            modelBuilder.Entity("Glinter.Modules.Stays.Domain.Entities.StayFavorite", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("StayId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("UserId", "StayId");
+
+                    b.HasIndex("StayId");
+
+                    b.HasIndex("UserId", "CreatedAtUtc");
+
+                    b.ToTable("stay_favorites", "stays");
                 });
 
             modelBuilder.Entity("Glinter.Modules.Stays.Domain.Entities.StayImage", b =>
@@ -311,10 +401,32 @@ namespace Glinter.Modules.Stays.Infrastructure.Persistence.Migrations
                     b.Navigation("Stay");
                 });
 
+            modelBuilder.Entity("Glinter.Modules.Stays.Domain.Entities.StayBooking", b =>
+                {
+                    b.HasOne("Glinter.Modules.Stays.Domain.Entities.Stay", "Stay")
+                        .WithMany("Bookings")
+                        .HasForeignKey("StayId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Stay");
+                });
+
             modelBuilder.Entity("Glinter.Modules.Stays.Domain.Entities.StayBookingPlatform", b =>
                 {
                     b.HasOne("Glinter.Modules.Stays.Domain.Entities.Stay", "Stay")
                         .WithMany("BookingPlatforms")
+                        .HasForeignKey("StayId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Stay");
+                });
+
+            modelBuilder.Entity("Glinter.Modules.Stays.Domain.Entities.StayFavorite", b =>
+                {
+                    b.HasOne("Glinter.Modules.Stays.Domain.Entities.Stay", "Stay")
+                        .WithMany()
                         .HasForeignKey("StayId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -360,6 +472,8 @@ namespace Glinter.Modules.Stays.Infrastructure.Persistence.Migrations
                     b.Navigation("Amenities");
 
                     b.Navigation("BookingPlatforms");
+
+                    b.Navigation("Bookings");
 
                     b.Navigation("Images");
 

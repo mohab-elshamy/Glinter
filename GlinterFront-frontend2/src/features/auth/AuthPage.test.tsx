@@ -36,12 +36,14 @@ const renderAuth = () => render(
 describe("authentication page", () => {
   beforeEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
     vi.clearAllMocks();
   });
 
   afterEach(() => {
     cleanup();
     localStorage.clear();
+    sessionStorage.clear();
   });
 
   it("registers without creating a session and asks for email confirmation", async () => {
@@ -69,7 +71,7 @@ describe("authentication page", () => {
     fireEvent.click(screen.getByRole("button", { name: "Create Account" }));
 
     await screen.findByRole("heading", { name: "Confirm your email" });
-    expect(localStorage.getItem("token")).toBeNull();
+    expect(sessionStorage.getItem("token")).toBeNull();
     expect(screen.getByRole("button", {
       name: "Confirm email with development token",
     })).toBeInTheDocument();
@@ -108,8 +110,9 @@ describe("authentication page", () => {
     fireEvent.submit(passwordForm!);
 
     await screen.findByRole("heading", { name: "Start Complete" });
-    expect(localStorage.getItem("token")).toBe("access-token");
-    expect(localStorage.getItem("refreshToken")).toBe("refresh-token");
+    expect(sessionStorage.getItem("token")).toBe("access-token");
+    expect(sessionStorage.getItem("refreshToken")).toBe("refresh-token");
+    expect(localStorage.getItem("token")).toBeNull();
   });
 
   it("moves an admin login into MFA setup without creating a session", async () => {
@@ -141,7 +144,7 @@ describe("authentication page", () => {
       })).toBeInTheDocument();
     });
     expect(screen.getByText("AUTHENTICATORKEY")).toBeInTheDocument();
-    expect(localStorage.getItem("token")).toBeNull();
+    expect(sessionStorage.getItem("token")).toBeNull();
   });
 
   it("supports development password recovery and reset", async () => {

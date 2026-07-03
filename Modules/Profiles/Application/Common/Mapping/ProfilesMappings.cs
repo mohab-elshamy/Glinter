@@ -20,6 +20,9 @@ public static class ProfilesMappings
             PreferredBudgetLevel = profile.PreferredBudgetLevel,
             TravelStyle = profile.TravelStyle,
             PreferredInterests = profile.PreferredInterests,
+            PreferredVibes = profile.PreferredVibes,
+            ComfortLevel = profile.ComfortLevel,
+            SafetyPriority = profile.SafetyPriority,
             ProfileImageUrl = profile.ProfileImageUrl,
             Interests = profile.Interests
                 .Select(x => ToInterestResponse(x.Interest))
@@ -34,7 +37,8 @@ public static class ProfilesMappings
     public static LocalBuddyProfileResponse ToLocalBuddyProfileResponse(
         LocalBuddyProfile profile,
         int followersCount = 0,
-        int followingCount = 0)
+        int followingCount = 0,
+        bool isFollowing = false)
     {
         return new LocalBuddyProfileResponse
         {
@@ -53,6 +57,7 @@ public static class ProfilesMappings
                 .ToList(),
             FollowersCount = followersCount,
             FollowingCount = followingCount,
+            IsFollowing = isFollowing,
             CreatedAtUtc = profile.CreatedAtUtc,
             UpdatedAtUtc = profile.UpdatedAtUtc
         };
@@ -112,7 +117,8 @@ public static class ProfilesMappings
     public static LocalBuddyListItemResponse ToLocalBuddyListItemResponse(
         LocalBuddyProfile profile,
         int followersCount = 0,
-        int followingCount = 0)
+        int followingCount = 0,
+        bool isFollowing = false)
     {
         return new LocalBuddyListItemResponse
         {
@@ -130,7 +136,8 @@ public static class ProfilesMappings
                 .Select(x => ToInterestResponse(x.Interest))
                 .ToList(),
             FollowersCount = followersCount,
-            FollowingCount = followingCount
+            FollowingCount = followingCount,
+            IsFollowing = isFollowing
         };
     }
 }

@@ -63,6 +63,9 @@ public class UpsertTravelerProfileCommandHandler
                 PreferredBudgetLevel = command.PreferredBudgetLevel,
                 TravelStyle = command.TravelStyle,
                 PreferredInterests = command.PreferredInterests,
+                PreferredVibes = command.PreferredVibes,
+                ComfortLevel = command.ComfortLevel,
+                SafetyPriority = command.SafetyPriority,
                 CreatedAtUtc = DateTime.UtcNow
             };
 
@@ -76,6 +79,9 @@ public class UpsertTravelerProfileCommandHandler
             profile.PreferredBudgetLevel = command.PreferredBudgetLevel;
             profile.TravelStyle = command.TravelStyle;
             profile.PreferredInterests = command.PreferredInterests;
+            profile.PreferredVibes = command.PreferredVibes;
+            profile.ComfortLevel = command.ComfortLevel;
+            profile.SafetyPriority = command.SafetyPriority;
             profile.UpdatedAtUtc = DateTime.UtcNow;
         }
 

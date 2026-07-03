@@ -31,9 +31,7 @@ public static class ApiExceptionMapper
             _ => new(
                 500,
                 "An unexpected error occurred.",
-                includeExceptionDetails
-                    ? exception.ToString()
-                    : "An unexpected error occurred while processing the request.",
+                "The server could not complete the request.",
                 "internal_server_error")
         };
     }

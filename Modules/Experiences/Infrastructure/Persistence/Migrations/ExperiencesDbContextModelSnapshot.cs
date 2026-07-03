@@ -70,11 +70,29 @@ namespace Glinter.Modules.Experiences.Infrastructure.Persistence.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
 
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
                     b.Property<double?>("Latitude")
                         .HasColumnType("double precision");
 
                     b.Property<double?>("Longitude")
                         .HasColumnType("double precision");
+
+                    b.Property<DateTime?>("ModeratedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ModeratedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ModerationNotes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("ModerationStatus")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -126,6 +144,10 @@ namespace Glinter.Modules.Experiences.Infrastructure.Persistence.Migrations
                     b.HasIndex("Cid")
                         .IsUnique();
 
+                    b.HasIndex("IsActive");
+
+                    b.HasIndex("ModerationStatus");
+
                     b.HasIndex("ProviderProfileId");
 
                     b.HasIndex("Rating");
@@ -148,8 +170,11 @@ namespace Glinter.Modules.Experiences.Infrastructure.Persistence.Migrations
                     b.Property<int>("ExperienceId")
                         .HasColumnType("integer");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
+                    b.Property<string>("NameAr")
+                        .HasMaxLength(250)
+                        .HasColumnType("character varying(250)");
+
+                    b.Property<string>("NameEn")
                         .HasMaxLength(250)
                         .HasColumnType("character varying(250)");
 
@@ -157,10 +182,104 @@ namespace Glinter.Modules.Experiences.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ExperienceId");
 
-                    b.HasIndex("ExperienceId", "Name")
+                    b.HasIndex("ExperienceId", "NameAr", "NameEn")
                         .IsUnique();
 
                     b.ToTable("experience_amenities", "experiences");
+                });
+
+            modelBuilder.Entity("Glinter.Modules.Experiences.Domain.Entities.ExperienceAvailability", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Capacity")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("EndTimeUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("ExperienceId")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<decimal>("PricePerPerson")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTime>("StartTimeUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExperienceId");
+
+                    b.HasIndex("ExperienceId", "StartTimeUtc", "EndTimeUtc");
+
+                    b.ToTable("experience_availability", "experiences");
+                });
+
+            modelBuilder.Entity("Glinter.Modules.Experiences.Domain.Entities.ExperienceBooking", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AvailabilityId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("ExperienceId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("GuestsCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<decimal>("TotalPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("TravelerName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid>("TravelerProfileId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AvailabilityId");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("ExperienceId");
+
+                    b.HasIndex("TravelerProfileId");
+
+                    b.ToTable("experience_bookings", "experiences");
                 });
 
             modelBuilder.Entity("Glinter.Modules.Experiences.Domain.Entities.ExperienceFeaturedImage", b =>
@@ -261,6 +380,12 @@ namespace Glinter.Modules.Experiences.Infrastructure.Persistence.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
                     b.Property<int>("ExperienceId")
                         .HasColumnType("integer");
 
@@ -287,6 +412,8 @@ namespace Glinter.Modules.Experiences.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(50)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CreatedByUserId");
 
                     b.HasIndex("ExperienceId");
 
@@ -334,6 +461,36 @@ namespace Glinter.Modules.Experiences.Infrastructure.Persistence.Migrations
                         .HasForeignKey("ExperienceId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Experience");
+                });
+
+            modelBuilder.Entity("Glinter.Modules.Experiences.Domain.Entities.ExperienceAvailability", b =>
+                {
+                    b.HasOne("Glinter.Modules.Experiences.Domain.Entities.Experience", "Experience")
+                        .WithMany("AvailabilitySlots")
+                        .HasForeignKey("ExperienceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Experience");
+                });
+
+            modelBuilder.Entity("Glinter.Modules.Experiences.Domain.Entities.ExperienceBooking", b =>
+                {
+                    b.HasOne("Glinter.Modules.Experiences.Domain.Entities.ExperienceAvailability", "Availability")
+                        .WithMany("Bookings")
+                        .HasForeignKey("AvailabilityId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Glinter.Modules.Experiences.Domain.Entities.Experience", "Experience")
+                        .WithMany("Bookings")
+                        .HasForeignKey("ExperienceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Availability");
 
                     b.Navigation("Experience");
                 });
@@ -397,6 +554,10 @@ namespace Glinter.Modules.Experiences.Infrastructure.Persistence.Migrations
                 {
                     b.Navigation("Amenities");
 
+                    b.Navigation("AvailabilitySlots");
+
+                    b.Navigation("Bookings");
+
                     b.Navigation("ExperienceReviews");
 
                     b.Navigation("FeaturedImages");
@@ -406,6 +567,11 @@ namespace Glinter.Modules.Experiences.Infrastructure.Persistence.Migrations
                     b.Navigation("PopularTimes");
 
                     b.Navigation("ReviewsPerRatings");
+                });
+
+            modelBuilder.Entity("Glinter.Modules.Experiences.Domain.Entities.ExperienceAvailability", b =>
+                {
+                    b.Navigation("Bookings");
                 });
 #pragma warning restore 612, 618
         }

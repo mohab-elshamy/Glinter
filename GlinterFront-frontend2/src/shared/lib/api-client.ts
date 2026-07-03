@@ -198,8 +198,12 @@ const executeRequest = async <T>(
   };
 
   if (body !== undefined) {
-    requestHeaders["Content-Type"] = "application/json";
-    config.body = JSON.stringify(body);
+    if (body instanceof FormData) {
+      config.body = body;
+    } else {
+      requestHeaders["Content-Type"] = "application/json";
+      config.body = JSON.stringify(body);
+    }
   }
 
   let response: Response;

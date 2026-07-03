@@ -6,6 +6,8 @@ using Glinter.Modules.Profiles.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using Glinter.Modules.IdentityAccess.Application.Abstractions;
 using Glinter.Modules.Profiles.Domain.Entities;
+using Glinter.Modules.Communication.Application.Notifications.Commands;
+using Glinter.Modules.Communication.Domain.Enums;
 
 namespace Glinter.Modules.Profiles.Application.Profiles.Commands.UpdateLocalBuddyVerification;
 
@@ -15,15 +17,18 @@ public class UpdateLocalBuddyVerificationCommandHandler
     private readonly ProfileFollowStatsService _profileFollowStatsService;
     private readonly UpdateLocalBuddyVerificationCommandValidator _validator = new();
     private readonly ICurrentUserService _currentUserService;
+    private readonly CreateNotificationHandler _createNotificationHandler;
 
     public UpdateLocalBuddyVerificationCommandHandler(
         IProfilesDbContext profilesDbContext,
         ProfileFollowStatsService profileFollowStatsService,
-        ICurrentUserService currentUserService)
+        ICurrentUserService currentUserService,
+        CreateNotificationHandler createNotificationHandler)
     {
         _profilesDbContext = profilesDbContext;
         _profileFollowStatsService = profileFollowStatsService;
         _currentUserService = currentUserService;
+        _createNotificationHandler = createNotificationHandler;
     }
 
     public async Task<LocalBuddyProfileResponse> HandleAsync(
@@ -65,6 +70,19 @@ public class UpdateLocalBuddyVerificationCommandHandler
             });
 
         await _profilesDbContext.SaveChangesAsync(cancellationToken);
+        var statusText = verificationStatus.ToString().ToLowerInvariant();
+        await _createNotificationHandler.HandleAsync(
+            new CreateNotificationCommand
+            {
+                UserId = profile.UserId,
+                Type = NotificationType.Moderation,
+                Title = $"Buddy verification {statusText}",
+                Body = $"Your local buddy verification is now {statusText}.",
+                LinkUrl = "/profile/me",
+                SourceModule = "Profiles",
+                SourceEntityType = "LocalBuddyVerification"
+            },
+            cancellationToken);
 
         var stats = await _profileFollowStatsService.GetCountsAsync(
             profile.UserId,

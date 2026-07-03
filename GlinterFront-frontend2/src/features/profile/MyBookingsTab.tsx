@@ -1,90 +1,113 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Calendar, MapPin, Star } from "lucide-react";
+import { Calendar, MapPin } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { staysApi } from "@/shared/services/api-stays";
-import { authStorage } from "@/shared/lib/auth";
+import { experiencesApi } from "@/shared/services/api-experiences";
+import { profilesApi } from "@/shared/services/api-profiles";
+import { formatUsdPrice } from "@/shared/lib/price";
+import type { LoadState } from "@/shared/types/async-state";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
-interface Booking {
+interface BookingView {
   id: string;
-  type: "hotel" | "experience";
+  type: "stay" | "experience" | "buddy";
   name: string;
-  date: string;
-  status: "pending" | "confirmed" | "completed" | "cancelled";
-  amount: number;
+  startsAt: string;
+  endsAt: string;
+  totalPrice: number;
+  status: "Pending" | "Confirmed" | "Completed" | "Cancelled";
 }
 
 const getStatusColor = (status: string) => {
   switch (status) {
-    case "confirmed": return "bg-green-500/20 text-green-400";
-    case "pending": return "bg-yellow-500/20 text-yellow-400";
-    case "completed": return "bg-blue-500/20 text-blue-400";
-    case "cancelled": return "bg-red-500/20 text-red-400";
+    case "Confirmed": return "bg-green-500/20 text-green-400";
+    case "Pending": return "bg-yellow-500/20 text-yellow-400";
+    case "Completed": return "bg-blue-500/20 text-blue-400";
+    case "Cancelled": return "bg-red-500/20 text-red-400";
     default: return "bg-gray-500/20 text-gray-400";
   }
 };
 
 const MyBookingsTab = () => {
   const navigate = useNavigate();
-  const [bookings, setBookings] = useState<Booking[]>(() => {
-    const saved = localStorage.getItem("my_bookings");
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [bookings, setBookings] = useState<BookingView[]>([]);
+  const [loadState, setLoadState] = useState<LoadState>({ status: "loading" });
+  const [pendingCancellation, setPendingCancellation] = useState<BookingView>();
 
   useEffect(() => {
-    if (!authStorage.isAuthenticated()) return;
-
-    staysApi.getStays()
-      .then(stays => {
-        const stayNames = new Map(stays.map(s => [s.id, s.name]));
-        return Promise.allSettled(
-          stays.map(s => staysApi.getBookings(s.id))
-        ).then(results => {
-          const apiBookings: Booking[] = [];
-          results.forEach((result, i) => {
-            if (result.status === "fulfilled") {
-              result.value.forEach(b => {
-                apiBookings.push({
-                  id: b.id,
-                  type: "hotel",
-                  name: stayNames.get(b.stayId) || "Hotel Stay",
-                  date: b.checkInDate,
-                  status: b.status as Booking["status"],
-                  amount: b.totalPrice,
-                });
-              });
-            }
-          });
-          if (apiBookings.length > 0) {
-            setBookings(prev => {
-              const existing = new Set(prev.map(b => b.id));
-              const newOnes = apiBookings.filter(b => !existing.has(b.id));
-              return [...newOnes, ...prev];
-            });
-          }
-        });
+    Promise.all([
+      staysApi.getMyBookings(),
+      experiencesApi.getMyBookings(),
+      profilesApi.getMyBuddyBookings(),
+    ])
+      .then(([stayBookings, experienceBookings, buddyBookings]) => {
+        setBookings([
+          ...stayBookings.map((booking): BookingView => ({
+          id: booking.id,
+          type: "stay",
+          name: booking.stayName,
+          startsAt: booking.checkInDate,
+          endsAt: booking.checkOutDate,
+          totalPrice: booking.totalPrice,
+          status: booking.status,
+        })),
+        ...experienceBookings.map((booking): BookingView => ({
+          id: booking.id,
+          type: "experience",
+          name: booking.experienceName,
+          startsAt: booking.startTimeUtc,
+          endsAt: booking.endTimeUtc,
+          totalPrice: booking.totalPrice,
+          status: booking.status,
+          })),
+          ...buddyBookings.map((booking): BookingView => ({
+            id: booking.id,
+            type: "buddy",
+            name: booking.buddyName,
+            startsAt: booking.startTimeUtc,
+            endsAt: booking.endTimeUtc,
+            totalPrice: booking.totalPrice,
+            status: booking.status === "Accepted" ? "Confirmed" : booking.status,
+          })),
+        ]);
+        setLoadState({ status: "ready" });
       })
-      .catch(() => {});
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : "Could not load bookings.";
+        setLoadState({ status: "error", message });
+        toast.error(message);
+      });
   }, []);
 
-  const handleCancelBooking = async (bookingId: string) => {
-    if (authStorage.isAuthenticated()) {
-      try {
-        await staysApi.cancelBooking(bookingId);
-      } catch { }
+  const handleCancelBooking = async (booking: BookingView) => {
+    try {
+      if (booking.type === "stay") {
+        await staysApi.cancelBooking(booking.id);
+      } else if (booking.type === "experience") {
+        await experiencesApi.cancelBooking(booking.id);
+      } else {
+        await profilesApi.cancelBuddyBooking(booking.id);
+      }
+      setBookings(prev => prev.map(b => b.id === booking.id ? { ...b, status: "Cancelled" } : b));
+      toast.info("Booking cancelled");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not cancel booking.");
     }
-    setBookings(prev => prev.map(b =>
-      b.id === bookingId ? { ...b, status: "cancelled" as const } : b
-    ));
-    toast.info("Booking cancelled");
   };
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
       <div className="card-glass p-6">
         <h2 className="font-bold text-lg mb-4">My Bookings</h2>
-        {bookings.length === 0 ? (
+        {loadState.status === "loading" ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">Loading bookings…</p>
+        ) : loadState.status === "error" ? (
+          <p className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+            {loadState.message}
+          </p>
+        ) : bookings.length === 0 ? (
           <div className="text-center py-8">
             <Calendar className="w-12 h-12 text-muted-foreground mx-auto mb-3 opacity-50" />
             <p className="text-muted-foreground text-sm">No bookings yet</p>
@@ -104,30 +127,26 @@ const MyBookingsTab = () => {
               >
                 <div className="flex items-center gap-3">
                   <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                    booking.type === "hotel" ? "bg-blue-500/20" : "bg-purple-500/20"
+                    "bg-blue-500/20"
                   }`}>
-                    {booking.type === "hotel" ? (
-                      <MapPin className="w-5 h-5 text-blue-500" />
-                    ) : (
-                      <Star className="w-5 h-5 text-purple-500" />
-                    )}
+                    <MapPin className="w-5 h-5 text-blue-500" />
                   </div>
                   <div>
                     <p className="font-semibold text-sm">{booking.name}</p>
                     <p className="text-xs text-muted-foreground flex items-center gap-1">
-                      <Calendar className="w-3 h-3" /> {booking.date}
+                      <Calendar className="w-3 h-3" /> {booking.startsAt} → {booking.endsAt}
                     </p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="font-bold text-accent">${booking.amount}</p>
+                  <p className="font-bold text-accent">{formatUsdPrice(booking.totalPrice)}</p>
                   <span className={`text-[10px] px-2 py-0.5 rounded-full ${getStatusColor(booking.status)}`}>
                     {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
                   </span>
                 </div>
-                {booking.status !== "cancelled" && booking.status !== "completed" && (
+                {booking.status !== "Cancelled" && booking.status !== "Completed" && (
                   <button
-                    onClick={() => handleCancelBooking(booking.id)}
+                    onClick={() => setPendingCancellation(booking)}
                     className="text-xs text-red-500 hover:text-red-400 ml-2"
                   >
                     Cancel
@@ -138,6 +157,20 @@ const MyBookingsTab = () => {
           </div>
         )}
       </div>
+      <ConfirmDialog
+        open={Boolean(pendingCancellation)}
+        title="Cancel booking?"
+        description={pendingCancellation?.type === "buddy"
+          ? "The local buddy will be notified and this time will become available again."
+          : "This booking will be cancelled according to its cancellation policy."}
+        confirmLabel="Cancel booking"
+        destructive
+        onOpenChange={(open) => { if (!open) setPendingCancellation(undefined); }}
+        onConfirm={() => {
+          if (pendingCancellation) void handleCancelBooking(pendingCancellation);
+          setPendingCancellation(undefined);
+        }}
+      />
     </motion.div>
   );
 };

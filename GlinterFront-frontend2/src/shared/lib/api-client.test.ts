@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { apiActivity } from "./api-activity";
-import { ApiError, request } from "./api-client";
+import { request } from "./api-client";
 import { authStorage } from "./auth";
 
 const problemResponse = (
@@ -16,12 +16,14 @@ const problemResponse = (
 describe("API client", () => {
   beforeEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
     vi.stubGlobal("fetch", vi.fn());
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
     localStorage.clear();
+    sessionStorage.clear();
   });
 
   it("parses backend Problem Details", async () => {
@@ -45,12 +47,30 @@ describe("API client", () => {
     vi.mocked(fetch).mockRejectedValueOnce(new TypeError("Failed to fetch"));
 
     await expect(request("/health")).rejects.toEqual(
-      expect.objectContaining<ApiError>({
+      expect.objectContaining({
         status: 0,
         errorCode: "network_error",
       }),
     );
     expect(apiActivity.getSnapshot()).toBe(0);
+  });
+
+  it("sends FormData without forcing a JSON content type", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }));
+    const form = new FormData();
+    form.append("file", new File(["{}"], "regions.geojson"));
+
+    await request("/admin/regions/import/adm0", {
+      method: "POST",
+      body: form,
+    });
+
+    const options = vi.mocked(fetch).mock.calls[0][1] as RequestInit;
+    expect(options.body).toBe(form);
+    expect(new Headers(options.headers).has("Content-Type")).toBe(false);
   });
 
   it("rotates the refresh token and retries a failed authorized request", async () => {

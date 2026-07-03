@@ -14,9 +14,17 @@ public class CreateStayRequest
     public string? LocationSummaryDescription { get; set; }
     public double? Latitude { get; set; }
     public double? Longitude { get; set; }
+    public int? Adm0Gid { get; set; }
+    public int? Adm1Gid { get; set; }
+    public int? Adm2Gid { get; set; }
+    public int? Adm3Gid { get; set; }
     public List<string> ImageLinks { get; set; } = [];
     public List<string> Amenities { get; set; } = [];
     public List<StayBookingPlatformRequest> BookingPlatforms { get; set; } = [];
+}
+
+public class UpdateStayRequest : CreateStayRequest
+{
 }
 
 public class StayBookingPlatformRequest
@@ -29,6 +37,18 @@ public class StayBookingPlatformRequest
 public class ImportStaysFileRequest
 {
     public IFormFile? File { get; set; }
+}
+
+public class UploadStayImageRequest
+{
+    public IFormFile? File { get; set; }
+}
+
+public class StayImageUploadResponse
+{
+    public string Link { get; set; } = string.Empty;
+    public string FileName { get; set; } = string.Empty;
+    public long SizeBytes { get; set; }
 }
 
 public class StayListRequest
@@ -46,6 +66,70 @@ public class StayListRequest
     public SortDirection SortDirection { get; set; } = SortDirection.Desc;
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 20;
+}
+
+public class StayFavoriteListRequest
+{
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 20;
+}
+
+public class StayFavoriteStatusResponse
+{
+    public int StayId { get; set; }
+    public bool IsFavorite { get; set; }
+}
+
+public sealed class StayFavoriteStatusesRequest
+{
+    public List<int> StayIds { get; set; } = [];
+}
+
+public sealed class StayFavoriteStatusesResponse
+{
+    public List<int> FavoriteStayIds { get; set; } = [];
+}
+
+public class StayFavoriteSummaryResponse
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public decimal? Price { get; set; }
+    public decimal? Rating { get; set; }
+    public int? Reviews { get; set; }
+    public string? PrimaryImage { get; set; }
+    public string? LocationSummaryDescription { get; set; }
+    public double? Latitude { get; set; }
+    public double? Longitude { get; set; }
+    public DateTime FavoritedAtUtc { get; set; }
+}
+
+public class CreateStayBookingRequest
+{
+    public DateOnly CheckInDate { get; set; }
+    public DateOnly CheckOutDate { get; set; }
+    public int GuestCount { get; set; }
+}
+
+public class UpdateStayBookingStatusRequest
+{
+    public StayBookingStatus Status { get; set; }
+}
+
+public class StayBookingResponse
+{
+    public Guid Id { get; set; }
+    public int StayId { get; set; }
+    public string StayName { get; set; } = string.Empty;
+    public Guid TravelerProfileId { get; set; }
+    public string GuestName { get; set; } = string.Empty;
+    public DateOnly CheckInDate { get; set; }
+    public DateOnly CheckOutDate { get; set; }
+    public int GuestCount { get; set; }
+    public decimal TotalPrice { get; set; }
+    public StayBookingStatus Status { get; set; }
+    public DateTime CreatedAtUtc { get; set; }
+    public DateTime? UpdatedAtUtc { get; set; }
 }
 
 public class StayRegionStatsRequest
@@ -92,6 +176,9 @@ public class StayResponse
     public int? Adm3Gid { get; set; }
     public double? Latitude { get; set; }
     public double? Longitude { get; set; }
+    public bool IsActive { get; set; }
+    public DateTime CreatedAtUtc { get; set; }
+    public DateTime? UpdatedAtUtc { get; set; }
     public List<StayImageResponse> Images { get; set; } = [];
     public List<string> Amenities { get; set; } = [];
     public List<StayReviewsPerRatingResponse> ReviewsPerRating { get; set; } = [];
@@ -156,5 +243,8 @@ public class PagedResponse<T>
     public int Page { get; set; }
     public int PageSize { get; set; }
     public int TotalCount { get; set; }
+    public int TotalPages => PageSize <= 0
+        ? 0
+        : (int)Math.Ceiling(TotalCount / (double)PageSize);
     public List<T> Items { get; set; } = [];
 }

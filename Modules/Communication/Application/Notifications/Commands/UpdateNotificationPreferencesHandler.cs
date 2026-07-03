@@ -27,8 +27,10 @@ public sealed class UpdateNotificationPreferencesHandler
             {
                 UserId = GetCurrentUserId(),
                 InAppEnabled = request.InAppEnabled,
-                EmailEnabled = request.EmailEnabled,
-                PushEnabled = request.PushEnabled,
+                // Email and push delivery providers are not configured yet. Keep
+                // these channels disabled instead of persisting misleading settings.
+                EmailEnabled = false,
+                PushEnabled = false,
                 ChatMessageNotificationsEnabled =
                     request.ChatMessageNotificationsEnabled,
                 SystemNotificationsEnabled = request.SystemNotificationsEnabled,
@@ -39,8 +41,8 @@ public sealed class UpdateNotificationPreferencesHandler
         return new NotificationPreferenceResponseDto
         {
             InAppEnabled = preference.InAppEnabled,
-            EmailEnabled = preference.EmailEnabled,
-            PushEnabled = preference.PushEnabled,
+            EmailEnabled = false,
+            PushEnabled = false,
             ChatMessageNotificationsEnabled =
                 preference.ChatMessageNotificationsEnabled,
             SystemNotificationsEnabled = preference.SystemNotificationsEnabled,

@@ -4,6 +4,8 @@ using System.Text;
 using System.Text.Json;
 using Glinter.Modules.IdentityAccess.Application.Abstractions;
 using Glinter.Modules.IdentityAccess.Domain.Constants;
+using Glinter.Modules.Communication.Application.Notifications.Commands;
+using Glinter.Modules.Communication.Domain.Enums;
 using Glinter.Modules.Profiles.Application.Abstractions;
 using Glinter.Modules.Regions.Application.Abstractions;
 using Glinter.Modules.Stays.Application.Dtos;
@@ -16,31 +18,65 @@ namespace Glinter.Modules.Stays.Application.Services;
 
 public class StayService
 {
+    private static readonly IReadOnlyDictionary<string, string> AmenityNameEnByNameAr =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["خدمة غسيل"] = "Laundry service",
+            ["مكيّف هواء"] = "Air conditioning",
+            ["خدمة غرف"] = "Room service",
+            ["اتصال Wi-Fi مجاني"] = "Free Wi-Fi",
+            ["مطعم"] = "Restaurant",
+            ["حافلة للمطار"] = "Airport shuttle",
+            ["مناسب للأطفال"] = "Kid-friendly",
+            ["مُناسب لذوي الاحتياجات الخاصة"] = "Accessible",
+            ["موقف سيارات مجاني"] = "Free parking",
+            ["إفطار مجاني"] = "Free breakfast",
+            ["Wi-Fi"] = "Wi-Fi",
+            ["حمام سباحة خارجي"] = "Outdoor pool",
+            ["صالة رياضة"] = "Fitness center",
+            ["بار"] = "Bar",
+            ["مطابخ في بعض الغرف"] = "Kitchen in some rooms",
+            ["منتجع صحي"] = "Spa",
+            ["إفطار مدفوع"] = "Paid breakfast",
+            ["حوض استحمام ساخن"] = "Hot tub",
+            ["موقف سيارات برسوم مدفوعة"] = "Paid parking",
+            ["مركز أعمال"] = "Business center",
+            ["الفطور"] = "Breakfast",
+            ["يُحظر التدخين"] = "No smoking",
+            ["مسبح"] = "Pool",
+            ["مطبخ في جميع الغرف"] = "Kitchen in all rooms",
+            ["موقف سيارات"] = "Parking",
+            ["يُسمح بحيوانات أليفة"] = "Pet-friendly",
+            ["حمام سباحة داخلي وخارجي"] = "Indoor and outdoor pool",
+            ["ملعب غولف"] = "Golf course",
+            ["اتصال Wi-Fi برسوم مدفوعة"] = "Paid Wi-Fi"
+        };
+
     private readonly StaysDbContext _dbContext;
     private readonly ICurrentUserService _currentUserService;
     private readonly IProfilesReadService _profilesReadService;
     private readonly IRegionsPointLookupRepository _regionsPointLookupRepository;
+    private readonly CreateNotificationHandler _createNotificationHandler;
 
     public StayService(
         StaysDbContext dbContext,
         ICurrentUserService currentUserService,
         IProfilesReadService profilesReadService,
-        IRegionsPointLookupRepository regionsPointLookupRepository)
+        IRegionsPointLookupRepository regionsPointLookupRepository,
+        CreateNotificationHandler createNotificationHandler)
     {
         _dbContext = dbContext;
         _currentUserService = currentUserService;
         _profilesReadService = profilesReadService;
         _regionsPointLookupRepository = regionsPointLookupRepository;
+        _createNotificationHandler = createNotificationHandler;
     }
 
     public async Task<StayResponse> CreateOwnerStayAsync(
         CreateStayRequest request,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(request.Name))
-        {
-            throw new ArgumentException("Stay name is required.");
-        }
+        ValidateStayRequest(request);
 
         var userId = _currentUserService.UserId
             ?? throw new InvalidOperationException("Authenticated user id is missing.");
@@ -67,7 +103,11 @@ public class StayService
             PhoneInternational = NormalizeString(request.PhoneInternational),
             LocationSummaryDescription = CleanText(request.LocationSummaryDescription),
             Latitude = request.Latitude,
-            Longitude = request.Longitude
+            Longitude = request.Longitude,
+            Adm0Gid = request.Adm0Gid,
+            Adm1Gid = request.Adm1Gid,
+            Adm2Gid = request.Adm2Gid,
+            Adm3Gid = request.Adm3Gid
         };
 
         await AttachRegionHierarchyAsync(stay, cancellationToken);
@@ -79,6 +119,427 @@ public class StayService
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         return ToResponse(stay);
+    }
+
+    public async Task AddFavoriteAsync(
+        int stayId,
+        CancellationToken cancellationToken)
+    {
+        var userId = RequireCurrentUserId();
+        var stayExists = await _dbContext.Stays
+            .AsNoTracking()
+            .AnyAsync(x => x.Id == stayId && x.IsActive, cancellationToken);
+        if (!stayExists)
+        {
+            throw new KeyNotFoundException("Active stay not found.");
+        }
+
+        if (await _dbContext.StayFavorites.AnyAsync(
+                x => x.UserId == userId && x.StayId == stayId,
+                cancellationToken))
+        {
+            return;
+        }
+
+        _dbContext.StayFavorites.Add(new StayFavorite
+        {
+            UserId = userId,
+            StayId = stayId
+        });
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task RemoveFavoriteAsync(
+        int stayId,
+        CancellationToken cancellationToken)
+    {
+        var userId = RequireCurrentUserId();
+        var favorite = await _dbContext.StayFavorites.FindAsync(
+            [userId, stayId],
+            cancellationToken);
+        if (favorite is null)
+        {
+            return;
+        }
+
+        _dbContext.StayFavorites.Remove(favorite);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<StayFavoriteStatusResponse> GetFavoriteStatusAsync(
+        int stayId,
+        CancellationToken cancellationToken)
+    {
+        var userId = RequireCurrentUserId();
+        return new StayFavoriteStatusResponse
+        {
+            StayId = stayId,
+            IsFavorite = await _dbContext.StayFavorites
+                .AsNoTracking()
+                .AnyAsync(
+                    x => x.UserId == userId && x.StayId == stayId,
+                    cancellationToken)
+        };
+    }
+
+    public async Task<StayFavoriteStatusesResponse> GetFavoriteStatusesAsync(
+        StayFavoriteStatusesRequest request,
+        CancellationToken cancellationToken)
+    {
+        var userId = RequireCurrentUserId();
+        var stayIds = request.StayIds
+            .Where(id => id > 0)
+            .Distinct()
+            .Take(200)
+            .ToArray();
+        if (stayIds.Length == 0)
+        {
+            return new StayFavoriteStatusesResponse();
+        }
+
+        return new StayFavoriteStatusesResponse
+        {
+            FavoriteStayIds = await _dbContext.StayFavorites
+                .AsNoTracking()
+                .Where(x => x.UserId == userId &&
+                            stayIds.Contains(x.StayId) &&
+                            x.Stay.IsActive)
+                .OrderBy(x => x.StayId)
+                .Select(x => x.StayId)
+                .ToListAsync(cancellationToken)
+        };
+    }
+
+    public async Task<PagedResponse<StayFavoriteSummaryResponse>> GetFavoritesAsync(
+        StayFavoriteListRequest request,
+        CancellationToken cancellationToken)
+    {
+        var userId = RequireCurrentUserId();
+        var page = Math.Max(1, request.Page);
+        var pageSize = Math.Clamp(request.PageSize, 1, 50);
+        var query = _dbContext.StayFavorites
+            .AsNoTracking()
+            .Where(x => x.UserId == userId && x.Stay.IsActive);
+
+        return new PagedResponse<StayFavoriteSummaryResponse>
+        {
+            Page = page,
+            PageSize = pageSize,
+            TotalCount = await query.CountAsync(cancellationToken),
+            Items = await query
+                .OrderByDescending(x => x.CreatedAtUtc)
+                .ThenBy(x => x.StayId)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(x => new StayFavoriteSummaryResponse
+                {
+                    Id = x.Stay.Id,
+                    Name = x.Stay.Name,
+                    Price = x.Stay.Price,
+                    Rating = x.Stay.Rating,
+                    Reviews = x.Stay.Reviews,
+                    PrimaryImage = x.Stay.Images
+                        .OrderBy(image => image.Id)
+                        .Select(image => image.Link)
+                        .FirstOrDefault(),
+                    LocationSummaryDescription = x.Stay.LocationSummaryDescription,
+                    Latitude = x.Stay.Latitude,
+                    Longitude = x.Stay.Longitude,
+                    FavoritedAtUtc = x.CreatedAtUtc
+                })
+                .ToListAsync(cancellationToken)
+        };
+    }
+
+    public async Task<List<StayResponse>> GetMyStaysAsync(CancellationToken cancellationToken)
+    {
+        var userId = RequireCurrentUserId();
+
+        var stays = await IncludeResponseData(_dbContext.Stays.AsNoTracking())
+            .Where(x => x.CreatedByUserId == userId)
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .AsSplitQuery()
+            .ToListAsync(cancellationToken);
+
+        return stays.Select(ToResponse).ToList();
+    }
+
+    public async Task<StayResponse?> UpdateOwnerStayAsync(
+        int stayId,
+        UpdateStayRequest request,
+        CancellationToken cancellationToken)
+    {
+        ValidateStayRequest(request);
+
+        var stay = await IncludeResponseData(_dbContext.Stays)
+            .AsSplitQuery()
+            .FirstOrDefaultAsync(x => x.Id == stayId, cancellationToken);
+
+        if (stay is null)
+        {
+            return null;
+        }
+
+        EnsureCanManage(stay);
+
+        stay.Name = CleanText(request.Name) ?? string.Empty;
+        stay.Price = request.Price;
+        stay.Description = CleanText(request.Description);
+        stay.GoogleMapsLink = NormalizeString(request.GoogleMapsLink);
+        stay.Website = NormalizeString(request.Website);
+        stay.PhoneInternational = NormalizeString(request.PhoneInternational);
+        stay.LocationSummaryDescription = CleanText(request.LocationSummaryDescription);
+        stay.Latitude = request.Latitude;
+        stay.Longitude = request.Longitude;
+        stay.Adm0Gid = request.Adm0Gid;
+        stay.Adm1Gid = request.Adm1Gid;
+        stay.Adm2Gid = request.Adm2Gid;
+        stay.Adm3Gid = request.Adm3Gid;
+        stay.UpdatedAtUtc = DateTime.UtcNow;
+
+        _dbContext.StayImages.RemoveRange(stay.Images);
+        _dbContext.StayAmenities.RemoveRange(stay.Amenities);
+        _dbContext.StayBookingPlatforms.RemoveRange(stay.BookingPlatforms);
+        stay.Images.Clear();
+        stay.Amenities.Clear();
+        stay.BookingPlatforms.Clear();
+
+        await AttachRegionHierarchyAsync(stay, cancellationToken);
+        AddImages(stay, request.ImageLinks);
+        AddAmenities(stay, request.Amenities);
+        AddBookingPlatforms(stay, request.BookingPlatforms);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return ToResponse(stay);
+    }
+
+    public async Task<StayResponse?> SetActiveAsync(
+        int stayId,
+        bool isActive,
+        CancellationToken cancellationToken)
+    {
+        var stay = await IncludeResponseData(_dbContext.Stays)
+            .AsSplitQuery()
+            .FirstOrDefaultAsync(x => x.Id == stayId, cancellationToken);
+
+        if (stay is null)
+        {
+            return null;
+        }
+
+        EnsureCanManage(stay);
+        stay.IsActive = isActive;
+        stay.UpdatedAtUtc = DateTime.UtcNow;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return ToResponse(stay);
+    }
+
+    public async Task<StayBookingResponse?> CreateBookingAsync(
+        int stayId,
+        CreateStayBookingRequest request,
+        CancellationToken cancellationToken)
+    {
+        ValidateBookingRequest(request);
+        var userId = RequireCurrentUserId();
+        var travelerProfileId = await _profilesReadService.GetTravelerProfileIdByUserIdAsync(
+            userId,
+            cancellationToken)
+            ?? throw new InvalidOperationException("Create your traveler profile before booking a stay.");
+
+        var stay = await _dbContext.Stays
+            .FirstOrDefaultAsync(x => x.Id == stayId && x.IsActive, cancellationToken);
+
+        if (stay is null)
+        {
+            return null;
+        }
+
+        if (stay.Price is null or <= 0)
+        {
+            throw new InvalidOperationException("This stay does not have a bookable nightly price.");
+        }
+
+        var hasOverlap = await _dbContext.StayBookings.AnyAsync(
+            x => x.StayId == stayId &&
+                 x.TravelerProfileId == travelerProfileId &&
+                 x.Status != StayBookingStatus.Cancelled &&
+                 request.CheckInDate < x.CheckOutDate &&
+                 request.CheckOutDate > x.CheckInDate,
+            cancellationToken);
+
+        if (hasOverlap)
+        {
+            throw new InvalidOperationException("You already have an overlapping booking for this stay.");
+        }
+
+        var nights = request.CheckOutDate.DayNumber - request.CheckInDate.DayNumber;
+        var booking = new StayBooking
+        {
+            StayId = stayId,
+            Stay = stay,
+            TravelerProfileId = travelerProfileId,
+            CreatedByUserId = userId,
+            GuestName = _currentUserService.Email ?? "Traveler",
+            CheckInDate = request.CheckInDate,
+            CheckOutDate = request.CheckOutDate,
+            GuestCount = request.GuestCount,
+            TotalPrice = stay.Price.Value * nights
+        };
+
+        _dbContext.StayBookings.Add(booking);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        if (stay.CreatedByUserId is Guid ownerUserId && ownerUserId != userId)
+        {
+            await _createNotificationHandler.HandleAsync(
+                new CreateNotificationCommand
+                {
+                    UserId = ownerUserId,
+                    Type = NotificationType.Booking,
+                    Title = "New stay booking",
+                    Body = $"{booking.GuestName} requested {stay.Name}.",
+                    LinkUrl = "/profile/me?tab=hotels",
+                    SourceModule = "Stays",
+                    SourceEntityType = "StayBooking",
+                    SourceEntityId = booking.Id
+                },
+                cancellationToken);
+        }
+        return ToBookingResponse(booking);
+    }
+
+    public async Task<List<StayBookingResponse>> GetMyBookingsAsync(CancellationToken cancellationToken)
+    {
+        var userId = RequireCurrentUserId();
+        var bookings = await _dbContext.StayBookings
+            .AsNoTracking()
+            .Include(x => x.Stay)
+            .Where(x => x.CreatedByUserId == userId)
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .ToListAsync(cancellationToken);
+
+        return bookings.Select(ToBookingResponse).ToList();
+    }
+
+    public async Task<List<StayBookingResponse>?> GetStayBookingsAsync(
+        int stayId,
+        CancellationToken cancellationToken)
+    {
+        var stay = await _dbContext.Stays
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == stayId, cancellationToken);
+
+        if (stay is null)
+        {
+            return null;
+        }
+
+        EnsureCanManage(stay);
+
+        var bookings = await _dbContext.StayBookings
+            .AsNoTracking()
+            .Include(x => x.Stay)
+            .Where(x => x.StayId == stayId)
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .ToListAsync(cancellationToken);
+
+        return bookings.Select(ToBookingResponse).ToList();
+    }
+
+    public async Task<StayBookingResponse?> CancelBookingAsync(
+        Guid bookingId,
+        CancellationToken cancellationToken)
+    {
+        var userId = RequireCurrentUserId();
+        var booking = await _dbContext.StayBookings
+            .Include(x => x.Stay)
+            .FirstOrDefaultAsync(x => x.Id == bookingId, cancellationToken);
+
+        if (booking is null)
+        {
+            return null;
+        }
+
+        var canManageStay = IsAdmin() || booking.Stay.CreatedByUserId == userId;
+        if (booking.CreatedByUserId != userId && !canManageStay)
+        {
+            throw new UnauthorizedAccessException("You cannot cancel this booking.");
+        }
+
+        if (booking.Status == StayBookingStatus.Completed)
+        {
+            throw new InvalidOperationException("A completed booking cannot be cancelled.");
+        }
+
+        booking.Status = StayBookingStatus.Cancelled;
+        booking.UpdatedAtUtc = DateTime.UtcNow;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        var cancellationRecipient = booking.CreatedByUserId == userId
+            ? booking.Stay.CreatedByUserId
+            : booking.CreatedByUserId;
+        if (cancellationRecipient is Guid recipientUserId && recipientUserId != userId)
+        {
+            await _createNotificationHandler.HandleAsync(
+                new CreateNotificationCommand
+                {
+                    UserId = recipientUserId,
+                    Type = NotificationType.Booking,
+                    Title = "Stay booking cancelled",
+                    Body = $"The booking for {booking.Stay.Name} was cancelled.",
+                    LinkUrl = booking.CreatedByUserId == userId
+                        ? "/profile/me?tab=hotels"
+                        : "/profile/me?tab=bookings",
+                    SourceModule = "Stays",
+                    SourceEntityType = "StayBooking",
+                    SourceEntityId = booking.Id
+                },
+                cancellationToken);
+        }
+        return ToBookingResponse(booking);
+    }
+
+    public async Task<StayBookingResponse?> UpdateBookingStatusAsync(
+        Guid bookingId,
+        StayBookingStatus status,
+        CancellationToken cancellationToken)
+    {
+        if (status is not (StayBookingStatus.Confirmed or StayBookingStatus.Completed or StayBookingStatus.Cancelled))
+        {
+            throw new ArgumentException("Booking status must be Confirmed, Completed, or Cancelled.");
+        }
+
+        var booking = await _dbContext.StayBookings
+            .Include(x => x.Stay)
+            .FirstOrDefaultAsync(x => x.Id == bookingId, cancellationToken);
+
+        if (booking is null)
+        {
+            return null;
+        }
+
+        EnsureCanManage(booking.Stay);
+
+        if (booking.Status == StayBookingStatus.Cancelled)
+        {
+            throw new InvalidOperationException("A cancelled booking cannot be changed.");
+        }
+
+        booking.Status = status;
+        booking.UpdatedAtUtc = DateTime.UtcNow;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _createNotificationHandler.HandleAsync(
+            new CreateNotificationCommand
+            {
+                UserId = booking.CreatedByUserId,
+                Type = NotificationType.Booking,
+                Title = $"Stay booking {status.ToString().ToLowerInvariant()}",
+                Body = $"Your booking for {booking.Stay.Name} is now {status.ToString().ToLowerInvariant()}.",
+                LinkUrl = "/profile/me?tab=bookings",
+                SourceModule = "Stays",
+                SourceEntityType = "StayBooking",
+                SourceEntityId = booking.Id
+            },
+            cancellationToken);
+        return ToBookingResponse(booking);
     }
 
     public async Task<ImportStaysResponse> ImportThirdPartyAsync(
@@ -162,7 +623,7 @@ public class StayService
     {
         var page = Math.Max(1, request.Page);
         var pageSize = Math.Clamp(request.PageSize, 1, 100);
-        var query = ApplyFilters(_dbContext.Stays.AsNoTracking(), request);
+        var query = ApplyFilters(_dbContext.Stays.AsNoTracking().Where(x => x.IsActive), request);
 
         var totalCount = await query.CountAsync(cancellationToken);
         var stays = await ApplySorting(IncludeResponseData(query), request)
@@ -182,7 +643,7 @@ public class StayService
 
     public async Task<StayResponse?> GetByIdAsync(int id, CancellationToken cancellationToken)
     {
-        var stay = await IncludeResponseData(_dbContext.Stays.AsNoTracking())
+        var stay = await IncludeResponseData(_dbContext.Stays.AsNoTracking().Where(x => x.IsActive))
             .AsSplitQuery()
             .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
 
@@ -193,7 +654,7 @@ public class StayService
         StayRegionStatsRequest request,
         CancellationToken cancellationToken)
     {
-        var query = ApplyStatsFilters(_dbContext.Stays.AsNoTracking(), request);
+        var query = ApplyStatsFilters(_dbContext.Stays.AsNoTracking().Where(x => x.IsActive), request);
         var pricedQuery = query.Where(x => x.Price != null);
         var minPrice = await pricedQuery.MinAsync(x => (decimal?)x.Price, cancellationToken);
         var maxPrice = await pricedQuery.MaxAsync(x => (decimal?)x.Price, cancellationToken);
@@ -507,16 +968,16 @@ public class StayService
         return request.SortBy switch
         {
             StaySortBy.Price => descending
-                ? query.OrderByDescending(x => x.Price).ThenByDescending(x => x.Rating).ThenBy(x => x.Name)
-                : query.OrderBy(x => x.Price).ThenByDescending(x => x.Rating).ThenBy(x => x.Name),
+                ? query.OrderBy(x => x.Price == null).ThenByDescending(x => x.Price).ThenByDescending(x => x.Rating).ThenBy(x => x.Name)
+                : query.OrderBy(x => x.Price == null).ThenBy(x => x.Price).ThenByDescending(x => x.Rating).ThenBy(x => x.Name),
 
             StaySortBy.Rating => descending
-                ? query.OrderByDescending(x => x.Rating).ThenByDescending(x => x.Reviews).ThenBy(x => x.Price)
-                : query.OrderBy(x => x.Rating).ThenByDescending(x => x.Reviews).ThenBy(x => x.Price),
+                ? query.OrderBy(x => x.Rating == null).ThenByDescending(x => x.Rating).ThenByDescending(x => x.Reviews).ThenBy(x => x.Price)
+                : query.OrderBy(x => x.Rating == null).ThenBy(x => x.Rating).ThenByDescending(x => x.Reviews).ThenBy(x => x.Price),
 
             StaySortBy.Reviews => descending
-                ? query.OrderByDescending(x => x.Reviews).ThenByDescending(x => x.Rating).ThenBy(x => x.Price)
-                : query.OrderBy(x => x.Reviews).ThenByDescending(x => x.Rating).ThenBy(x => x.Price),
+                ? query.OrderBy(x => x.Reviews == null).ThenByDescending(x => x.Reviews).ThenByDescending(x => x.Rating).ThenBy(x => x.Price)
+                : query.OrderBy(x => x.Reviews == null).ThenBy(x => x.Reviews).ThenByDescending(x => x.Rating).ThenBy(x => x.Price),
 
             StaySortBy.Name => descending
                 ? query.OrderByDescending(x => x.Name)
@@ -527,7 +988,8 @@ public class StayService
                 : query.OrderBy(x => x.CreatedAtUtc),
 
             _ => query
-                .OrderByDescending(x => x.Rating)
+                .OrderBy(x => x.Rating == null)
+                .ThenByDescending(x => x.Rating)
                 .ThenByDescending(x => x.Reviews)
                 .ThenBy(x => x.Price)
                 .ThenBy(x => x.Name)
@@ -590,13 +1052,18 @@ public class StayService
             Adm3Gid = stay.Adm3Gid,
             Latitude = stay.Latitude,
             Longitude = stay.Longitude,
+            IsActive = stay.IsActive,
+            CreatedAtUtc = stay.CreatedAtUtc,
+            UpdatedAtUtc = stay.UpdatedAtUtc,
             Images = stay.Images
                 .OrderBy(x => x.Id)
                 .Select(x => new StayImageResponse { Id = x.Id, Link = x.Link })
                 .ToList(),
             Amenities = stay.Amenities
-                .OrderBy(x => x.Name)
-                .Select(x => x.Name)
+                .Select(GetAmenityDisplayName)
+                .Where(x => x is not null)
+                .Select(x => x!)
+                .OrderBy(x => x)
                 .ToList(),
             ReviewsPerRating = stay.ReviewsPerRatings
                 .OrderBy(x => x.Rating)
@@ -622,6 +1089,88 @@ public class StayService
                 .Select(ToReviewResponse)
                 .ToList()
         };
+    }
+
+    private static StayBookingResponse ToBookingResponse(StayBooking booking)
+    {
+        return new StayBookingResponse
+        {
+            Id = booking.Id,
+            StayId = booking.StayId,
+            StayName = booking.Stay.Name,
+            TravelerProfileId = booking.TravelerProfileId,
+            GuestName = booking.GuestName,
+            CheckInDate = booking.CheckInDate,
+            CheckOutDate = booking.CheckOutDate,
+            GuestCount = booking.GuestCount,
+            TotalPrice = booking.TotalPrice,
+            Status = booking.Status,
+            CreatedAtUtc = booking.CreatedAtUtc,
+            UpdatedAtUtc = booking.UpdatedAtUtc
+        };
+    }
+
+    private static void ValidateStayRequest(CreateStayRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name))
+        {
+            throw new ArgumentException("Stay name is required.");
+        }
+
+        if (request.Price is null or <= 0)
+        {
+            throw new ArgumentException("A positive nightly price is required.");
+        }
+
+        if (request.Latitude is < -90 or > 90 || request.Longitude is < -180 or > 180)
+        {
+            throw new ArgumentException("Valid latitude and longitude are required.");
+        }
+
+        if (new[] { request.Adm0Gid, request.Adm1Gid, request.Adm2Gid, request.Adm3Gid }
+            .Any(x => x is <= 0))
+        {
+            throw new ArgumentException("Region identifiers must be positive.");
+        }
+    }
+
+    private static void ValidateBookingRequest(CreateStayBookingRequest request)
+    {
+        if (request.CheckInDate == default || request.CheckOutDate == default)
+        {
+            throw new ArgumentException("Check-in and check-out dates are required.");
+        }
+
+        if (request.CheckOutDate <= request.CheckInDate)
+        {
+            throw new ArgumentException("Check-out must be after check-in.");
+        }
+
+        if (request.CheckInDate < DateOnly.FromDateTime(DateTime.UtcNow))
+        {
+            throw new ArgumentException("Check-in cannot be in the past.");
+        }
+
+        if (request.GuestCount is < 1 or > 100)
+        {
+            throw new ArgumentException("Guest count must be between 1 and 100.");
+        }
+    }
+
+    private Guid RequireCurrentUserId()
+    {
+        return _currentUserService.UserId
+            ?? throw new InvalidOperationException("Authenticated user id is missing.");
+    }
+
+    private bool IsAdmin() => _currentUserService.Roles.Contains(RoleNames.Admin);
+
+    private void EnsureCanManage(Stay stay)
+    {
+        if (!IsAdmin() && stay.CreatedByUserId != RequireCurrentUserId())
+        {
+            throw new UnauthorizedAccessException("You cannot manage this stay.");
+        }
     }
 
     private static StayReviewResponse ToReviewResponse(StayReview review)
@@ -710,8 +1259,31 @@ public class StayService
     {
         foreach (var name in names.Select(CleanText).Where(x => x is not null).Distinct())
         {
-            stay.Amenities.Add(new StayAmenity { Name = name! });
+            stay.Amenities.Add(CreateAmenity(name!));
         }
+    }
+
+    private static StayAmenity CreateAmenity(string name)
+    {
+        return ContainsArabic(name)
+            ? new StayAmenity
+            {
+                NameAr = name,
+                NameEn = AmenityNameEnByNameAr.GetValueOrDefault(name)
+            }
+            : new StayAmenity { NameEn = name };
+    }
+
+    private static string? GetAmenityDisplayName(StayAmenity amenity)
+    {
+        return !string.IsNullOrWhiteSpace(amenity.NameEn)
+            ? amenity.NameEn
+            : amenity.NameAr;
+    }
+
+    private static bool ContainsArabic(string value)
+    {
+        return value.Any(c => c is >= '\u0600' and <= '\u06FF');
     }
 
     private static void AddReviewsPerRating(Stay stay, JsonElement item)
@@ -877,10 +1449,13 @@ public class StayService
 
     private async Task AttachRegionHierarchyAsync(Stay stay, CancellationToken cancellationToken)
     {
-        stay.Adm0Gid = null;
-        stay.Adm1Gid = null;
-        stay.Adm2Gid = null;
-        stay.Adm3Gid = null;
+        if (stay.Adm0Gid is not null ||
+            stay.Adm1Gid is not null ||
+            stay.Adm2Gid is not null ||
+            stay.Adm3Gid is not null)
+        {
+            return;
+        }
 
         if (stay.Latitude is null || stay.Longitude is null)
         {
@@ -892,10 +1467,13 @@ public class StayService
             stay.Longitude.Value,
             cancellationToken);
 
-        stay.Adm0Gid = hierarchy?.Adm0Gid;
-        stay.Adm1Gid = hierarchy?.Adm1Gid;
-        stay.Adm2Gid = hierarchy?.Adm2Gid;
-        stay.Adm3Gid = hierarchy?.Adm3Gid;
+        if (hierarchy is not null)
+        {
+            stay.Adm0Gid = hierarchy.Adm0Gid;
+            stay.Adm1Gid = hierarchy.Adm1Gid;
+            stay.Adm2Gid = hierarchy.Adm2Gid;
+            stay.Adm3Gid = hierarchy.Adm3Gid;
+        }
     }
 
     private static string? NormalizeExternalReviewId(

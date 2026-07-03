@@ -54,6 +54,7 @@ public class StayConfiguration : IEntityTypeConfiguration<Stay>
         builder.HasIndex(x => x.Rating);
         builder.HasIndex(x => new { x.Latitude, x.Longitude });
         builder.HasIndex(x => x.HotelOwnerProfileId);
+        builder.HasIndex(x => x.IsActive);
 
         builder.HasMany(x => x.Images)
             .WithOne(x => x.Stay)
@@ -79,5 +80,10 @@ public class StayConfiguration : IEntityTypeConfiguration<Stay>
             .WithOne(x => x.Stay)
             .HasForeignKey(x => x.StayId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(x => x.Bookings)
+            .WithOne(x => x.Stay)
+            .HasForeignKey(x => x.StayId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

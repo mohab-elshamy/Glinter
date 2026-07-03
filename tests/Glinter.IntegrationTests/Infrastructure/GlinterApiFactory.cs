@@ -1,14 +1,23 @@
 using System.Text;
+using System.Security.Cryptography;
 using Glinter.Modules.Communication.Infrastructure.Persistence;
 using Glinter.Modules.Experiences.Infrastructure.Persistence;
+using Glinter.Modules.IdentityAccess.Domain.Entities;
 using Glinter.Modules.IdentityAccess.Infrastructure.Persistence;
 using Glinter.Modules.IdentityAccess.Infrastructure.Security;
 using Glinter.Modules.Profiles.Infrastructure.Persistence;
 using Glinter.Modules.Regions.Infrastructure.Persistence;
 using Glinter.Modules.SafetyIndex.Infrastructure.Persistence;
 using Glinter.Modules.Stays.Infrastructure.Persistence;
+using Glinter.Modules.Stays.Application.Abstractions;
+using Glinter.Modules.Stays.Application.Dtos;
+using Glinter.Modules.Itineraries.Application.Abstractions;
+using Glinter.Modules.Itineraries.Application.Dtos;
+using Glinter.Modules.Itineraries.Domain.Enums;
+using Glinter.Modules.Itineraries.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
@@ -63,14 +72,18 @@ public sealed class GlinterApiFactory : WebApplicationFactory<Program>, IAsyncLi
         var testBuilder = new NpgsqlConnectionStringBuilder(configuredConnection)
         {
             Database = _databaseName,
-            Pooling = false
+            Pooling = false,
+            Timeout = 15,
+            CommandTimeout = 30
         };
         ConnectionString = testBuilder.ConnectionString;
 
         var adminBuilder = new NpgsqlConnectionStringBuilder(configuredConnection)
         {
             Database = "postgres",
-            Pooling = false
+            Pooling = false,
+            Timeout = 15,
+            CommandTimeout = 30
         };
         _adminConnectionString = adminBuilder.ConnectionString;
 
@@ -110,18 +123,23 @@ public sealed class GlinterApiFactory : WebApplicationFactory<Program>, IAsyncLi
                 ["Jwt:SecretKey"] = JwtSecret,
                 ["Jwt:ExpiryMinutes"] = "60",
                 ["IdentityEmail:SmtpHost"] = string.Empty,
+                ["HotelRecommendations:GroqApiKey"] = string.Empty,
+                ["HotelRecommendations:MinLocalPriceSampleSize"] = "3",
+                ["HotelRecommendations:MaxExperiencesPerCategory"] = "1",
+                ["HotelRecommendations:NaturalLanguageMaxCharacters"] = "1000",
+                ["HotelRecommendations:MaxRequestedAmenities"] = "20",
+                ["HotelRecommendations:RateLimiting:PermitLimit"] = "5",
+                ["HotelRecommendations:RateLimiting:WindowSeconds"] = "60",
+                ["Cleanup:Enabled"] = "false",
+                ["SafetyIndex:EnableWeeklyService"] = "false",
+                ["SafetyIndex:RunInitialHistoricalCollectionOnStartup"] = "false",
                 ["RateLimiting:PermitLimit"] = "10000",
                 ["RateLimiting:WindowMinutes"] = "1",
                 ["Communication:RateLimiting:DirectThreadPermitLimit"] = "5",
                 ["Communication:RateLimiting:MessagePermitLimit"] = "8",
-                ["Communication:RateLimiting:WindowSeconds"] = "60",
-
-                ["SafetyIndex:EnableWeeklyService"] = "false",
-                ["SafetyIndex:RunInitialHistoricalCollectionOnStartup"] = "false",
-                ["SafetyIndex:HostedServiceStartupDelaySeconds"] = "0"
+                ["Communication:RateLimiting:WindowSeconds"] = "60"
             });
         });
-
         builder.ConfigureTestServices(services =>
         {
             ReplaceDbContext<IdentityAccessDbContext>(services, false);
@@ -131,6 +149,7 @@ public sealed class GlinterApiFactory : WebApplicationFactory<Program>, IAsyncLi
             ReplaceDbContext<StaysDbContext>(services, false);
             ReplaceDbContext<ExperiencesDbContext>(services, false);
             ReplaceDbContext<CommunicationDbContext>(services, false);
+            ReplaceDbContext<ItinerariesDbContext>(services, false);
 
             services.PostConfigure<JwtOptions>(options =>
             {
@@ -139,7 +158,6 @@ public sealed class GlinterApiFactory : WebApplicationFactory<Program>, IAsyncLi
                 options.SecretKey = JwtSecret;
                 options.ExpiryMinutes = 60;
             });
-
             services.PostConfigure<JwtBearerOptions>(
                 JwtBearerDefaults.AuthenticationScheme,
                 options =>
@@ -149,6 +167,16 @@ public sealed class GlinterApiFactory : WebApplicationFactory<Program>, IAsyncLi
                     options.TokenValidationParameters.IssuerSigningKey =
                         new SymmetricSecurityKey(Encoding.UTF8.GetBytes(JwtSecret));
                 });
+            services.RemoveAll<IPasswordHasher<ApplicationUser>>();
+            services.AddSingleton<IPasswordHasher<ApplicationUser>, FastTestPasswordHasher>();
+            services.RemoveAll<IHotelRecommendationGroqClient>();
+            services.AddSingleton<IHotelRecommendationGroqClient, NullHotelRecommendationGroqClient>();
+            services.RemoveAll<IItineraryGroqClient>();
+            services.AddSingleton<IItineraryGroqClient, NullItineraryGroqClient>();
+            services.RemoveAll<IItineraryRoutePlanner>();
+            services.AddSingleton<IItineraryRoutePlanner, TestItineraryRoutePlanner>();
+            services.RemoveAll<IWeatherForecastService>();
+            services.AddSingleton<IWeatherForecastService, TestWeatherForecastService>();
         });
     }
 
@@ -206,57 +234,49 @@ public sealed class GlinterApiFactory : WebApplicationFactory<Program>, IAsyncLi
             .UseNpgsql(ConnectionString)
             .Options;
         await using (var context = new IdentityAccessDbContext(identityOptions))
-        {
             await context.Database.MigrateAsync();
-        }
 
         var profileOptions = new DbContextOptionsBuilder<ProfilesDbContext>()
             .UseNpgsql(ConnectionString)
             .Options;
         await using (var context = new ProfilesDbContext(profileOptions))
-        {
             await context.Database.MigrateAsync();
-        }
 
         var regionOptions = new DbContextOptionsBuilder<RegionsDbContext>()
             .UseNpgsql(ConnectionString, options => options.UseNetTopologySuite())
             .Options;
         await using (var context = new RegionsDbContext(regionOptions))
-        {
             await context.Database.MigrateAsync();
-        }
 
-        var safetyIndexOptions = new DbContextOptionsBuilder<SafetyIndexDbContext>()
+        var safetyOptions = new DbContextOptionsBuilder<SafetyIndexDbContext>()
             .UseNpgsql(ConnectionString)
             .Options;
-        await using (var context = new SafetyIndexDbContext(safetyIndexOptions))
-        {
+        await using (var context = new SafetyIndexDbContext(safetyOptions))
             await context.Database.MigrateAsync();
-        }
 
         var stayOptions = new DbContextOptionsBuilder<StaysDbContext>()
             .UseNpgsql(ConnectionString)
             .Options;
         await using (var context = new StaysDbContext(stayOptions))
-        {
             await context.Database.MigrateAsync();
-        }
 
         var experienceOptions = new DbContextOptionsBuilder<ExperiencesDbContext>()
             .UseNpgsql(ConnectionString)
             .Options;
         await using (var context = new ExperiencesDbContext(experienceOptions))
-        {
             await context.Database.MigrateAsync();
-        }
 
         var communicationOptions = new DbContextOptionsBuilder<CommunicationDbContext>()
             .UseNpgsql(ConnectionString)
             .Options;
         await using (var context = new CommunicationDbContext(communicationOptions))
-        {
             await context.Database.MigrateAsync();
-        }
+
+        var itineraryOptions = new DbContextOptionsBuilder<ItinerariesDbContext>()
+            .UseNpgsql(ConnectionString)
+            .Options;
+        await using (var context = new ItinerariesDbContext(itineraryOptions))
+            await context.Database.MigrateAsync();
     }
 
     private void ReplaceDbContext<TContext>(
@@ -279,5 +299,109 @@ public sealed class GlinterApiFactory : WebApplicationFactory<Program>, IAsyncLi
                 options.UseNpgsql(ConnectionString);
             }
         });
+    }
+
+    private sealed class FastTestPasswordHasher
+        : IPasswordHasher<ApplicationUser>
+    {
+        private const string Prefix = "integration-sha256:";
+
+        public string HashPassword(ApplicationUser user, string password)
+        {
+            ArgumentNullException.ThrowIfNull(password);
+            return Prefix + Convert.ToBase64String(
+                SHA256.HashData(Encoding.UTF8.GetBytes(password)));
+        }
+
+        public PasswordVerificationResult VerifyHashedPassword(
+            ApplicationUser user,
+            string hashedPassword,
+            string providedPassword)
+        {
+            if (!hashedPassword.StartsWith(Prefix, StringComparison.Ordinal))
+                return PasswordVerificationResult.Failed;
+
+            var expected = HashPassword(user, providedPassword);
+            return CryptographicOperations.FixedTimeEquals(
+                Encoding.UTF8.GetBytes(hashedPassword),
+                Encoding.UTF8.GetBytes(expected))
+                ? PasswordVerificationResult.Success
+                : PasswordVerificationResult.Failed;
+        }
+    }
+
+    private sealed class NullHotelRecommendationGroqClient
+        : IHotelRecommendationGroqClient
+    {
+        public Task<HotelRecommendationPreferences?> ClassifyAsync(
+            string text,
+            string? preferredLanguage,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<HotelRecommendationPreferences?>(null);
+
+        public Task<IReadOnlyDictionary<int, HotelRecommendationExplanationResponse>?>
+            GenerateExplanationsAsync(
+                HotelRecommendationRequest request,
+                IReadOnlyList<HotelRecommendationItemResponse> rankedItems,
+                CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyDictionary<int, HotelRecommendationExplanationResponse>?>(null);
+    }
+
+    private sealed class NullItineraryGroqClient : IItineraryGroqClient
+    {
+        public Task<ItineraryPlanPreferences?> ClassifyPlanAsync(
+            string text,
+            string? preferredLanguage,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<ItineraryPlanPreferences?>(null);
+    }
+
+    private sealed class TestItineraryRoutePlanner : IItineraryRoutePlanner
+    {
+        public Task<ItineraryRouteResult> GetRouteAsync(
+            ItineraryRouteRequest request,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(new ItineraryRouteResult
+            {
+                Mode = request.FallbackMode,
+                Provider = ItineraryRouteProvider.FallbackEstimate,
+                DistanceKm = 1,
+                DurationMinutes = 12,
+                Geometry = new ItineraryLegGeometryResponse
+                {
+                    Coordinates =
+                    [
+                        [request.From.Longitude, request.From.Latitude],
+                        [request.To.Longitude, request.To.Latitude]
+                    ]
+                },
+                Steps = ["Test route estimate"],
+                Warnings = ["Test routing fallback"]
+            });
+    }
+
+    private sealed class TestWeatherForecastService : IWeatherForecastService
+    {
+        public Task<WeatherForecastResponse> GetForecastAsync(
+            WeatherForecastRequest request,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new WeatherForecastResponse
+            {
+                Location = request.Location,
+                IsAvailable = true,
+                ProviderDataTimestampUtc = DateTime.UtcNow,
+                Days =
+                [
+                    new DailyWeatherResponse
+                    {
+                        Date = request.StartDate,
+                        TemperatureMinC = 20,
+                        TemperatureMaxC = 30,
+                        Condition = "Clear",
+                        HumidityPercent = 40,
+                        Advice = "Test forecast"
+                    }
+                ]
+            });
     }
 }

@@ -1,219 +1,3 @@
-export interface AuthResponse {
-  userId: string;
-  fullName: string;
-  email: string;
-  roles: string[];
-  token: string;
-}
-
-export interface CurrentUser {
-  userId: string;
-  fullName: string;
-  email: string;
-  isActive: boolean;
-  roles: string[];
-}
-
-export interface RegisterData {
-  fullName: string;
-  email: string;
-  password: string;
-  role?: string;
-}
-
-export interface UserListItem {
-  id: string;
-  fullName: string;
-  email: string;
-  isActive: boolean;
-  roles: string[];
-  createdAt: string;
-}
-
-export interface Role {
-  name: string;
-  id: string;
-}
-
-export interface Neighborhood {
-  id: string;
-  name: string;
-  city: string;
-  lat: number;
-  lng: number;
-  safety_score: number;
-  price_level: number;
-  comfort_score: number;
-  ai_insights?: string;
-}
-
-export interface NeighborhoodsResponse {
-  neighborhoods: Neighborhood[];
-}
-
-export interface Hotel {
-  id: string;
-  name: string;
-  neighborhood: string;
-  price: number;
-  rating: number;
-  reviews_count: number;
-  images: string[];
-  amenities: string[];
-}
-
-export interface HotelsResponse {
-  hotels: Hotel[];
-}
-
-export interface Experience {
-  id: string;
-  name: string;
-  city: string;
-  description: string;
-  price: number;
-  duration_hours: number;
-  images: string[];
-}
-
-export interface ExperiencesResponse {
-  experiences: Experience[];
-}
-
-export interface ItineraryGenerateData {
-  city: string;
-  start_date: string;
-  end_date: string;
-  vibes: string[];
-  budget: string;
-  preferences?: {
-    start_time?: string;
-    end_time?: string;
-    num_travelers?: number;
-  };
-}
-
-export interface ItineraryStop {
-  time: string;
-  name: string;
-  duration: string;
-  type: string;
-  cost: number;
-  location?: {
-    lat: number;
-    lng: number;
-  };
-}
-
-export interface ItineraryDay {
-  day: string;
-  theme: string;
-  stops: ItineraryStop[];
-  transport_to_next?: string;
-}
-
-export interface ItineraryResponse {
-  itinerary: ItineraryDay[];
-  transport_estimate: {
-    total: number;
-    breakdown: { day: string; uber: number; metro: number; walking: number }[];
-  };
-  total_cost: number;
-  weather?: {
-    condition: string;
-    temp_min: number;
-    temp_max: number;
-    advice: string;
-  };
-}
-
-export interface SaveItineraryData {
-  city: string;
-  start_date: string;
-  end_date: string;
-  vibes: string[];
-  plan_json: ItineraryDay[];
-}
-
-export interface ItineraryListResponse {
-  itineraries: ItineraryResponse[];
-}
-
-export interface Buddy {
-  id: string;
-  name: string;
-  avatar: string;
-  city: string;
-  languages: string[];
-  rating: number;
-  reviews_count: number;
-  is_verified: boolean;
-  verified_at?: string;
-  specialties: string[];
-  price?: string;
-}
-
-export interface BuddiesResponse {
-  buddies: Buddy[];
-}
-
-export interface Message {
-  id: string;
-  sender_id: string;
-  receiver_id: string;
-  content: string;
-  is_read: boolean;
-  created_at: string;
-}
-
-export interface ConversationsResponse {
-  conversations: {
-    user_id: string;
-    user_name: string;
-    last_message: string;
-    unread_count: number;
-  }[];
-}
-
-export interface Rating {
-  id: string;
-  traveler_id: string;
-  buddy_id: string;
-  score: number;
-  review_text?: string;
-  created_at: string;
-}
-
-export interface RatingsResponse {
-  ratings: Rating[];
-}
-
-export interface Favorite {
-  neighborhood_id?: string;
-  hotel_id?: string;
-  created_at: string;
-}
-
-export interface FavoritesResponse {
-  favorites: Favorite[];
-}
-
-export interface SafetyReportData {
-  description: string;
-  location_lat?: number;
-  location_lng?: number;
-}
-
-export interface SafetyReport {
-  id: string;
-  status: string;
-  created_at: string;
-}
-
-export interface SafetyReportsResponse {
-  reports: SafetyReport[];
-}
-
 // ============================================================
 // Profiles Module DTOs (matching backend)
 // ============================================================
@@ -226,13 +10,16 @@ export interface InterestResponse {
 export interface TravelerProfileResponse {
   profileId: string;
   userId: string;
-  profileType: string;
+  profileType: "Traveler";
   displayName: string;
   bio?: string;
   nationality?: string;
   preferredBudgetLevel?: string;
   travelStyle?: string;
   preferredInterests?: string;
+  preferredVibes?: string;
+  comfortLevel?: string;
+  safetyPriority?: string;
   profileImageUrl?: string;
   interests: InterestResponse[];
   followersCount: number;
@@ -255,12 +42,69 @@ export interface LocalBuddyListItemResponse {
   interests: InterestResponse[];
   followersCount: number;
   followingCount: number;
+  isFollowing: boolean;
+}
+
+export interface FollowStatusResponse {
+  followedUserId: string;
+  isFollowing: boolean;
+  followersCount: number;
+}
+
+export interface BuddyAvailabilityDto {
+  id: string;
+  localBuddyUserId: string;
+  startTimeUtc: string;
+  endTimeUtc: string;
+  price: number;
+  isActive: boolean;
+  isBooked: boolean;
+}
+
+export interface BuddyAvailabilityRequest {
+  startTimeUtc: string;
+  endTimeUtc: string;
+  price: number;
+}
+
+export type BuddyBookingStatus =
+  | "Pending"
+  | "Accepted"
+  | "Rejected"
+  | "Completed"
+  | "Cancelled";
+
+export interface BuddyBookingDto {
+  id: string;
+  availabilityId: string;
+  localBuddyUserId: string;
+  buddyName: string;
+  travelerUserId: string;
+  travelerName: string;
+  startTimeUtc: string;
+  endTimeUtc: string;
+  totalPrice: number;
+  notes?: string;
+  status: BuddyBookingStatus;
+  createdAtUtc: string;
+  updatedAtUtc?: string;
+}
+
+export interface BuddyReviewDto {
+  id: string;
+  bookingId: string;
+  localBuddyUserId: string;
+  travelerUserId: string;
+  reviewerName: string;
+  rating: number;
+  reviewText: string;
+  createdAtUtc: string;
 }
 
 export interface LocalBuddyProfileResponse {
   profileId: string;
   userId: string;
-  profileType: string;
+  profileType: "LocalBuddy";
   displayName: string;
   bio?: string;
   city: string;
@@ -274,6 +118,7 @@ export interface LocalBuddyProfileResponse {
   updatedAtUtc?: string;
   followersCount: number;
   followingCount: number;
+  isFollowing: boolean;
 }
 
 export interface TravelerProfileRequest {
@@ -283,6 +128,9 @@ export interface TravelerProfileRequest {
   preferredBudgetLevel?: string;
   travelStyle?: string;
   preferredInterests?: string;
+  preferredVibes?: string;
+  comfortLevel?: string;
+  safetyPriority?: string;
   interestIds: string[];
 }
 
@@ -290,78 +138,185 @@ export interface TravelerProfileRequest {
 // Experiences Module DTOs (matching backend)
 // ============================================================
 
-export interface VibeResponseDto {
-  id: string;
-  name: string;
+export type ExperienceCategory = "Historical" | "Nature" | "Shopping" | "Nightlife" | "Dining";
+export type ExperienceSourceType = "ThirdParty" | "Provider";
+export type ExperienceBookingStatus = "Pending" | "Confirmed" | "Completed" | "Cancelled";
+export type ExperienceModerationStatus = "Pending" | "Approved" | "Rejected";
+export type ExperienceOpenStatus = "open" | "closed" | "unknown";
+
+export interface ExperienceImageDto {
+  id: number;
+  link: string;
 }
 
-export interface ExperienceTagDto {
-  id: string;
-  experienceId: string;
+export interface ExperienceHourDto {
+  id: number;
+  dayOfWeek: string;
+  opensAt: string;
+  closesAt: string;
+}
+
+export interface ExperienceReviewDto {
+  id: number;
+  externalReviewId?: string;
+  reviewerName?: string;
+  rating?: number;
+  reviewText?: string;
+  publishedAtDate?: string;
+  sourceList: string;
+}
+
+export interface ExperienceVisitInsightDto {
+  requestedAt: string;
+  dayOfWeek: string;
+  hourOfDay: number;
+  isOpen?: boolean;
+  openStatus: ExperienceOpenStatus;
+  popularityPercentage?: number;
+  crowdLevel: string;
+  bestKnownOpenWindow?: string;
+}
+
+export interface ExperienceMapItemDto {
+  id: number;
+  category: ExperienceCategory;
+  sourceType: ExperienceSourceType;
   name: string;
+  address?: string;
+  adm0Gid?: number;
+  adm1Gid?: number;
+  adm2Gid?: number;
+  adm3Gid?: number;
+  latitude?: number;
+  longitude?: number;
+  rating?: number;
+  reviews?: number;
+  startingPricePerPerson?: number;
+  primaryImage?: string;
+  isOpenNow?: boolean;
+  popularityPercentageNow?: number;
+}
+
+export interface ExperienceImageUploadDto {
+  link: string;
+  fileName: string;
+  sizeBytes: number;
+}
+
+export interface ImportExperiencesResult {
+  created: number;
+  updated: number;
+  skipped: number;
+}
+
+export interface ExperienceReviewsForLlmDto {
+  experienceId: number;
+  experienceName: string;
+  reviewsCount: number;
+  reviewsText: string;
 }
 
 export interface ExperienceResponseDto {
-  id: string;
-  providerProfileId: string;
-  categoryId: string;
-  categoryName?: string;
-  areaId: string;
-  title: string;
-  description: string;
-  locationName: string;
-  pricePerPerson: number;
-  currency: string;
-  durationMinutes: number;
-  maxGuests: number;
-  latitude: number;
-  longitude: number;
-  isActive: boolean;
-  approvalStatus: string;
-  moderationNotes?: string;
-  moderatedAtUtc?: string;
-  createdAtUtc: string;
-  updatedAtUtc?: string;
-  vibes: VibeResponseDto[];
-  tags: ExperienceTagDto[];
-}
-
-export interface ExperienceSummaryDto {
-  id: string;
-  providerProfileId: string;
-  categoryId: string;
-  categoryName?: string;
-  areaId: string;
-  title: string;
-  locationName: string;
-  pricePerPerson: number;
-  currency: string;
-  durationMinutes: number;
-  maxGuests: number;
-  isActive: boolean;
-  approvalStatus: string;
-  moderationNotes?: string;
-  vibes: string[];
-  tags: string[];
-}
-
-export interface ExperienceCategoryResponseDto {
-  id: string;
+  id: number;
+  category: ExperienceCategory;
+  sourceType: ExperienceSourceType;
+  createdByUserId?: string;
+  providerProfileId?: string;
   name: string;
   description?: string;
+  address?: string;
+  cid?: string;
+  adm0Gid?: number;
+  adm1Gid?: number;
+  adm2Gid?: number;
+  adm3Gid?: number;
+  latitude?: number;
+  longitude?: number;
+  featuredImages: ExperienceImageDto[];
+  hours: ExperienceHourDto[];
+  googleMapsLink?: string;
+  popularTimes: Array<{
+    id: number;
+    dayOfWeek: string;
+    hourOfDay: number;
+    popularityPercentage: number;
+  }>;
+  phoneInternational?: string;
+  priceRange?: string;
+  startingPricePerPerson?: number;
+  reviews?: number;
+  rating?: number;
+  reviewsPerRating: Array<{ rating: number; reviewsCount: number }>;
+  website?: string;
+  amenities: string[];
+  featuredReviews: ExperienceReviewDto[];
+  isActive: boolean;
+  createdAtUtc: string;
+  updatedAtUtc?: string;
+  currentInsight?: ExperienceVisitInsightDto;
+  moderationStatus: ExperienceModerationStatus;
+  moderationNotes?: string;
+  moderatedByUserId?: string;
+  moderatedAtUtc?: string;
+}
+
+export type ExperienceSummaryDto = ExperienceResponseDto;
+
+export interface CreateExperienceRequest {
+  category: ExperienceCategory;
+  name: string;
+  description?: string;
+  address?: string;
+  latitude?: number;
+  longitude?: number;
+  adm0Gid?: number;
+  adm1Gid?: number;
+  adm2Gid?: number;
+  adm3Gid?: number;
+  featuredImageLinks: string[];
+  hours: Array<{ dayOfWeek: string; opensAt: string; closesAt: string }>;
+  googleMapsLink?: string;
+  popularTimes: Array<{ dayOfWeek: string; hourOfDay: number; popularityPercentage: number }>;
+  phoneInternational?: string;
+  priceRange?: string;
+  website?: string;
+  amenities: string[];
+}
+
+export type UpdateExperienceRequest = CreateExperienceRequest;
+
+export interface ExperienceAvailabilityDto {
+  id: string;
+  experienceId: number;
+  startTimeUtc: string;
+  endTimeUtc: string;
+  capacity: number;
+  remainingCapacity: number;
+  pricePerPerson: number;
+  isActive: boolean;
+}
+
+export interface CreateExperienceAvailabilityRequest {
+  startTimeUtc: string;
+  endTimeUtc: string;
+  capacity: number;
+  pricePerPerson: number;
 }
 
 export interface ExperienceBookingResponseDto {
   id: string;
-  experienceId: string;
+  experienceId: number;
+  experienceName: string;
   availabilityId: string;
   travelerProfileId: string;
+  travelerName: string;
+  startTimeUtc: string;
+  endTimeUtc: string;
   guestsCount: number;
   totalPrice: number;
-  status: string;
+  status: ExperienceBookingStatus;
   createdAtUtc: string;
-  cancelledAtUtc?: string;
-  completedAtUtc?: string;
+  updatedAtUtc?: string;
 }
 
 export interface CreateExperienceBookingRequest {
@@ -369,111 +324,215 @@ export interface CreateExperienceBookingRequest {
   guestsCount: number;
 }
 
+export type ExperienceSortBy =
+  | "Recommended"
+  | "Price"
+  | "Rating"
+  | "Reviews"
+  | "Name"
+  | "Newest"
+  | "Popularity"
+  | "OpenNow"
+  | "Distance";
+export type SortDirection = "Asc" | "Desc";
+
 export interface GetExperiencesRequest {
-  areaId?: string;
-  categoryId?: string;
-  minPrice?: number;
-  maxPrice?: number;
-  guests?: number;
-  vibeId?: string;
-  tag?: string;
+  category?: ExperienceCategory;
+  sourceType?: ExperienceSourceType;
+  search?: string;
+  adm0Gid?: number;
+  adm1Gid?: number;
+  adm2Gid?: number;
+  adm3Gid?: number;
+  minRating?: number;
+  isFree?: boolean;
+  sortBy?: ExperienceSortBy;
+  sortDirection?: SortDirection;
+  currentLatitude?: number;
+  currentLongitude?: number;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface CreateExperienceReviewRequest {
+  rating: number;
+  reviewText: string;
 }
 
 // ============================================================
 // Stays Module DTOs (matching backend)
 // ============================================================
 
-export interface StayTagDto {
-  id: string;
-  stayId: string;
-  name: string;
+export type StaySourceType = "ThirdParty" | "HotelOwner";
+export type StayBookingStatus = "Pending" | "Confirmed" | "Completed" | "Cancelled";
+export type StaySortBy = "Recommended" | "Price" | "Rating" | "Reviews" | "Name" | "Newest";
+
+export interface StayImageDto {
+  id: number;
+  link: string;
 }
 
-export interface StaySummaryDto {
-  id: string;
+export interface StayBookingPlatformDto {
+  id: number;
   name: string;
-  address: string;
-  pricePerNight: number;
-  currency: string;
-  maxGuests: number;
-  isActive: boolean;
-  amenities: string[];
-  images: string[];
+  priceWithTax?: number;
+  link?: string;
+}
+
+export interface StayReviewDto {
+  id: number;
+  externalReviewId?: string;
+  reviewerName?: string;
+  rating?: number;
+  reviewText?: string;
+  platform: string;
+  publishedAtDate?: string;
 }
 
 export interface StayResponseDto {
-  id: string;
-  ownerProfileId: string;
-  areaId: string;
+  id: number;
+  sourceType: StaySourceType;
+  createdByUserId?: string;
+  hotelOwnerProfileId?: string;
   name: string;
-  description: string;
-  address: string;
-  pricePerNight: number;
-  currency: string;
-  maxGuests: number;
-  latitude: number;
-  longitude: number;
+  price?: number;
+  description?: string;
+  googleMapsLink?: string;
+  reviews?: number;
+  rating?: number;
+  website?: string;
+  phoneInternational?: string;
+  locationSummaryDescription?: string;
+  cid?: string;
+  adm0Gid?: number;
+  adm1Gid?: number;
+  adm2Gid?: number;
+  adm3Gid?: number;
+  latitude?: number;
+  longitude?: number;
   isActive: boolean;
   createdAtUtc: string;
   updatedAtUtc?: string;
-  tags: StayTagDto[];
   amenities: string[];
-  images: string[];
+  images: StayImageDto[];
+  reviewsPerRating: { rating: number; reviewsCount: number }[];
+  bookingPlatforms: StayBookingPlatformDto[];
+  featuredReviews: StayReviewDto[];
 }
 
 export interface CreateStayRequest {
-  areaId: string;
   name: string;
-  description: string;
-  address: string;
-  pricePerNight: number;
-  currency: string;
-  maxGuests: number;
-  latitude: number;
-  longitude: number;
-  tags: string[];
-  amenities?: string[];
-  images?: string[];
+  price: number;
+  description?: string;
+  googleMapsLink?: string;
+  website?: string;
+  phoneInternational?: string;
+  locationSummaryDescription?: string;
+  latitude?: number;
+  longitude?: number;
+  adm0Gid?: number;
+  adm1Gid?: number;
+  adm2Gid?: number;
+  adm3Gid?: number;
+  imageLinks: string[];
+  amenities: string[];
+  bookingPlatforms: Array<{
+    name: string;
+    priceWithTax?: number;
+    link?: string;
+  }>;
 }
 
-export interface UpdateStayRequest {
-  name: string;
-  description?: string;
-  address?: string;
-  pricePerNight: number;
-  currency: string;
-  maxGuests: number;
-  latitude: number;
-  longitude: number;
-  tags?: string[];
-  amenities?: string[];
-  images?: string[];
-}
+export type UpdateStayRequest = CreateStayRequest;
 
 export interface GetStaysRequest {
-  areaId?: string;
+  sourceType?: StaySourceType;
+  search?: string;
+  adm0Gid?: number;
+  adm1Gid?: number;
+  adm2Gid?: number;
+  adm3Gid?: number;
   minPrice?: number;
   maxPrice?: number;
-  guests?: number;
-  tag?: string;
+  minRating?: number;
+  sortBy?: StaySortBy;
+  sortDirection?: SortDirection;
+  page?: number;
+  pageSize?: number;
+}
+
+export type StayRegionGroupBy = "Adm0" | "Adm1" | "Adm2" | "Adm3";
+
+export interface StayRegionStatsRequest {
+  groupBy: StayRegionGroupBy;
+  sourceType?: StaySourceType;
+  adm0Gid?: number;
+  adm1Gid?: number;
+  adm2Gid?: number;
+  adm3Gid?: number;
+  minPrice?: number;
+  maxPrice?: number;
+  minRating?: number;
+}
+
+export interface StayRegionStatsDto {
+  groupBy: StayRegionGroupBy;
+  regionGid: number;
+  hotelsCount: number;
+  averagePrice?: number;
+  pricePercentage?: number;
+}
+
+export interface StayImageUploadDto {
+  link: string;
+  fileName: string;
+  sizeBytes: number;
+}
+
+export interface ImportStaysResult {
+  created: number;
+  updated: number;
+  skipped: number;
+}
+
+export interface StayReviewsForLlmDto {
+  stayId: number;
+  stayName: string;
+  reviewsCount: number;
+  reviewsText: string;
+}
+
+export interface PagedResponse<T> {
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  items: T[];
 }
 
 export interface StayBookingResponseDto {
   id: string;
-  stayId: string;
+  stayId: number;
+  stayName: string;
   travelerProfileId: string;
+  guestName: string;
   checkInDate: string;
   checkOutDate: string;
   guestCount: number;
   totalPrice: number;
-  status: string;
+  status: StayBookingStatus;
   createdAtUtc: string;
+  updatedAtUtc?: string;
 }
 
 export interface CreateStayBookingRequest {
   checkInDate: string;
   checkOutDate: string;
   guestCount: number;
+}
+
+export interface CreateStayReviewRequest {
+  rating: number;
+  reviewText: string;
 }
 
 // ============================================================
@@ -486,6 +545,15 @@ export interface AdminUserListItem {
   email: string;
   isActive: boolean;
   role: string;
+}
+
+export interface AdminUserResponse {
+  userId: string;
+  fullName: string;
+  email: string;
+  isActive: boolean;
+  createdAtUtc: string;
+  roles: string[];
 }
 
 export interface AdminRoleResponse {
@@ -501,15 +569,286 @@ export interface AdminChangeUserStatusRequest {
 }
 
 export interface AdminGetExperiencesRequest {
-  approvalStatus?: string;
+  moderationStatus?: ExperienceModerationStatus;
   isActive?: boolean;
 }
 
-export interface AdminSetApprovalStatusRequest {
-  approvalStatus: string;
+export interface AdminModerateExperienceRequest {
+  moderationStatus: ExperienceModerationStatus;
   moderationNotes?: string;
 }
 
 export interface AdminUpdateBuddyVerificationRequest {
   verificationStatus: string;
+  moderationNotes?: string;
+}
+
+export interface AdminLocalBuddy {
+  userId: string;
+  profileId: string;
+  displayName: string;
+  city: string;
+  languages?: string;
+  profileImageUrl?: string;
+  rating: number;
+  reviewsCount: number;
+  verificationStatus: "Pending" | "Approved" | "Rejected";
+  createdAtUtc: string;
+  updatedAtUtc?: string;
+}
+
+export interface BuddyVerificationEvent {
+  id: string;
+  localBuddyUserId: string;
+  actorUserId: string;
+  previousStatus: "Pending" | "Approved" | "Rejected";
+  newStatus: "Pending" | "Approved" | "Rejected";
+  notes?: string;
+  createdAtUtc: string;
+}
+
+export interface AdminDashboard {
+  totalUsers: number;
+  activeUsers: number;
+  pendingBuddyVerifications: number;
+  approvedBuddies: number;
+  pendingExperiences: number;
+  approvedExperiences: number;
+  activeStays: number;
+  totalBookings: number;
+  totalBookingValue: number;
+  auditEventsLast24Hours: number;
+}
+
+export interface AdminAnalytics {
+  usersByRole: Record<string, number>;
+  bookingsByStatus: Record<string, number>;
+  listingsByType: Record<string, number>;
+  stayBookingValue: number;
+  experienceBookingValue: number;
+}
+
+export interface AdminAuditEvent {
+  id: string;
+  actorUserId: string;
+  action: string;
+  httpMethod: string;
+  path: string;
+  target?: string;
+  statusCode: number;
+  succeeded: boolean;
+  correlationId: string;
+  createdAtUtc: string;
+  completedAtUtc?: string;
+  changes?: unknown;
+}
+
+export interface AdminAuditPage {
+  items: AdminAuditEvent[];
+  page: number;
+  pageSize: number;
+  totalCount: number;
+}
+
+// ============================================================
+// Communication Module DTOs
+// ============================================================
+
+export interface ChatThreadDto {
+  id: string;
+  type: "Direct" | "Group";
+  title?: string;
+  participantUserIds: string[];
+  participantDisplayNames: Record<string, string>;
+  lastMessageBody?: string;
+  lastMessageSenderUserId?: string;
+  lastMessageAtUtc?: string;
+  unreadCount: number;
+  createdAtUtc: string;
+}
+
+export interface ChatMessageDto {
+  id: string;
+  threadId: string;
+  senderUserId: string;
+  body: string;
+  sentAtUtc: string;
+  isMine: boolean;
+}
+
+export interface ChatMessageEventDto {
+  id: string;
+  threadId: string;
+  senderUserId: string;
+  body: string;
+  sentAtUtc: string;
+}
+
+export interface ChatThreadReadEventDto {
+  threadId: string;
+  userId: string;
+  readAtUtc: string;
+}
+
+export interface NotificationDto {
+  id: string;
+  type: "System" | "ChatMessage" | "Booking" | "Moderation" | "Support";
+  title: string;
+  body: string;
+  linkUrl?: string;
+  sourceModule?: string;
+  sourceEntityType?: string;
+  sourceEntityId?: string;
+  createdAtUtc: string;
+  readAtUtc?: string;
+  isRead: boolean;
+}
+
+export interface NotificationsPageDto {
+  items: NotificationDto[];
+  unreadCount: number;
+  page: number;
+  pageSize: number;
+  totalCount: number;
+}
+
+export interface NotificationPreferencesDto {
+  inAppEnabled: boolean;
+  emailEnabled: boolean;
+  pushEnabled: boolean;
+  chatMessageNotificationsEnabled: boolean;
+  systemNotificationsEnabled: boolean;
+  updatedAtUtc?: string;
+}
+
+export type UpdateNotificationPreferencesRequest = Omit<
+  NotificationPreferencesDto,
+  "updatedAtUtc"
+>;
+
+export interface HotelRecommendationCategoryPreference {
+  category: string;
+  weight?: number | null;
+}
+
+export interface HotelRecommendationRequest {
+  budgetLevel?: number | null;
+  experienceCategories: HotelRecommendationCategoryPreference[];
+  requestedAmenities: string[];
+  adm0Gid?: number | null;
+  adm1Gid?: number | null;
+  adm2Gid?: number | null;
+  adm3Gid?: number | null;
+  limit?: number | null;
+  preferredLanguage?: string | null;
+}
+
+export interface NaturalLanguageHotelRecommendationRequest {
+  text: string;
+  limit?: number | null;
+  adm0Gid?: number | null;
+  adm1Gid?: number | null;
+  adm2Gid?: number | null;
+  adm3Gid?: number | null;
+  preferredLanguage?: string | null;
+}
+
+export interface WeightedExperienceCategoryPreference {
+  category: string;
+  weight: number;
+}
+
+export interface HotelRecommendationPreferences {
+  budgetLevel?: number | null;
+  budgetLabel?: string | null;
+  experienceCategories: WeightedExperienceCategoryPreference[];
+  requestedAmenities: string[];
+  adm0Gid?: number | null;
+  adm1Gid?: number | null;
+  adm2Gid?: number | null;
+  adm3Gid?: number | null;
+  limit: number;
+  preferredLanguage: string;
+  classificationConfidence?: number | null;
+  notes?: string | null;
+  regionName?: string | null;
+  resolvedRegionName?: string | null;
+}
+
+export interface HotelRecommendationRegionResponse {
+  countryNameEn?: string | null;
+  countryNameAr?: string | null;
+  governorateNameEn?: string | null;
+  governorateNameAr?: string | null;
+  districtNameEn?: string | null;
+  districtNameAr?: string | null;
+  neighbourhoodNameEn?: string | null;
+  neighbourhoodNameAr?: string | null;
+  displayName?: string | null;
+}
+
+export interface HotelRecommendationScoreBreakdown {
+  interestProximityScore?: number | null;
+  budgetMatchScore?: number | null;
+  hotelQualityScore?: number | null;
+  amenityMatchScore?: number | null;
+}
+
+export interface NearbyExperienceSummaryResponse {
+  experienceId: number;
+  name: string;
+  category: string;
+  distanceKm: number;
+  rating?: number | null;
+  reviews?: number | null;
+}
+
+export interface HotelRecommendationExplanationResponse {
+  shortExplanation: string;
+  reasons: string[];
+  bestFor: string[];
+  isAiGenerated: boolean;
+}
+
+export interface HotelRecommendationItemResponse {
+  ranking: number;
+  hotelId: number;
+  name: string;
+  price?: number | null;
+  description?: string | null;
+  locationSummaryDescription?: string | null;
+  budgetLevel?: number | null;
+  budgetLabel?: string | null;
+  rating?: number | null;
+  reviews?: number | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  adm0Gid?: number | null;
+  adm1Gid?: number | null;
+  adm2Gid?: number | null;
+  adm3Gid?: number | null;
+  region?: HotelRecommendationRegionResponse | null;
+  googleMapsLink?: string | null;
+  website?: string | null;
+  phoneInternational?: string | null;
+  finalScore: number;
+  scores: HotelRecommendationScoreBreakdown;
+  amenities: string[];
+  matchedAmenities: string[];
+  nearbyExperiences: NearbyExperienceSummaryResponse[];
+  explanation: HotelRecommendationExplanationResponse;
+}
+
+export interface HotelRecommendationResponse {
+  preferences: HotelRecommendationPreferences;
+  totalCandidates: number;
+  totalMatchingCandidates: number;
+  evaluatedCandidates: number;
+  returnedCount: number;
+  items: HotelRecommendationItemResponse[];
+}
+
+export interface NaturalLanguageHotelRecommendationResponse extends HotelRecommendationResponse {
+  inputText: string;
+  classificationNotes?: string | null;
 }

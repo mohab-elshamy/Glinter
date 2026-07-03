@@ -1,10 +1,22 @@
 import { useEffect, useRef } from "react";
-import { MapContainer, TileLayer, useMap, Marker, Popup, useMapEvents } from "react-leaflet";
+import {
+  Circle,
+  GeoJSON,
+  MapContainer,
+  Marker,
+  Polyline,
+  TileLayer,
+  Tooltip,
+  useMap,
+  useMapEvents,
+} from "react-leaflet";
 import L from "leaflet";
+import type { Feature, GeoJsonObject, Geometry } from "geojson";
 import "leaflet.markercluster";
-import "leaflet.fullscreen";
 import "leaflet-geosearch/dist/geosearch.css";
 import { GeoSearchControl, OpenStreetMapProvider } from "leaflet-geosearch";
+import { formatUsdPrice } from "@/shared/lib/price";
+import { overlayLayers } from "@/shared/lib/overlay-layers";
 
 // Fix for default marker icons in React/Webpack
 import icon from "leaflet/dist/images/marker-icon.png";
@@ -24,12 +36,59 @@ const DefaultIcon = L.icon({
 
 L.Marker.prototype.options.icon = DefaultIcon;
 
-interface MapMarker {
+const CurrentLocationIcon = L.divIcon({
+  className: "current-location-marker",
+  html: `<div style="
+    position:relative;width:24px;height:24px;
+    display:flex;align-items:center;justify-content:center;
+  ">
+    <span style="
+      position:absolute;width:24px;height:24px;border-radius:9999px;
+      background:rgba(14,165,233,.28);box-shadow:0 0 0 8px rgba(14,165,233,.12);
+    "></span>
+    <span style="
+      position:relative;width:14px;height:14px;border-radius:9999px;
+      border:3px solid white;background:#0ea5e9;
+      box-shadow:0 2px 12px rgba(14,165,233,.8);
+    "></span>
+  </div>`,
+  iconSize: [24, 24],
+  iconAnchor: [12, 12],
+});
+
+export interface MapMarker {
+  id?: number;
   lat: number;
   lng: number;
   name: string;
   cheapestPrice?: number;
-  data?: any;
+  color?: string;
+  label?: string;
+  data?: Partial<{
+    price: number | null;
+    rating: number;
+    area: string;
+    comfortScore: number;
+    safetyScore: number;
+  }>;
+}
+
+export interface MapOverlayArea {
+  id: number;
+  name: string;
+  value?: number | null;
+  color: string;
+  geometry: Geometry | Feature;
+  fillOpacity?: number;
+  dashArray?: string;
+}
+
+export interface MapRouteLine {
+  id: string;
+  positions: Array<[number, number]>;
+  color?: string;
+  dashed?: boolean;
+  label?: string;
 }
 
 interface LeafletMapProps {
@@ -37,14 +96,29 @@ interface LeafletMapProps {
   zoom: number;
   markers?: MapMarker[];
   onMarkerClick?: (marker: MapMarker) => void;
+  onMapClick?: (lat: number, lng: number) => void;
   selectedMarker?: MapMarker | null;
   comparisonMarkers?: MapMarker[];
   height?: string;
   showSearch?: boolean;
   showFullscreen?: boolean;
   showMarkers?: boolean;
-  heatmapLayerType?: string;
-  comparisonNeighborhoods?: any[];
+  showLegend?: boolean;
+  overlayAreas?: MapOverlayArea[];
+  currentLocation?: {
+    latitude: number;
+    longitude: number;
+    accuracy?: number;
+  };
+  recenterSequence?: number;
+  routeLines?: MapRouteLine[];
+}
+
+function MapClickHandler({ onMapClick }: { onMapClick?: (lat: number, lng: number) => void }) {
+  useMapEvents({
+    click: (event) => onMapClick?.(event.latlng.lat, event.latlng.lng),
+  });
+  return null;
 }
 
 // Component to add search control
@@ -54,8 +128,7 @@ function SearchControl({ showSearch }: { showSearch?: boolean }) {
   useEffect(() => {
     if (showSearch) {
       const provider = new OpenStreetMapProvider();
-      // @ts-ignore - GeoSearchControl types issue
-      const searchControl = new GeoSearchControl({
+      const searchControl = GeoSearchControl({
         provider,
         style: "bar",
         searchLabel: "Search location...",
@@ -64,7 +137,7 @@ function SearchControl({ showSearch }: { showSearch?: boolean }) {
         marker: {
           icon: DefaultIcon,
         },
-      });
+      }) as unknown as L.Control;
 
       map.addControl(searchControl);
 
@@ -83,22 +156,21 @@ function FullscreenControl({ showFullscreen }: { showFullscreen?: boolean }) {
   const controlRef = useRef<L.Control | null>(null);
 
   useEffect(() => {
+    let active = true;
     if (showFullscreen) {
-      // Dynamically import and add fullscreen control
-      import("leaflet.fullscreen").then((module) => {
-        // @ts-ignore - leaflet.fullscreen types issue
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-        const Fullscreen = module.default || module;
-        // @ts-ignore - Fullscreen constructor types
+      void import("leaflet.fullscreen").then((module) => {
+        if (!active) return;
+        const Fullscreen = module.default as unknown as new () => L.Control;
         const fullscreenControl = new Fullscreen();
         map.addControl(fullscreenControl);
         controlRef.current = fullscreenControl;
-      }).catch((err) => {
-        console.warn("Failed to load fullscreen control:", err);
+      }).catch((error: unknown) => {
+        console.error("Could not load the fullscreen map control.", error);
       });
     }
 
     return () => {
+      active = false;
       if (controlRef.current) {
         map.removeControl(controlRef.current);
         controlRef.current = null;
@@ -113,49 +185,53 @@ const BRAND_PURPLE = "#9333ea";
 const SELECTED_GOLD = "#FFD700";
 const COMPARISON_TEAL = "#00CED1";
 
-const SCORE_COLORS = {
-  great: "#22c55e",
-  good: "#fbbf24",
-  okay: "#f97316",
-  poor: "#ef4444",
+const escapeMapHtml = (value: string) => value
+  .replaceAll("&", "&amp;")
+  .replaceAll("<", "&lt;")
+  .replaceAll(">", "&gt;")
+  .replaceAll('"', "&quot;")
+  .replaceAll("'", "&#039;");
+
+const toGeoJson = (area: MapOverlayArea): GeoJsonObject => {
+  if ("type" in area.geometry && area.geometry.type === "Feature") {
+    return area.geometry as Feature;
+  }
+  return {
+    type: "Feature",
+    properties: { id: area.id },
+    geometry: area.geometry as Geometry,
+  } satisfies Feature;
 };
 
-function getScoreColor(score: number): string {
-  if (score >= 85) return SCORE_COLORS.great;
-  if (score >= 75) return SCORE_COLORS.good;
-  if (score >= 65) return SCORE_COLORS.okay;
-  return SCORE_COLORS.poor;
-}
-
-// Component to handle markers (without clustering)
+// Component to handle markers, clustering larger datasets for responsiveness.
 function MarkerGroup({
   markers,
   onMarkerClick,
   selectedMarker,
   comparisonMarkers,
-  layerType,
 }: {
   markers: MapMarker[];
   onMarkerClick?: (marker: MapMarker) => void;
   selectedMarker?: MapMarker | null;
   comparisonMarkers?: MapMarker[];
-  layerType?: string;
 }) {
   const map = useMap();
-  const markersRef = useRef<L.Marker[]>([]);
+  const markerLayerRef = useRef<L.LayerGroup | null>(null);
 
   useEffect(() => {
-    markersRef.current.forEach((marker) => map.removeLayer(marker));
-    markersRef.current = [];
+    if (markerLayerRef.current) {
+      map.removeLayer(markerLayerRef.current);
+      markerLayerRef.current = null;
+    }
+    const markerLayer: L.LayerGroup = markers.length > 50
+      ? L.markerClusterGroup({ chunkedLoading: true, maxClusterRadius: 55 })
+      : L.layerGroup();
 
     markers.forEach((marker) => {
       const isSelected = selectedMarker?.name === marker.name;
       const isInComparison = comparisonMarkers?.some((m) => m.name === marker.name);
 
-      const isScoring = layerType && layerType !== "none" && marker.data && layerType in marker.data;
-      const score = isScoring ? marker.data[layerType] : null;
-
-      let markerColor = BRAND_PURPLE;
+      let markerColor = marker.color || BRAND_PURPLE;
       let bgOpacity = "0.5";
       const hexSize = isSelected ? "scale(1.4)" : isInComparison ? "scale(1.2)" : "";
 
@@ -165,13 +241,11 @@ function MarkerGroup({
       } else if (isInComparison) {
         markerColor = COMPARISON_TEAL;
         bgOpacity = "0.8";
-      } else if (isScoring && score !== null) {
-        markerColor = getScoreColor(score);
-        bgOpacity = "1";
       }
 
       const cp = marker.cheapestPrice;
-      const displayPrice = cp !== undefined && cp !== null ? `$${cp}` : "";
+      const displayPrice = marker.label ??
+        (cp !== undefined && cp !== null ? formatUsdPrice(cp) : "");
       const markerIcon = L.divIcon({
         className: `custom-marker ${isSelected || isInComparison ? "selected" : ""}`,
         html: `<div style="
@@ -197,7 +271,7 @@ function MarkerGroup({
           <span style="
             position:relative;z-index:2;
             color:white;font-size:10px;font-weight:700;
-          ">${displayPrice}</span>
+          ">${escapeMapHtml(displayPrice)}</span>
         </div>`,
         iconSize: [32, 36],
         iconAnchor: [16, 18],
@@ -207,50 +281,49 @@ function MarkerGroup({
 
       if (marker.name) {
         // Create detailed popup content
-        let popupContent = `<div style="min-width: 200px;"><strong style="font-size: 14px;">${marker.name}</strong>`;
+        let popupContent = `<div style="min-width: 200px;"><strong style="font-size: 14px;">${escapeMapHtml(marker.name)}</strong>`;
         
         if (marker.data) {
           const data = marker.data;
-          if ("safety" in data) {
-            // It's a neighborhood
-            const n = data as any;
+          if (data.area) {
             popupContent += `
               <div style="margin-top: 8px; font-size: 12px;">
-                <div style="display: flex; justify-content: space-between; margin: 4px 0;">
-                  <span>🛡️ Safety:</span>
-                  <strong style="color: ${n.safety >= 85 ? '#22c55e' : n.safety >= 70 ? '#fbbf24' : '#ef4444'}">${n.safety}%</strong>
-                </div>
-                <div style="display: flex; justify-content: space-between; margin: 4px 0;">
-                  <span>💰 Price:</span>
-                  <strong>${n.price}/100</strong>
-                </div>
-                <div style="display: flex; justify-content: space-between; margin: 4px 0;">
-                  <span>🛋️ Comfort:</span>
-                  <strong style="color: ${n.comfort >= 85 ? '#22c55e' : n.comfort >= 70 ? '#fbbf24' : '#ef4444'}">${n.comfort}%</strong>
-                </div>
-              </div>
-            `;
-          } else if ("rating" in data) {
-            // It's a hotel
-            const h = data as any;
-            popupContent += `
-              <div style="margin-top: 8px; font-size: 12px;">
-                <div style="margin: 4px 0;">📍 ${h.area}</div>
-                <div style="display: flex; justify-content: space-between; margin: 4px 0;">
-                  <span>⭐ Rating:</span>
-                  <strong>${h.rating}</strong>
-                </div>
-                <div style="display: flex; justify-content: space-between; margin: 4px 0;">
-                  <span>🛡️ Safety:</span>
-                  <strong style="color: ${h.safety >= 85 ? '#22c55e' : h.safety >= 70 ? '#fbbf24' : '#ef4444'}">${h.safety}%</strong>
-                </div>
-                <div style="display: flex; justify-content: space-between; margin: 4px 0;">
-                  <span>💰 Price:</span>
-                  <strong>$${h.price}/night</strong>
-                </div>
-              </div>
+                <div style="margin: 4px 0;">📍 ${escapeMapHtml(data.area)}</div>
             `;
           }
+          if (data.rating != null) {
+            popupContent += `
+                <div style="display: flex; justify-content: space-between; margin: 4px 0;">
+                  <span>⭐ Rating:</span>
+                  <strong>${data.rating}</strong>
+                </div>
+            `;
+          }
+          if (data.price != null) {
+            popupContent += `
+                <div style="display: flex; justify-content: space-between; margin: 4px 0;">
+                  <span>💰 Price:</span>
+                  <strong>${escapeMapHtml(formatUsdPrice(data.price))}/night</strong>
+                </div>
+            `;
+          }
+          if (data.comfortScore != null) {
+            popupContent += `
+                <div style="display: flex; justify-content: space-between; margin: 4px 0;">
+                  <span>✨ Comfort:</span>
+                  <strong>${data.comfortScore}/100</strong>
+                </div>
+            `;
+          }
+          if (data.safetyScore != null) {
+            popupContent += `
+                <div style="display: flex; justify-content: space-between; margin: 4px 0;">
+                  <span>🛡️ Safety:</span>
+                  <strong>${data.safetyScore}/100</strong>
+                </div>
+            `;
+          }
+          if (data.area) popupContent += "</div>";
         }
         popupContent += `</div>`;
         leafletMarker.bindPopup(popupContent);
@@ -262,19 +335,75 @@ function MarkerGroup({
         });
       }
 
-      leafletMarker.addTo(map);
-      markersRef.current.push(leafletMarker);
+      markerLayer.addLayer(leafletMarker);
     });
+    markerLayer.addTo(map);
+    markerLayerRef.current = markerLayer;
 
     return () => {
-      markersRef.current.forEach((marker) => {
-        map.removeLayer(marker);
-      });
-      markersRef.current = [];
+      map.removeLayer(markerLayer);
+      markerLayerRef.current = null;
     };
-  }, [map, markers, onMarkerClick, selectedMarker, comparisonMarkers, layerType]);
+  }, [map, markers, onMarkerClick, selectedMarker, comparisonMarkers]);
 
   return null;
+}
+
+function OverlayBounds({ areas }: { areas: MapOverlayArea[] }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (areas.length === 0) return;
+    const group = L.geoJSON({
+      type: "FeatureCollection",
+      features: areas.map((area) => toGeoJson(area) as Feature),
+    });
+    const bounds = group.getBounds();
+    if (bounds.isValid()) map.fitBounds(bounds, { padding: [32, 32], maxZoom: 11 });
+  }, [areas, map]);
+
+  return null;
+}
+
+function CurrentLocationLayer({
+  location,
+  recenterSequence,
+}: {
+  location?: LeafletMapProps["currentLocation"];
+  recenterSequence?: number;
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!location || !recenterSequence) return;
+    map.setView([location.latitude, location.longitude], Math.max(map.getZoom(), 14), {
+      animate: true,
+    });
+  }, [location, map, recenterSequence]);
+
+  if (!location) return null;
+  const center: [number, number] = [location.latitude, location.longitude];
+
+  return (
+    <>
+      {location.accuracy != null && (
+        <Circle
+          center={center}
+          radius={Math.max(20, location.accuracy)}
+          pathOptions={{
+            color: "#38bdf8",
+            fillColor: "#38bdf8",
+            fillOpacity: 0.08,
+            opacity: 0.35,
+            weight: 1,
+          }}
+        />
+      )}
+      <Marker position={center} icon={CurrentLocationIcon} zIndexOffset={2000}>
+        <Tooltip direction="top" offset={[0, -8]} permanent>You are here</Tooltip>
+      </Marker>
+    </>
+  );
 }
 
 // Component to handle map bounds for comparison mode
@@ -300,7 +429,7 @@ function MapBounds({
         const hotelMarkers = allMarkers.filter(m => 
           m.data && "rating" in m.data && 
           comparisonMarkers.some(cm => {
-            const hotelArea = (m.data as any).area;
+            const hotelArea = m.data?.area;
             return cm.name === hotelArea;
           })
         );
@@ -312,7 +441,7 @@ function MapBounds({
       if (allMarkers) {
         const hotelMarkers = allMarkers.filter(m => 
           m.data && "rating" in m.data && 
-          (m.data as any).area === selectedMarker.name
+          m.data?.area === selectedMarker.name
         );
         markersToFit.push(...hotelMarkers);
       }
@@ -329,26 +458,37 @@ function MapBounds({
   return null;
 }
 
+function RouteBounds({
+  routeLines,
+  markers,
+}: {
+  routeLines: MapRouteLine[];
+  markers: MapMarker[];
+}) {
+  const map = useMap();
+  useEffect(() => {
+    const points = [
+      ...routeLines.flatMap((line) => line.positions),
+      ...markers.map((marker) => [marker.lat, marker.lng] as [number, number]),
+    ];
+    if (points.length < 2) return;
+    const bounds = L.latLngBounds(points);
+    if (bounds.isValid()) map.fitBounds(bounds, { padding: [36, 36], maxZoom: 14 });
+  }, [map, markers, routeLines]);
+  return null;
+}
+
 // Marker legend for the map
-function MarkerLegend({ layerType }: { layerType?: string }) {
-  const isScoring = layerType && layerType !== "none";
-  const items = isScoring ? [
-    { color: "#22c55e", label: "Great (85+)" },
-    { color: "#fbbf24", label: "Good (75-84)" },
-    { color: "#f97316", label: "Okay (65-74)" },
-    { color: "#ef4444", label: "Poor (<65)" },
+function MarkerLegend() {
+  const items = [
+    { color: "#9333ea", label: "Backend stay" },
     { color: "#FFD700", label: "Selected" },
-  ] : [
-    { color: "#9333ea", label: "Matching place" },
-    { color: "#FFD700", label: "Selected" },
-    { color: "#00CED1", label: "Comparing" },
   ];
   return (
-    <div style={{
+    <div className={overlayLayers.mapOverlay} style={{
       position: "absolute",
       bottom: 16,
       left: 16,
-      zIndex: 1000,
       background: "rgba(11,12,16,0.85)",
       backdropFilter: "blur(12px)",
       WebkitBackdropFilter: "blur(12px)",
@@ -377,17 +517,24 @@ const LeafletMap: React.FC<LeafletMapProps> = ({
   zoom,
   markers = [],
   onMarkerClick,
+  onMapClick,
   selectedMarker,
   comparisonMarkers = [],
   height = "400px",
   showSearch = true,
   showFullscreen = true,
   showMarkers = true,
-  heatmapLayerType,
-  comparisonNeighborhoods = [],
+  showLegend = true,
+  overlayAreas = [],
+  currentLocation,
+  recenterSequence,
+  routeLines = [],
 }) => {
   return (
-    <div style={{ position: "relative", height, width: "100%" }} className="rounded-lg overflow-hidden border border-border/30">
+    <div
+      style={{ height, width: "100%" }}
+      className={`${overlayLayers.map} relative isolate overflow-hidden rounded-lg border border-border/30`}
+    >
       <MapContainer
         center={center}
         zoom={zoom}
@@ -403,6 +550,46 @@ const LeafletMap: React.FC<LeafletMapProps> = ({
         />
         <SearchControl showSearch={showSearch} />
         <FullscreenControl showFullscreen={showFullscreen} />
+        <MapClickHandler onMapClick={onMapClick} />
+        <OverlayBounds areas={overlayAreas} />
+        {overlayAreas.map((area) => (
+          <GeoJSON
+            key={`${area.id}-${area.value ?? "none"}-${area.color}`}
+            data={toGeoJson(area)}
+            onEachFeature={(_feature, layer) => {
+              const tooltip = document.createElement("span");
+              tooltip.textContent = `${area.name}: ${area.value ?? "No data"}`;
+              layer.bindTooltip(tooltip);
+            }}
+            style={{
+              color: area.color,
+              fillColor: area.color,
+              fillOpacity: area.fillOpacity ?? 0.52,
+              opacity: 0.95,
+              weight: 2,
+              dashArray: area.dashArray,
+            }}
+          />
+        ))}
+        <CurrentLocationLayer
+          location={currentLocation}
+          recenterSequence={recenterSequence}
+        />
+        <RouteBounds routeLines={routeLines} markers={markers} />
+        {routeLines.map((line, index) => (
+          <Polyline
+            key={line.id}
+            positions={line.positions}
+            pathOptions={{
+              color: line.color ?? ["#8b5cf6", "#0ea5e9", "#f59e0b", "#10b981"][index % 4],
+              weight: 4,
+              opacity: 0.8,
+              dashArray: line.dashed ? "7 7" : undefined,
+            }}
+          >
+            {line.label && <Tooltip sticky>{line.label}</Tooltip>}
+          </Polyline>
+        ))}
         <MapBounds 
           comparisonMarkers={comparisonMarkers} 
           selectedMarker={selectedMarker}
@@ -414,11 +601,10 @@ const LeafletMap: React.FC<LeafletMapProps> = ({
             onMarkerClick={onMarkerClick}
             selectedMarker={selectedMarker}
             comparisonMarkers={comparisonMarkers}
-            layerType={heatmapLayerType}
           />
         )}
       </MapContainer>
-      <MarkerLegend layerType={heatmapLayerType} />
+      {showLegend && <MarkerLegend />}
     </div>
   );
 };

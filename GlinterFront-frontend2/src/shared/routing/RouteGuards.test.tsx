@@ -61,12 +61,14 @@ const setSession = (role: string) => {
 describe("route guards", () => {
   beforeEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
     vi.clearAllMocks();
   });
 
   afterEach(() => {
     cleanup();
     localStorage.clear();
+    sessionStorage.clear();
   });
 
   it("redirects unauthenticated visitors to login", async () => {

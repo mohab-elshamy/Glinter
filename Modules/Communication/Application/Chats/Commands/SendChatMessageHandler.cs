@@ -1,7 +1,9 @@
 using Glinter.Modules.Communication.Application.Abstractions;
 using Glinter.Modules.Communication.Application.Chats.Dtos;
 using Glinter.Modules.Communication.Application.Common.Mapping;
+using Glinter.Modules.Communication.Application.Notifications.Commands;
 using Glinter.Modules.Communication.Domain.Entities;
+using Glinter.Modules.Communication.Domain.Enums;
 using Glinter.Modules.IdentityAccess.Application.Abstractions;
 
 namespace Glinter.Modules.Communication.Application.Chats.Commands;
@@ -12,17 +14,20 @@ public class SendChatMessageHandler
     private readonly IChatMessageRepository _messageRepository;
     private readonly ICurrentUserService _currentUserService;
     private readonly IChatRealtimeNotifier _realtimeNotifier;
+    private readonly CreateNotificationHandler _createNotificationHandler;
 
     public SendChatMessageHandler(
         IChatThreadRepository threadRepository,
         IChatMessageRepository messageRepository,
         ICurrentUserService currentUserService,
-        IChatRealtimeNotifier realtimeNotifier)
+        IChatRealtimeNotifier realtimeNotifier,
+        CreateNotificationHandler createNotificationHandler)
     {
         _threadRepository = threadRepository;
         _messageRepository = messageRepository;
         _currentUserService = currentUserService;
         _realtimeNotifier = realtimeNotifier;
+        _createNotificationHandler = createNotificationHandler;
     }
 
     public async Task<ChatMessageResponseDto> HandleAsync(
@@ -83,6 +88,27 @@ public class SendChatMessageHandler
                 SentAtUtc = createdMessage.SentAtUtc
             },
             cancellationToken);
+
+        var preview = body.Length <= 180 ? body : $"{body[..177]}...";
+        foreach (var recipientUserId in thread.Participants
+                     .Where(x => x.LeftAtUtc == null && x.UserId != currentUserId)
+                     .Select(x => x.UserId)
+                     .Distinct())
+        {
+            await _createNotificationHandler.HandleAsync(
+                new CreateNotificationCommand
+                {
+                    UserId = recipientUserId,
+                    Type = NotificationType.ChatMessage,
+                    Title = "New message",
+                    Body = preview,
+                    LinkUrl = $"/messages?thread={thread.Id}",
+                    SourceModule = "Communication",
+                    SourceEntityType = "ChatMessage",
+                    SourceEntityId = createdMessage.Id
+                },
+                cancellationToken);
+        }
 
         return CommunicationMappings.ToMessageResponseDto(createdMessage, currentUserId);
     }

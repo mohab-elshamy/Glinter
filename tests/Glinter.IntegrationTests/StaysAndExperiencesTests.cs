@@ -366,7 +366,7 @@ public async Task Experience_name_is_required()
         json.RootElement.GetProperty("message").GetString());
 }    
     [Fact]
-public async Task Created_experience_appears_in_map_results()
+    public async Task Pending_created_experience_does_not_appear_in_map_results()
 {
     var experience = await CreateExperienceWithVisitDataAsync();
 
@@ -377,7 +377,7 @@ public async Task Created_experience_appears_in_map_results()
 
     using var json = await ReadJsonAsync(response);
 
-    Assert.Contains(
+    Assert.DoesNotContain(
         json.RootElement.EnumerateArray(),
         item =>
             item.GetProperty("id").GetInt32() == experience.Id &&
@@ -453,9 +453,11 @@ public async Task Visit_insight_returns_unknown_when_no_hours_exist_for_day()
 }
 
 [Fact]
+
 public async Task Unknown_experience_read_endpoints_return_not_found()
 {
     const int unknownId = int.MaxValue;
+    var adminToken = await GetAdminTokenAsync();
 
     var paths = new[]
     {
@@ -467,7 +469,14 @@ public async Task Unknown_experience_read_endpoints_return_not_found()
 
     foreach (var path in paths)
     {
-        var response = await Client.GetAsync(path);
+        using var request = new HttpRequestMessage(HttpMethod.Get, path);
+
+        request.Headers.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue(
+                "Bearer",
+                adminToken);
+
+        using var response = await Client.SendAsync(request);
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -587,7 +596,7 @@ private sealed record TestExperience(int Id, string Name);
     }
 
     [Fact]
-    public async Task Experience_provider_can_create_and_publicly_search_an_experience()
+    public async Task Experience_provider_can_create_a_pending_experience_that_is_not_publicly_visible()
     {
         var provider = await CreateUserAsync(
             "ExperienceProvider",
@@ -621,15 +630,27 @@ private sealed record TestExperience(int Id, string Name);
             Guid.Empty,
             createdJson.RootElement.GetProperty("providerProfileId").GetGuid());
 
-        var details = await Client.GetAsync($"/api/experiences/{experienceId}");
-        details.EnsureSuccessStatusCode();
+        var details = await Client.GetAsync(
+            $"/api/experiences/{experienceId}");
+
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            details.StatusCode);
 
         var search = await Client.GetAsync(
-            $"/api/experiences?search={Uri.EscapeDataString(name)}&category=Historical&page=1&pageSize=10");
-        search.EnsureSuccessStatusCode();
+            $"/api/experiences?search={Uri.EscapeDataString(name)}" +
+            "&category=Historical&page=1&pageSize=10");
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            search.StatusCode);
+
         using var searchJson = await ReadJsonAsync(search);
-        Assert.Contains(
-            searchJson.RootElement.GetProperty("items").EnumerateArray(),
+
+        Assert.DoesNotContain(
+            searchJson.RootElement
+                .GetProperty("items")
+                .EnumerateArray(),
             item => item.GetProperty("id").GetInt32() == experienceId);
     }
     [Fact]

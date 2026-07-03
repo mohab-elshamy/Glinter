@@ -42,4 +42,15 @@ public class IdentityUserReadService : IIdentityUserReadService
                 cancellationToken);
     }
 
+    public async Task<Dictionary<Guid, string>> GetDisplayNamesAsync(
+        IEnumerable<Guid> userIds,
+        CancellationToken cancellationToken = default)
+    {
+        var ids = userIds.Where(x => x != Guid.Empty).Distinct().ToArray();
+        return await _dbContext.Users
+            .AsNoTracking()
+            .Where(x => ids.Contains(x.Id))
+            .ToDictionaryAsync(x => x.Id, x => x.FullName, cancellationToken);
+    }
+
 }

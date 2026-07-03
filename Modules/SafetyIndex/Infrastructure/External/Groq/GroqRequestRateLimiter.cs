@@ -10,6 +10,23 @@ public class GroqRequestRateLimiter(
     private readonly object syncRoot = new();
     private DateTimeOffset nextAvailableAtUtc = DateTimeOffset.MinValue;
 
+    public void Defer(TimeSpan delay)
+    {
+        if (delay <= TimeSpan.Zero)
+        {
+            return;
+        }
+
+        lock (syncRoot)
+        {
+            var deferredUntil = DateTimeOffset.UtcNow.Add(delay);
+            if (nextAvailableAtUtc < deferredUntil)
+            {
+                nextAvailableAtUtc = deferredUntil;
+            }
+        }
+    }
+
     public async Task WaitAsync(CancellationToken ct = default)
     {
         var requestsPerMinute = options.CurrentValue.GroqRequestsPerMinute;

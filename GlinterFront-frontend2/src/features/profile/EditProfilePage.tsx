@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
-import { User, Bookmark, Building2, Sparkles, Edit } from "lucide-react";
+import { User, Bookmark, Building2, Sparkles, CalendarDays } from "lucide-react";
 import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -9,12 +9,14 @@ import MyBookingsTab from "./MyBookingsTab";
 import MyHotelsTab from "./MyHotelsTab";
 import MyExperiencesTab from "./MyExperiencesTab";
 import { authStorage } from "@/shared/lib/auth";
+import MyBuddyScheduleTab from "./MyBuddyScheduleTab";
 
 const allTabs = [
   { key: "edit", label: "Edit Profile", icon: User },
   { key: "bookings", label: "My Bookings", icon: Bookmark },
   { key: "hotels", label: "My Hotels", icon: Building2 },
   { key: "experiences", label: "My Experiences", icon: Sparkles },
+  { key: "buddy-schedule", label: "Schedule & Requests", icon: CalendarDays },
 ] as const;
 
 type TabKey = (typeof allTabs)[number]["key"];
@@ -28,13 +30,17 @@ const EditProfilePage = () => {
     ? "hotel-owner"
     : roles.includes("ExperienceProvider")
       ? "experience-provider"
-      : "traveler";
+      : roles.includes("LocalBuddy")
+        ? "local-buddy"
+        : "traveler";
   const tabs = useMemo(() => {
     const allowedTabKeys: readonly TabKey[] = roleKind === "hotel-owner"
-      ? ["hotels"]
+      ? ["edit", "hotels"]
       : roleKind === "experience-provider"
-        ? ["experiences"]
-        : ["edit", "bookings"];
+        ? ["edit", "experiences"]
+      : roleKind === "local-buddy"
+          ? ["edit", "buddy-schedule"]
+          : ["edit", "bookings"];
     return allTabs.filter((tab) => allowedTabKeys.includes(tab.key));
   }, [roleKind]);
   const defaultTab = tabs[0]?.key ?? "edit";
@@ -50,11 +56,6 @@ const EditProfilePage = () => {
       setActiveTab(defaultTab);
     }
   }, [activeTab, defaultTab, location.state, searchParams, tabs]);
-
-  const bookingsCount = (() => {
-    const saved = localStorage.getItem("my_bookings");
-    return saved ? JSON.parse(saved).length : 0;
-  })();
 
   return (
     <div className="min-h-screen bg-background">
@@ -84,7 +85,6 @@ const EditProfilePage = () => {
             >
               <Icon className="w-3.5 h-3.5" />
               {label}
-              {key === "bookings" && bookingsCount > 0 && ` (${bookingsCount})`}
             </button>
           ))}
         </div>
@@ -98,6 +98,7 @@ const EditProfilePage = () => {
           {activeTab === "bookings" && <MyBookingsTab />}
           {activeTab === "hotels" && <MyHotelsTab />}
           {activeTab === "experiences" && <MyExperiencesTab />}
+          {activeTab === "buddy-schedule" && <MyBuddyScheduleTab />}
         </motion.div>
       </div>
       <Footer />

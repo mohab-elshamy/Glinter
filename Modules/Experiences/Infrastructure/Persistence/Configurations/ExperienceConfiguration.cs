@@ -20,6 +20,13 @@ public class ExperienceConfiguration : IEntityTypeConfiguration<Experience>
             .HasConversion<string>()
             .HasMaxLength(30);
 
+        builder.Property(x => x.ModerationStatus)
+            .HasConversion<string>()
+            .HasMaxLength(30);
+
+        builder.Property(x => x.ModerationNotes)
+            .HasMaxLength(2000);
+
         builder.Property(x => x.Name)
             .IsRequired()
             .HasMaxLength(250);
@@ -65,6 +72,8 @@ public class ExperienceConfiguration : IEntityTypeConfiguration<Experience>
         builder.HasIndex(x => new { x.Latitude, x.Longitude });
         builder.HasIndex(x => x.Rating);
         builder.HasIndex(x => x.ProviderProfileId);
+        builder.HasIndex(x => x.IsActive);
+        builder.HasIndex(x => x.ModerationStatus);
 
         builder.HasMany(x => x.FeaturedImages)
             .WithOne(x => x.Experience)
@@ -95,5 +104,15 @@ public class ExperienceConfiguration : IEntityTypeConfiguration<Experience>
             .WithOne(x => x.Experience)
             .HasForeignKey(x => x.ExperienceId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(x => x.AvailabilitySlots)
+            .WithOne(x => x.Experience)
+            .HasForeignKey(x => x.ExperienceId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(x => x.Bookings)
+            .WithOne(x => x.Experience)
+            .HasForeignKey(x => x.ExperienceId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

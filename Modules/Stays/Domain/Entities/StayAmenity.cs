@@ -4,7 +4,8 @@ public class StayAmenity
 {
     public int Id { get; set; }
     public int StayId { get; set; }
-    public string Name { get; set; } = string.Empty;
+    public string? NameAr { get; set; }
+    public string? NameEn { get; set; }
 
     public Stay Stay { get; set; } = null!;
 }

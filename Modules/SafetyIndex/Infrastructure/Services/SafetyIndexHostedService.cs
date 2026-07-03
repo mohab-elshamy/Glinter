@@ -4,75 +4,191 @@ using Microsoft.Extensions.Options;
 
 namespace Glinter.Modules.SafetyIndex.Infrastructure.Services;
 
-public class SafetyIndexHostedService(
-    IServiceScopeFactory scopeFactory,
-    IOptions<SafetyIndexOptions> options,
-    ILogger<SafetyIndexHostedService> logger) : BackgroundService
+public sealed class SafetyIndexHostedService
+    : BackgroundService
 {
-    private readonly SafetyIndexOptions options = options.Value;
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly SafetyIndexOptions _options;
+    private readonly ILogger<SafetyIndexHostedService> _logger;
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    public SafetyIndexHostedService(
+        IServiceScopeFactory scopeFactory,
+        IOptions<SafetyIndexOptions> options,
+        ILogger<SafetyIndexHostedService> logger)
     {
-        var startupDelay = TimeSpan.FromSeconds(Math.Max(0, options.HostedServiceStartupDelaySeconds));
-        if (startupDelay > TimeSpan.Zero)
+        _scopeFactory = scopeFactory;
+        _options = options.Value;
+        _logger = logger;
+    }
+
+    protected override async Task ExecuteAsync(
+        CancellationToken stoppingToken)
+    {
+        try
         {
-            await Task.Delay(startupDelay, stoppingToken);
-        }
+            var initialCollectionEnabled =
+                _options.RunInitialHistoricalCollectionOnStartup;
 
-        await RunInitialHistoricalCollectionAsync(stoppingToken);
+            var weeklyServiceEnabled =
+                _options.EnableWeeklyService;
 
-        if (!options.EnableWeeklyService)
-        {
-            logger.LogInformation("Weekly safety index service is disabled by configuration");
-            return;
-        }
+            if (!initialCollectionEnabled &&
+                !weeklyServiceEnabled)
+            {
+                _logger.LogInformation(
+                    "Safety Index background collection is disabled. Existing stored safety results remain available.");
 
-        await RunWeeklyRefreshAsync(stoppingToken);
+                return;
+            }
 
-        var interval = TimeSpan.FromHours(Math.Max(1, options.WeeklyRefreshIntervalHours));
-        using var timer = new PeriodicTimer(interval);
+            if (string.IsNullOrWhiteSpace(
+                    _options.GroqApiKey))
+            {
+                _logger.LogWarning(
+                    "Safety Index background collection was requested, but SafetyIndex:GroqApiKey is missing. The collection jobs will not run.");
 
-        while (await timer.WaitForNextTickAsync(stoppingToken))
-        {
+                return;
+            }
+
+            var startupDelay = TimeSpan.FromSeconds(
+                Math.Max(
+                    0,
+                    _options.HostedServiceStartupDelaySeconds));
+
+            if (startupDelay > TimeSpan.Zero)
+            {
+                _logger.LogInformation(
+                    "Safety Index background service will start after {StartupDelaySeconds} seconds.",
+                    startupDelay.TotalSeconds);
+
+                await Task.Delay(
+                    startupDelay,
+                    stoppingToken);
+            }
+
+            if (initialCollectionEnabled)
+            {
+                await RunInitialHistoricalCollectionAsync(
+                    stoppingToken);
+            }
+
+            if (!weeklyServiceEnabled)
+            {
+                _logger.LogInformation(
+                    "Weekly Safety Index refresh is disabled.");
+
+                return;
+            }
+
+            /*
+             * Run once when the weekly service starts so a deployed
+             * environment does not need to wait seven days for its
+             * first refresh.
+             */
             await RunWeeklyRefreshAsync(stoppingToken);
+
+            var interval = TimeSpan.FromHours(
+                Math.Max(
+                    1,
+                    _options.WeeklyRefreshIntervalHours));
+
+            _logger.LogInformation(
+                "Weekly Safety Index refresh is enabled with an interval of {IntervalHours} hours.",
+                interval.TotalHours);
+
+            using var timer = new PeriodicTimer(interval);
+
+            while (await timer.WaitForNextTickAsync(
+                       stoppingToken))
+            {
+                await RunWeeklyRefreshAsync(
+                    stoppingToken);
+            }
+        }
+        catch (OperationCanceledException)
+            when (stoppingToken.IsCancellationRequested)
+        {
+            _logger.LogDebug(
+                "Safety Index hosted service stopped.");
+        }
+        catch (Exception exception)
+        {
+            /*
+             * Prevent an external API/background-job failure from
+             * terminating the complete ASP.NET Core application.
+             */
+            _logger.LogError(
+                exception,
+                "Safety Index hosted service stopped after an unexpected error.");
         }
     }
 
-    private async Task RunInitialHistoricalCollectionAsync(CancellationToken ct)
+    private async Task RunInitialHistoricalCollectionAsync(
+        CancellationToken cancellationToken)
     {
         try
         {
-            using var scope = scopeFactory.CreateScope();
-            var service = scope.ServiceProvider.GetRequiredService<ISafetyIndexService>();
+            await using var scope =
+                _scopeFactory.CreateAsyncScope();
 
-            await service.RunInitialHistoricalCollectionAsync(ct);
+            var safetyIndexService =
+                scope.ServiceProvider
+                    .GetRequiredService<ISafetyIndexService>();
+
+            _logger.LogInformation(
+                "Starting initial historical Safety Index collection.");
+
+            await safetyIndexService
+                .RunInitialHistoricalCollectionAsync(
+                    cancellationToken);
+
+            _logger.LogInformation(
+                "Initial historical Safety Index collection completed.");
         }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
         {
             throw;
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            logger.LogError(ex, "Initial historical safety index hosted job failed");
+            _logger.LogError(
+                exception,
+                "Initial historical Safety Index collection failed.");
         }
     }
 
-    private async Task RunWeeklyRefreshAsync(CancellationToken ct)
+    private async Task RunWeeklyRefreshAsync(
+        CancellationToken cancellationToken)
     {
         try
         {
-            using var scope = scopeFactory.CreateScope();
-            var service = scope.ServiceProvider.GetRequiredService<ISafetyIndexService>();
+            await using var scope =
+                _scopeFactory.CreateAsyncScope();
 
-            await service.RefreshWeeklyAsync(ct);
+            var safetyIndexService =
+                scope.ServiceProvider
+                    .GetRequiredService<ISafetyIndexService>();
+
+            _logger.LogInformation(
+                "Starting weekly Safety Index refresh.");
+
+            await safetyIndexService.RefreshWeeklyAsync(
+                cancellationToken);
+
+            _logger.LogInformation(
+                "Weekly Safety Index refresh completed.");
         }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
         {
             throw;
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            logger.LogError(ex, "Weekly safety index hosted job failed");
+            _logger.LogError(
+                exception,
+                "Weekly Safety Index refresh failed.");
         }
     }
 }

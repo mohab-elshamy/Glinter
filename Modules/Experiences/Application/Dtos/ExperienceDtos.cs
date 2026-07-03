@@ -11,6 +11,10 @@ public class CreateExperienceRequest
     public string? Address { get; set; }
     public double? Latitude { get; set; }
     public double? Longitude { get; set; }
+    public int? Adm0Gid { get; set; }
+    public int? Adm1Gid { get; set; }
+    public int? Adm2Gid { get; set; }
+    public int? Adm3Gid { get; set; }
     public List<string> FeaturedImageLinks { get; set; } = [];
     public List<ExperienceHourRequest> Hours { get; set; } = [];
     public string? GoogleMapsLink { get; set; }
@@ -19,6 +23,75 @@ public class CreateExperienceRequest
     public string? PriceRange { get; set; }
     public string? Website { get; set; }
     public List<string> Amenities { get; set; } = [];
+}
+
+public class UpdateExperienceRequest : CreateExperienceRequest
+{
+}
+
+public class CreateExperienceAvailabilityRequest
+{
+    public DateTime StartTimeUtc { get; set; }
+    public DateTime EndTimeUtc { get; set; }
+    public int Capacity { get; set; }
+    public decimal PricePerPerson { get; set; }
+}
+
+public class UpdateExperienceAvailabilityRequest : CreateExperienceAvailabilityRequest
+{
+    public bool IsActive { get; set; } = true;
+}
+
+public class ExperienceAvailabilityResponse
+{
+    public Guid Id { get; set; }
+    public int ExperienceId { get; set; }
+    public DateTime StartTimeUtc { get; set; }
+    public DateTime EndTimeUtc { get; set; }
+    public int Capacity { get; set; }
+    public int RemainingCapacity { get; set; }
+    public decimal PricePerPerson { get; set; }
+    public bool IsActive { get; set; }
+}
+
+public class CreateExperienceBookingRequest
+{
+    public Guid AvailabilityId { get; set; }
+    public int GuestsCount { get; set; }
+}
+
+public class UpdateExperienceBookingStatusRequest
+{
+    public ExperienceBookingStatus Status { get; set; }
+}
+
+public class ExperienceBookingResponse
+{
+    public Guid Id { get; set; }
+    public int ExperienceId { get; set; }
+    public string ExperienceName { get; set; } = string.Empty;
+    public Guid AvailabilityId { get; set; }
+    public Guid TravelerProfileId { get; set; }
+    public string TravelerName { get; set; } = string.Empty;
+    public DateTime StartTimeUtc { get; set; }
+    public DateTime EndTimeUtc { get; set; }
+    public int GuestsCount { get; set; }
+    public decimal TotalPrice { get; set; }
+    public ExperienceBookingStatus Status { get; set; }
+    public DateTime CreatedAtUtc { get; set; }
+    public DateTime? UpdatedAtUtc { get; set; }
+}
+
+public class CreateExperienceReviewRequest
+{
+    public int Rating { get; set; }
+    public string ReviewText { get; set; } = string.Empty;
+}
+
+public class ModerateExperienceRequest
+{
+    public ExperienceModerationStatus ModerationStatus { get; set; }
+    public string? ModerationNotes { get; set; }
 }
 
 public class ExperienceHourRequest
@@ -41,6 +114,18 @@ public class ImportExperiencesFileRequest
     public IFormFile? File { get; set; }
 }
 
+public class UploadExperienceImageRequest
+{
+    public IFormFile? File { get; set; }
+}
+
+public class ExperienceImageUploadResponse
+{
+    public string Link { get; set; } = string.Empty;
+    public string FileName { get; set; } = string.Empty;
+    public long SizeBytes { get; set; }
+}
+
 public class ExperienceListRequest
 {
     public ExperienceCategory? Category { get; set; }
@@ -51,6 +136,11 @@ public class ExperienceListRequest
     public int? Adm2Gid { get; set; }
     public int? Adm3Gid { get; set; }
     public decimal? MinRating { get; set; }
+    public bool? IsFree { get; set; }
+    public ExperienceSortBy SortBy { get; set; } = ExperienceSortBy.Recommended;
+    public ExperienceSortDirection SortDirection { get; set; } = ExperienceSortDirection.Desc;
+    public double? CurrentLatitude { get; set; }
+    public double? CurrentLongitude { get; set; }
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 20;
 }
@@ -78,6 +168,7 @@ public class ExperienceResponse
     public List<ExperiencePopularTimeResponse> PopularTimes { get; set; } = [];
     public string? PhoneInternational { get; set; }
     public string? PriceRange { get; set; }
+    public decimal? StartingPricePerPerson { get; set; }
     public int? Reviews { get; set; }
     public decimal? Rating { get; set; }
     public List<ExperienceReviewsPerRatingResponse> ReviewsPerRating { get; set; } = [];
@@ -85,6 +176,13 @@ public class ExperienceResponse
     public List<string> Amenities { get; set; } = [];
     public List<ExperienceReviewResponse> FeaturedReviews { get; set; } = [];
     public VisitInsightResponse? CurrentInsight { get; set; }
+    public bool IsActive { get; set; }
+    public DateTime CreatedAtUtc { get; set; }
+    public DateTime? UpdatedAtUtc { get; set; }
+    public ExperienceModerationStatus ModerationStatus { get; set; }
+    public string? ModerationNotes { get; set; }
+    public Guid? ModeratedByUserId { get; set; }
+    public DateTime? ModeratedAtUtc { get; set; }
 }
 
 public class ExperienceFeaturedImageResponse
@@ -130,6 +228,7 @@ public class ExperienceMapItemResponse
     public double? Longitude { get; set; }
     public decimal? Rating { get; set; }
     public int? Reviews { get; set; }
+    public decimal? StartingPricePerPerson { get; set; }
     public string? PrimaryImage { get; set; }
     public bool? IsOpenNow { get; set; }
     public int? PopularityPercentageNow { get; set; }

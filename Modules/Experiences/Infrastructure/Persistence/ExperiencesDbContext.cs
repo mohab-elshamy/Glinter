@@ -16,6 +16,8 @@ public class ExperiencesDbContext : DbContext
     public DbSet<ExperienceReviewsPerRating> ExperienceReviewsPerRatings => Set<ExperienceReviewsPerRating>();
     public DbSet<ExperienceAmenity> ExperienceAmenities => Set<ExperienceAmenity>();
     public DbSet<ExperienceReview> ExperienceReviews => Set<ExperienceReview>();
+    public DbSet<ExperienceAvailability> ExperienceAvailabilitySlots => Set<ExperienceAvailability>();
+    public DbSet<ExperienceBooking> ExperienceBookings => Set<ExperienceBooking>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

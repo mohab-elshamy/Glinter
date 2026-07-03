@@ -12,11 +12,13 @@ public class ExperienceAmenityConfiguration : IEntityTypeConfiguration<Experienc
 
         builder.HasKey(x => x.Id);
 
-        builder.Property(x => x.Name)
-            .IsRequired()
+        builder.Property(x => x.NameAr)
+            .HasMaxLength(250);
+
+        builder.Property(x => x.NameEn)
             .HasMaxLength(250);
 
         builder.HasIndex(x => x.ExperienceId);
-        builder.HasIndex(x => new { x.ExperienceId, x.Name }).IsUnique();
+        builder.HasIndex(x => new { x.ExperienceId, x.NameAr, x.NameEn }).IsUnique();
     }
 }

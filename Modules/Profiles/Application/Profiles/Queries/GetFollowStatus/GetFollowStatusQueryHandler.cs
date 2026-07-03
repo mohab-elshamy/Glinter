@@ -35,11 +35,16 @@ public class GetFollowStatusQueryHandler
                 x => x.FollowerUserId == followerUserId &&
                      x.FollowedUserId == query.FollowedUserId,
                 cancellationToken);
+        var followersCount = await _profilesDbContext.UserFollows
+            .CountAsync(
+                x => x.FollowedUserId == query.FollowedUserId,
+                cancellationToken);
 
         return new FollowStatusResponse
         {
             FollowedUserId = query.FollowedUserId,
-            IsFollowing = isFollowing
+            IsFollowing = isFollowing,
+            FollowersCount = followersCount
         };
     }
 }

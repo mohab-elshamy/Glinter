@@ -1,434 +1,654 @@
-import { useState } from "react";
-import { Search, Star, MapPin, Wifi, Car, Sparkles, Shield, DollarSign, Armchair, TrendingUp, X, UtensilsCrossed, SlidersHorizontal } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Car,
+  DollarSign,
+  Gauge,
+  Images,
+  List,
+  LocateFixed,
+  Map,
+  MapPin,
+  ShieldCheck,
+  Sparkles,
+  Star,
+  UtensilsCrossed,
+  Wifi,
+  Heart,
+} from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import HotelDetailsModal from "@/components/HotelDetailsModal";
+import RegionCascadeSelect from "@/components/RegionCascadeSelect";
 import SearchBar from "./components/SearchBar";
 import HeatmapPanel from "./components/HeatmapPanel";
 import FiltersPanel from "./components/FiltersPanel";
+import RegionStatsPanel from "./components/RegionStatsPanel";
 import { useWhereToStay } from "./hooks";
-import { allHotels } from "./data";
+import { useStayMapSafety } from "./use-stay-map-safety";
+import { detectedRegionLabel, useCurrentLocation } from "./use-current-location";
 import { computePrice } from "./pricing";
+import { formatUsdPrice } from "@/shared/lib/price";
 import hotelImg from "@/assets/hotel-1.jpg";
 import { toast } from "sonner";
+import { authStorage } from "@/shared/lib/auth";
+import type { Hotel } from "./types";
+import { getComfortScore, type StayMapMode } from "./map-modes";
+import { staysApi } from "@/shared/services/api-stays";
+import type { SafetyPeriod } from "@/shared/types/safety";
+import HotelRecommendationPanel from "./components/HotelRecommendationPanel";
+import { useSearchParams } from "react-router-dom";
+
+const mapModes: Array<{
+  value: StayMapMode;
+  label: string;
+  icon: typeof Map;
+  description: string;
+}> = [
+  { value: "standard", label: "Standard", icon: Map, description: "Browse every mapped stay" },
+  { value: "safety", label: "Safety", icon: ShieldCheck, description: "District safety signals" },
+  { value: "comfort", label: "Comfort", icon: Gauge, description: "Ratings, reviews and amenities" },
+  { value: "price", label: "Price", icon: DollarSign, description: "Compare with the regional average" },
+];
 
 const WhereToStayPage = () => {
+  const [searchParams] = useSearchParams();
   const {
     searchQuery, setSearchQuery,
     checkin, setCheckin,
     checkout, setCheckout,
     guests, setGuests,
-    hasSearched,
-    selectedNeighborhood, setSelectedNeighborhood,
     maxPrice, setMaxPrice,
-    minSafety, setMinSafety,
-    minComfort, setMinComfort,
     minRating, setMinRating,
-    backgroundLayer, setBackgroundLayer,
-    isComparing, toggleComparisonMode,
-    comparisonNeighborhoods, toggleNeighborhoodForComparison, removeFromComparison,
+    sortBy, sortDirection, setSorting,
     selectedHotel, setSelectedHotel,
+    previewHotel, setPreviewHotel,
+    selectHotel,
+    selectHotelById,
+    region, setRegion,
+    locatingRegion,
+    resolveRegionByPoint,
+    staysState,
+    isLoadingStays,
     handleSearch,
     filteredHotels,
-    mapData,
+    page,
+    pageSize,
+    totalCount,
+    totalPages,
+    setPage,
+    regionStats,
+    statsState,
     isMapEmpty,
   } = useWhereToStay();
 
+  const [viewMode, setViewMode] = useState<"map" | "list">("map");
+  const [mapMode, setMapMode] = useState<StayMapMode>("standard");
+  const [safetyPeriod, setSafetyPeriod] = useState<SafetyPeriod>("weekly");
   const [showFilters, setShowFilters] = useState(false);
-  const [showMarkers, setShowMarkers] = useState(true);
+  const [favoriteIds, setFavoriteIds] = useState<Set<number>>(new Set());
+  const [favoritePending, setFavoritePending] = useState<Set<number>>(new Set());
 
-  const handleBookHotel = (hotel: typeof filteredHotels[number]) => {
-    const p = computePrice(hotel.price, checkin, checkout);
-    const totalAmount = p.nights > 0 ? p.total : hotel.price;
-    const bookingDate = checkin || new Date().toISOString().split("T")[0];
-    const hotelId = hotel.name.toLowerCase().replace(/\s+/g, "-");
+  useEffect(() => {
+    const stayId = Number(searchParams.get("stayId"));
+    if (Number.isInteger(stayId) && stayId > 0) {
+      void selectHotelById(stayId);
+    }
+  }, [searchParams, selectHotelById]);
 
-    const consumerBooking = {
-      id: `booking-${Date.now()}`,
-      type: "hotel" as const,
-      name: hotel.name,
-      date: bookingDate,
-      status: "confirmed" as const,
-      amount: totalAmount,
+  useEffect(() => {
+    if (!authStorage.isAuthenticated() || !authStorage.hasAnyRole(["Traveler"])) return;
+    const stayIds = filteredHotels.flatMap((hotel) => hotel.id ? [hotel.id] : []);
+    if (stayIds.length === 0) {
+      setFavoriteIds(new Set());
+      return;
+    }
+    staysApi.getFavoriteStatuses(stayIds)
+      .then((result) => setFavoriteIds(new Set(result.favoriteStayIds)))
+      .catch(() => undefined);
+  }, [filteredHotels]);
+
+  const toggleFavorite = async (hotel: Hotel) => {
+    if (!hotel.id) return;
+    if (!authStorage.isAuthenticated()) {
+      toast.error("Sign in as a traveler to save hotels.");
+      return;
+    }
+    const id = hotel.id;
+    const wasFavorite = favoriteIds.has(id);
+    setFavoritePending((current) => new Set(current).add(id));
+    setFavoriteIds((current) => {
+      const next = new Set(current);
+      if (wasFavorite) next.delete(id); else next.add(id);
+      return next;
+    });
+    try {
+      if (wasFavorite) await staysApi.removeFavorite(id);
+      else await staysApi.addFavorite(id);
+      window.dispatchEvent(new CustomEvent("stay-favorites-change", {
+        detail: { stayId: id, isFavorite: !wasFavorite },
+      }));
+    } catch (error) {
+      setFavoriteIds((current) => {
+        const next = new Set(current);
+        if (wasFavorite) next.add(id); else next.delete(id);
+        return next;
+      });
+      toast.error(error instanceof Error ? error.message : "Could not update favorites.");
+    } finally {
+      setFavoritePending((current) => {
+        const next = new Set(current);
+        next.delete(id);
+        return next;
+      });
+    }
+  };
+
+  const safety = useStayMapSafety(
+      region,
+      viewMode === "map" && mapMode === "safety",
+      safetyPeriod,
+  );
+  const currentLocation = useCurrentLocation();
+  const currentRegionLabel = detectedRegionLabel(currentLocation.state.detectedRegion);
+
+  const regionalSummary = useMemo(() => {
+    const hotelsCount = regionStats.reduce((sum, item) => sum + item.hotelsCount, 0);
+    const pricedRegions = regionStats.filter(
+        (item) => item.averagePrice != null && item.hotelsCount > 0,
+    );
+    const weightedPriceTotal = pricedRegions.reduce(
+        (sum, item) => sum + (item.averagePrice ?? 0) * item.hotelsCount,
+        0,
+    );
+    const weightedHotelCount = pricedRegions.reduce(
+        (sum, item) => sum + item.hotelsCount,
+        0,
+    );
+    const visiblePrices = filteredHotels.flatMap((hotel) =>
+        hotel.price == null ? [] : [hotel.price]);
+    const fallbackAverage = visiblePrices.length > 0
+        ? visiblePrices.reduce((sum, price) => sum + price, 0) / visiblePrices.length
+        : undefined;
+    const averageComfort = filteredHotels.length > 0
+        ? Math.round(
+            filteredHotels.reduce((sum, hotel) => sum + getComfortScore(hotel), 0) /
+            filteredHotels.length,
+        )
+        : undefined;
+
+    return {
+      hotelsCount,
+      averagePrice: weightedHotelCount > 0
+          ? weightedPriceTotal / weightedHotelCount
+          : fallbackAverage,
+      averageComfort,
     };
+  }, [filteredHotels, regionStats]);
 
-    const ownerBooking = {
-      id: `hotel-booking-${Date.now()}`,
-      hotelId,
-      hotelName: hotel.name,
-      guestName: localStorage.getItem("profile_displayName") || "Guest",
-      checkIn: checkin || bookingDate,
-      checkOut: checkout || bookingDate,
-      guestCount: guests,
-      totalPrice: totalAmount,
-      status: "pending" as const,
-    };
+  const handleBookHotel = async (hotel: Hotel) => {
+    if (!authStorage.isAuthenticated()) {
+      toast.error("Sign in as a traveler to book this stay.");
+      return;
+    }
+    if (!hotel.id) {
+      toast.error("This stay is not available for backend booking.");
+      return;
+    }
+    if (!checkin || !checkout) {
+      toast.error("Choose check-in and check-out dates first.");
+      return;
+    }
+    if (hotel.price == null) {
+      toast.error("This stay does not have a bookable backend price.");
+      return;
+    }
 
-    const existingConsumer = JSON.parse(localStorage.getItem("my_bookings") || "[]");
-    existingConsumer.push(consumerBooking);
-    localStorage.setItem("my_bookings", JSON.stringify(existingConsumer));
+    const price = computePrice(hotel.price, checkin, checkout);
+    if (price.nights < 1) {
+      toast.error("Check-out must be after check-in.");
+      return;
+    }
 
-    const existingOwner = JSON.parse(localStorage.getItem("my_hotel_bookings") || "[]");
-    existingOwner.push(ownerBooking);
-    localStorage.setItem("my_hotel_bookings", JSON.stringify(existingOwner));
-
-    toast.success(`"${hotel.name}" booked successfully! 🎉`);
+    try {
+      await staysApi.createBooking(hotel.id, {
+        checkInDate: checkin,
+        checkOutDate: checkout,
+        guestCount: guests,
+      });
+      toast.success(`"${hotel.name}" booking requested.`);
+      setSelectedHotel(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not create booking.");
+    }
   };
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: '#0B0C10' }}>
-      <Navbar />
-
-      {/* HERO: map full-width, starts below navbar */}
-      <section className="relative w-full" style={{ height: 'calc(100vh - 5rem)' }}>
-        <div className="absolute inset-0 z-0">
-          <HeatmapPanel
-            mapData={mapData}
-            backgroundLayer={backgroundLayer}
-            selectedNeighborhood={selectedNeighborhood}
-            isComparing={isComparing}
-            comparisonNeighborhoods={comparisonNeighborhoods}
-            filteredHotels={filteredHotels}
-            onSelectNeighborhood={setSelectedNeighborhood}
-            onToggleNeighborhoodForComparison={toggleNeighborhoodForComparison}
-            showMarkers={showMarkers}
-            height="calc(100vh - 5rem)"
-          />
-        </div>
-
-        {isMapEmpty && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
-            <div className="bg-black/70 backdrop-blur-sm rounded-2xl px-8 py-6 max-w-sm text-center border border-white/10">
-              <p className="text-white/90 text-sm font-medium">
-                No places match all your filters.
+      <div className="min-h-screen bg-[#0B0C10]">
+        <Navbar />
+        <main className="container mx-auto max-w-7xl px-4 pb-20 pt-6">
+          <header className="mb-5 flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.22em] text-brand-gold">
+                Find your base
               </p>
-              <p className="text-white/50 text-xs mt-2">
-                Try lowering your price, safety, or comfort requirements.
+              <h1 className="text-3xl font-bold text-white sm:text-4xl">Where to stay</h1>
+              <p className="mt-2 max-w-2xl text-sm text-gray-400">
+                Compare live backend stays by location, comfort, regional price and safety context.
               </p>
             </div>
-          </div>
-        )}
+            <div className="flex rounded-xl border border-white/10 bg-white/5 p-1" aria-label="Results view">
+              <button
+                  type="button"
+                  aria-pressed={viewMode === "map"}
+                  onClick={() => setViewMode("map")}
+                  className={`flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-semibold transition ${
+                      viewMode === "map" ? "bg-primary text-primary-foreground" : "text-gray-400 hover:text-white"
+                  }`}
+              >
+                <Map className="h-4 w-4" /> Map
+              </button>
+              <button
+                  type="button"
+                  aria-pressed={viewMode === "list"}
+                  onClick={() => setViewMode("list")}
+                  className={`flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-semibold transition ${
+                      viewMode === "list" ? "bg-primary text-primary-foreground" : "text-gray-400 hover:text-white"
+                  }`}
+              >
+                <List className="h-4 w-4" /> List
+              </button>
+            </div>
+          </header>
 
-        <div
-          className="absolute inset-0 z-[1] pointer-events-none"
-          style={{
-            background: 'radial-gradient(ellipse at center, transparent 30%, rgba(11,12,16,0.75) 100%)'
-          }}
-        />
-
-        {/* Search bar — floats in map below navbar */}
-        {showMarkers && (
-          <div className="absolute top-3 left-1/2 -translate-x-1/2 max-w-4xl z-40 px-4" style={{ width: 'calc(100% - 2rem)' }}>
+          <section className="card-glass mb-5 space-y-4 p-4">
             <SearchBar
-              searchQuery={searchQuery}
-              onSearchQueryChange={setSearchQuery}
-              checkin={checkin}
-              onCheckinChange={setCheckin}
-              checkout={checkout}
-              onCheckoutChange={setCheckout}
-              guests={guests}
-              onGuestsChange={setGuests}
-              onSearch={handleSearch}
+                searchQuery={searchQuery}
+                onSearchQueryChange={setSearchQuery}
+                checkin={checkin}
+                onCheckinChange={setCheckin}
+                checkout={checkout}
+                onCheckoutChange={setCheckout}
+                guests={guests}
+                onGuestsChange={setGuests}
+                onSearch={handleSearch}
             />
-          </div>
-        )}
-
-        {/* FiltersPanel — floats top-right */}
-        {showMarkers && (
-          <>
-            <div
-              className="absolute right-8 z-40 hidden lg:block"
-              style={{ top: '11rem', width: '18rem' }}
-            >
-              <FiltersPanel
-                maxPrice={maxPrice}
-                onMaxPriceChange={setMaxPrice}
-                minSafety={minSafety}
-                onMinSafetyChange={setMinSafety}
-                minComfort={minComfort}
-                onMinComfortChange={setMinComfort}
-                minRating={minRating}
-                onMinRatingChange={setMinRating}
-                backgroundLayer={backgroundLayer}
-                onBackgroundLayerChange={setBackgroundLayer}
+            <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
+              <RegionCascadeSelect
+                  value={region}
+                  onChange={setRegion}
+                  label={locatingRegion ? "Finding region from map point…" : "Filter by backend region or click the map"}
+                  disabled={locatingRegion}
               />
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="flex items-center gap-2 text-xs text-gray-400">
+                  <span>Sort</span>
+                  <select
+                      value={`${sortBy}:${sortDirection}`}
+                      onChange={(event) => {
+                        const [nextSortBy, nextDirection] = event.target.value.split(":");
+                        setSorting(nextSortBy as typeof sortBy, nextDirection as typeof sortDirection);
+                      }}
+                      className="rounded-lg border border-white/10 bg-[#15161c] px-3 py-2 text-xs text-white"
+                  >
+                    <option value="Recommended:Desc">Recommended</option>
+                    <option value="Price:Asc">Price: low to high</option>
+                    <option value="Price:Desc">Price: high to low</option>
+                    <option value="Rating:Desc">Highest rated</option>
+                    <option value="Reviews:Desc">Most reviewed</option>
+                    <option value="Name:Asc">Name: A–Z</option>
+                    <option value="Name:Desc">Name: Z–A</option>
+                    <option value="Newest:Desc">Newest first</option>
+                    <option value="Newest:Asc">Oldest first</option>
+                  </select>
+                </label>
+                <button
+                    type="button"
+                    aria-expanded={showFilters}
+                    onClick={() => setShowFilters((value) => !value)}
+                    className="rounded-lg border border-white/10 px-3 py-2 text-xs text-gray-300 hover:bg-white/5"
+                >
+                  {showFilters ? "Hide filters" : "Price & rating filters"}
+                </button>
+              </div>
             </div>
             {showFilters && (
-              <div
-                className="absolute right-4 z-40 lg:hidden"
-                style={{ top: '7rem', width: '16rem' }}
-              >
-                <FiltersPanel
-                  maxPrice={maxPrice}
-                  onMaxPriceChange={setMaxPrice}
-                  minSafety={minSafety}
-                  onMinSafetyChange={setMinSafety}
-                  minComfort={minComfort}
-                  onMinComfortChange={setMinComfort}
-                  minRating={minRating}
-                  onMinRatingChange={setMinRating}
-                  backgroundLayer={backgroundLayer}
-                  onBackgroundLayerChange={setBackgroundLayer}
-                />
-              </div>
+                <div className="max-w-sm">
+                  <FiltersPanel
+                      maxPrice={maxPrice}
+                      onMaxPriceChange={setMaxPrice}
+                      minRating={minRating}
+                      onMinRatingChange={setMinRating}
+                  />
+                </div>
             )}
-          </>
-        )}
+          </section>
 
-        {/* Toggle markers */}
-        <button
-          onClick={() => setShowMarkers(!showMarkers)}
-          className="absolute bottom-6 left-6 z-40 flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-brand-dark/80 backdrop-blur-sm border border-brand-glassBorder hover:bg-brand-glass transition"
-        >
-          <span className="flex gap-0.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-green-400 inline-block" />
-            <span className="w-2.5 h-2.5 rounded-full bg-yellow-400 inline-block" />
-            <span className="w-2.5 h-2.5 rounded-full bg-red-400 inline-block" />
-          </span>
-          {showMarkers ? "Hide" : "Show"} Map UI
-        </button>
+          <HotelRecommendationPanel
+            region={region}
+            onViewDetails={selectHotelById}
+          />
 
-        {/* Mobile filter toggle */}
-        {showMarkers && (
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className="lg:hidden absolute right-4 z-40 bottom-6 w-10 h-10 rounded-full bg-brand-dark/80 backdrop-blur-sm border border-brand-glassBorder flex items-center justify-center hover:bg-brand-glass transition"
-          >
-            <SlidersHorizontal className="w-4 h-4 text-white" />
-          </button>
-        )}
-      </section>
-
-      {/* MAIN CONTENT */}
-      <main className="relative z-10 -mt-20 pb-20" style={{ backgroundColor: '#0B0C10' }}>
-        <div className="container mx-auto max-w-7xl px-0 sm:px-2 max-md:px-4">
-
-          <div className="flex justify-between items-end mb-8 pt-10 max-md:flex-col max-md:items-start max-md:gap-2">
-            <div>
-              <h3 className="text-2xl font-bold mb-1">
-                Search results{searchQuery
-                  ? <> for <span className="text-brand-gold">'{searchQuery}'</span></>
-                  : ''}
-              </h3>
-              <p className="text-gray-400 text-sm">Showing top matches based on your preferences</p>
-            </div>
-            <span className="text-sm text-gray-500">{filteredHotels.length} hotels found</span>
+          <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Metric label="Matching stays" value={isLoadingStays ? "…" : totalCount} />
+            <Metric label="Mapped now" value={filteredHotels.filter((hotel) => hotel.latitude != null && hotel.longitude != null).length} />
+            <Metric label="Regional average" value={formatUsdPrice(regionalSummary.averagePrice, "—")} />
+            <Metric label="Average comfort" value={regionalSummary.averageComfort == null ? "—" : `${regionalSummary.averageComfort}/100`} />
           </div>
 
-          {/* Comparison mode toggle & table */}
-          <div className="mb-8">
-            <button
-              onClick={toggleComparisonMode}
-              className={`px-6 py-2.5 rounded-xl border text-xs font-bold transition ${
-                isComparing
-                  ? "bg-brand-purple/20 border-brand-purple/50 text-brand-purple"
-                  : "bg-brand-purple text-white border-brand-purple hover:bg-brand-purple/90"
-              }`}
-            >
-              {isComparing ? "Exit Comparison Mode" : "Compare Neighborhoods"}
-            </button>
-            {isComparing && (
-              <p className="text-xs text-gray-500 mt-2">
-                Click neighborhoods on the map to add them to the comparison table below.
-              </p>
-            )}
-            {isComparing && comparisonNeighborhoods.length > 0 && (
-              <div className="mt-4">
-                <ComparisonTable
-                  neighborhoods={comparisonNeighborhoods}
-                  onRemove={removeFromComparison}
-                />
-              </div>
-            )}
-          </div>
-
-          {filteredHotels.length > 0 && (
-            <HotelGrid
-              hotels={filteredHotels}
-              checkin={checkin}
-              checkout={checkout}
-              onSelectHotel={setSelectedHotel}
-            />
-          )}
-
-          {filteredHotels.length === 0 && (
-            <motion.div
-              className="liquid-glass rounded-2xl p-10 text-center mb-10"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-            >
-              <Search className="w-10 h-10 text-gray-400 mx-auto mb-3" />
-              <p className="text-gray-400">No hotels match your filters. Try adjusting your search criteria.</p>
-            </motion.div>
-          )}
-
-        </div>
-      </main>
-
-      <HotelDetailsModal hotel={selectedHotel} checkin={checkin} checkout={checkout} onClose={() => setSelectedHotel(null)} onBook={handleBookHotel} />
-      <Footer />
-    </div>
-  );
-};
-
-const ComparisonTable = ({
-  neighborhoods,
-  onRemove,
-}: {
-  neighborhoods: { name: string; safety: number; price: number; comfort: number }[];
-  onRemove: (name: string) => void;
-}) => {
-  const allHotelsLocal = allHotels;
-  return (
-    <div className="liquid-glass rounded-2xl p-3 md:p-5">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-bold flex items-center gap-2">
-          <TrendingUp className="w-5 h-5 text-brand-purple" />
-          Neighborhood Comparison ({neighborhoods.length}/4)
-        </h2>
-        <span className="text-xs text-gray-400">Click neighborhoods on the map to add more</span>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-white/10">
-              <th className="text-left py-2 px-3 font-semibold text-gray-300">Neighborhood</th>
-              <th className="text-center py-2 px-3 font-semibold text-gray-300"><Shield className="w-4 h-4 mx-auto mb-1 text-green-400" />Safety</th>
-              <th className="text-center py-2 px-3 font-semibold text-gray-300"><DollarSign className="w-4 h-4 mx-auto mb-1 text-brand-gold" />Price/night</th>
-              <th className="text-center py-2 px-3 font-semibold text-gray-300"><Armchair className="w-4 h-4 mx-auto mb-1 text-brand-teal" />Comfort</th>
-              <th className="text-center py-2 px-3 font-semibold text-gray-300">Hotels</th>
-              <th className="text-center py-2 px-3 font-semibold text-gray-300">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {neighborhoods.map((n) => {
-              const hotelsInArea = allHotelsLocal.filter((h) => h.area === n.name);
-              const prices = hotelsInArea.map(h => h.price);
-              const minPrice = prices.length > 0 ? Math.min(...prices) : null;
-              const maxPrice = prices.length > 0 ? Math.max(...prices) : null;
-              return (
-                <tr key={n.name} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                  <td className="py-3 px-3 font-semibold">{n.name}</td>
-                  <td className="text-center py-3 px-3">
-                    <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
-                      n.safety >= 85 ? "bg-green-500/20 text-green-400" :
-                      n.safety >= 70 ? "bg-brand-gold/20 text-brand-gold" :
-                      "bg-red-500/20 text-red-400"
-                    }`}>{n.safety}%</span>
-                  </td>
-                  <td className="text-center py-3 px-3">
-                    <span className="text-xs font-medium text-brand-gold">
-                      {minPrice !== null ? (minPrice === maxPrice ? `$${minPrice}` : `$${minPrice} - $${maxPrice}`) : "—"}
-                    </span>
-                  </td>
-                  <td className="text-center py-3 px-3">
-                    <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
-                      n.comfort >= 85 ? "bg-green-500/20 text-green-400" :
-                      n.comfort >= 70 ? "bg-brand-gold/20 text-brand-gold" :
-                      "bg-red-500/20 text-red-400"
-                    }`}>{n.comfort}%</span>
-                  </td>
-                  <td className="text-center py-3 px-3 text-gray-400">{hotelsInArea.length}</td>
-                  <td className="text-center py-3 px-3">
-                    <button onClick={() => onRemove(n.name)} className="text-red-400 hover:text-red-300 transition-colors" title="Remove from comparison">
-                      <X className="w-4 h-4" />
+          {viewMode === "map" ? (
+              <section>
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex max-w-full gap-2 overflow-x-auto pb-1">
+                    {mapModes.map((mode) => (
+                        <button
+                            key={mode.value}
+                            type="button"
+                            aria-pressed={mapMode === mode.value}
+                            title={mode.description}
+                            onClick={() => {
+                              setMapMode(mode.value);
+                              setPreviewHotel(null);
+                            }}
+                            className={`flex shrink-0 items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition ${
+                                mapMode === mode.value
+                                    ? "border-primary bg-primary/15 text-primary"
+                                    : "border-white/10 bg-white/5 text-gray-400 hover:text-white"
+                            }`}
+                        >
+                          <mode.icon className="h-4 w-4" /> {mode.label}
+                        </button>
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {mapMode === "safety" && (
+                        <div className="flex rounded-lg border border-white/10 bg-white/5 p-1">
+                          <button
+                              type="button"
+                              onClick={() => setSafetyPeriod("weekly")}
+                              className={`rounded-md px-3 py-1.5 text-[11px] ${safetyPeriod === "weekly" ? "bg-white/10 text-white" : "text-gray-400"}`}
+                          >
+                            Current
+                          </button>
+                          <button
+                              type="button"
+                              onClick={() => setSafetyPeriod("historical")}
+                              className={`rounded-md px-3 py-1.5 text-[11px] ${safetyPeriod === "historical" ? "bg-white/10 text-white" : "text-gray-400"}`}
+                          >
+                            Historical
+                          </button>
+                        </div>
+                    )}
+                    <button
+                        type="button"
+                        onClick={currentLocation.locate}
+                        disabled={currentLocation.state.status === "locating"}
+                        className="flex items-center gap-2 rounded-xl border border-sky-400/30 bg-sky-500/10 px-3 py-2 text-xs font-semibold text-sky-200 transition hover:bg-sky-500/20 disabled:cursor-wait disabled:opacity-60"
+                    >
+                      <LocateFixed className={`h-4 w-4 ${currentLocation.state.status === "locating" ? "animate-pulse" : ""}`} />
+                      {currentLocation.state.status === "locating" ? "Locating…" : "Locate me"}
                     </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                  </div>
+                </div>
+
+                {currentLocation.state.status === "ready" && currentLocation.state.position && (
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-sky-500/25 bg-sky-500/10 p-3 text-xs text-sky-100">
+                <span>
+                  <strong>You are here</strong>
+                  {" · "}accuracy ±{Math.round(currentLocation.state.position.accuracy)} m
+                  {currentRegionLabel && <>{" · "}{currentRegionLabel}</>}
+                </span>
+                      <span className="text-sky-200/70">
+                  {currentLocation.state.regionMessage || "Region identified by the backend. Filters unchanged."}
+                </span>
+                    </div>
+                )}
+                {["denied", "unavailable", "timeout", "insecure", "unsupported"].includes(currentLocation.state.status) && (
+                    <p role="alert" className="mb-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-100">
+                      {currentLocation.state.regionMessage}
+                    </p>
+                )}
+
+                {mapMode === "safety" && !region.adm0Gid && (
+                    <p className="mb-3 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-xs text-amber-100">
+                      Select a country and governorate to load district safety boundaries.
+                    </p>
+                )}
+                {mapMode === "safety" && region.adm0Gid && !region.adm1Gid && (
+                    <p className="mb-3 rounded-xl border border-blue-500/25 bg-blue-500/10 p-3 text-xs text-blue-100">
+                      Country safety scores are available. Select a governorate to draw the detailed heatmap.
+                    </p>
+                )}
+                {safety.state.status === "loading" && (
+                    <p className="mb-3 rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-gray-300">
+                      Loading district safety scores and boundaries…
+                    </p>
+                )}
+                {safety.state.status === "error" && (
+                    <p role="alert" className="mb-3 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-200">
+                      {safety.state.message}
+                    </p>
+                )}
+                {isMapEmpty && (
+                    <p className="mb-3 rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-gray-300">
+                      No mapped stays match the synchronized search and filters.
+                    </p>
+                )}
+
+                <HeatmapPanel
+                    hotels={filteredHotels}
+                    selectedHotel={previewHotel}
+                    mode={mapMode}
+                    averagePrice={regionalSummary.averagePrice}
+                    safetyScores={safety.scoreByDistrict}
+                    safetyAreas={safety.overlayAreas}
+                    currentLocation={currentLocation.state.position}
+                    recenterSequence={currentLocation.state.requestSequence}
+                    onSelectHotel={setPreviewHotel}
+                    onClearHotel={() => setPreviewHotel(null)}
+                    onViewDetails={(hotel) => void selectHotel(hotel)}
+                    onMapClick={(lat, lng) => void resolveRegionByPoint(lat, lng)}
+                    height="min(72vh, 48rem)"
+                />
+              </section>
+          ) : (
+              <section>
+                <RegionStatsPanel
+                    stats={regionStats}
+                    state={statsState}
+                    region={region}
+                    onSelectRegion={setRegion}
+                />
+                <div className="mb-7 mt-8 flex flex-wrap items-end justify-between gap-3">
+                  <div>
+                    <h2 className="text-2xl font-bold text-white">Stay results</h2>
+                    <p className="mt-1 text-sm text-gray-400">The list uses the same backend filters as the map.</p>
+                  </div>
+                  <span className="text-sm text-gray-500">
+                {isLoadingStays
+                    ? "Loading stays…"
+                    : staysState.status === "error"
+                        ? "Could not load stays"
+                        : totalCount === 0
+                            ? "0 hotels found"
+                            : `${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, totalCount)} of ${totalCount}`}
+              </span>
+                </div>
+
+                {staysState.status === "error" && (
+                    <div className="mb-8 rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-300">
+                      {staysState.message}
+                    </div>
+                )}
+                {staysState.status === "ready" && filteredHotels.length === 0 && (
+                    <div className="card-glass mb-8 p-8 text-center text-sm text-gray-400">
+                      No stays match the current search and filters.
+                    </div>
+                )}
+                {filteredHotels.length > 0 && (
+                    <HotelGrid
+                        hotels={filteredHotels}
+                        checkin={checkin}
+                        checkout={checkout}
+                        onSelectHotel={(hotel) => void selectHotel(hotel)}
+                        favoriteIds={favoriteIds}
+                        favoritePending={favoritePending}
+                        onToggleFavorite={(hotel) => void toggleFavorite(hotel)}
+                    />
+                )}
+                {staysState.status === "ready" && totalPages > 1 && (
+                    <nav aria-label="Stay results pages" className="mb-12 flex items-center justify-center gap-3">
+                      <button
+                          disabled={page <= 1}
+                          onClick={() => setPage((current) => Math.max(1, current - 1))}
+                          className="rounded-lg border border-border px-4 py-2 text-sm disabled:opacity-40"
+                      >
+                        Previous
+                      </button>
+                      <span className="text-sm text-muted-foreground">Page {page} of {totalPages}</span>
+                      <button
+                          disabled={page >= totalPages}
+                          onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                          className="rounded-lg border border-border px-4 py-2 text-sm disabled:opacity-40"
+                      >
+                        Next
+                      </button>
+                    </nav>
+                )}
+              </section>
+          )}
+        </main>
+
+        <HotelDetailsModal
+            hotel={selectedHotel}
+            checkin={checkin}
+            checkout={checkout}
+            guests={guests}
+            onClose={() => setSelectedHotel(null)}
+            onBook={handleBookHotel}
+        />
+        <Footer />
       </div>
-      {neighborhoods.length < 4 && (
-        <p className="text-xs text-gray-500 mt-3 text-center">
-          Click up to {4 - neighborhoods.length} more neighborhood{4 - neighborhoods.length > 1 ? "s" : ""} on the map to compare
-        </p>
-      )}
-    </div>
   );
 };
+
+const Metric = ({ label, value }: { label: string; value: string | number }) => (
+    <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
+      <p className="text-[10px] uppercase tracking-wider text-gray-500">{label}</p>
+      <p className="mt-1 text-lg font-bold text-white">{value}</p>
+    </div>
+);
 
 const HotelGrid = ({
-  hotels, checkin, checkout, onSelectHotel,
-}: {
-  hotels: { name: string; area: string; rating: number; reviews: number; price: number; comfort: number; safety: number; amenities: string[] }[];
+                     hotels, checkin, checkout, onSelectHotel,
+                     favoriteIds, favoritePending, onToggleFavorite,
+                   }: {
+  hotels: Hotel[];
   checkin: string;
   checkout: string;
-  onSelectHotel: (h: { name: string; area: string; rating: number; reviews: number; price: number; comfort: number; safety: number; amenities: string[] }) => void;
-}) => {
-  if (hotels.length === 0) return null;
-
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-md:gap-4 mb-16">
+  onSelectHotel: (hotel: Hotel) => void;
+  favoriteIds: Set<number>;
+  favoritePending: Set<number>;
+  onToggleFavorite: (hotel: Hotel) => void;
+}) => (
+    <div className="mb-16 grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
       <AnimatePresence mode="popLayout">
-        {hotels.map((h) => {
-          const p = computePrice(h.price, checkin, checkout);
-          const matchPercent = Math.round((h.rating / 5) * 100);
-
+        {hotels.map((hotel) => {
+          const price = computePrice(hotel.price, checkin, checkout);
+          const comfortScore = getComfortScore(hotel);
+          const taxInclusivePrices = hotel.bookingPlatforms.flatMap((platform) =>
+              platform.priceWithTax == null ? [] : [platform.priceWithTax]);
+          const lowestTaxInclusivePrice = taxInclusivePrices.length > 0
+              ? Math.min(...taxInclusivePrices)
+              : undefined;
           return (
-            <motion.div
-              key={h.name}
-              layout
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="liquid-glass rounded-2xl overflow-hidden group hover:-translate-y-1 transition duration-300 flex flex-col"
-            >
-              <div className="relative h-56 shrink-0">
-                <img src={hotelImg} alt={h.name} className="w-full h-full object-cover" />
-                <div className={`absolute top-3 left-3 ${matchPercent >= 85 ? 'bg-[#0EA5E9]' : 'bg-[#8A2BE2]'} text-white px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1 shadow-lg`}>
-                  <Sparkles className="w-3.5 h-3.5" /> {matchPercent}% Match
-                </div>
-                <div className="absolute top-3 right-3 bg-black/80 backdrop-blur-md px-3 py-1 rounded-full text-brand-gold text-sm font-bold border border-brand-gold/30 shadow-lg">
-                  ${p.nights > 0 ? `${p.adjustedNightly}` : `${h.price}`}<span className="text-[10px] text-gray-300 font-normal">/night</span>
-                </div>
-              </div>
-
-              <div className="p-5 flex flex-col flex-grow">
-                <div>
-                  <div className="flex justify-between items-start mb-2">
-                    <h4 className="text-xl font-bold leading-tight">{h.name}</h4>
-                    <div className="flex items-center gap-1 text-brand-gold font-semibold shrink-0">
-                      <Star className="w-4 h-4 fill-current" /> <span className="text-base">{h.rating}</span>
-                    </div>
+              <motion.article
+                  key={hotel.id ?? hotel.name}
+                  layout
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  className="liquid-glass group flex flex-col overflow-hidden rounded-2xl transition duration-300 hover:-translate-y-1"
+              >
+                <div className="relative h-52 shrink-0">
+                  <img src={hotel.image || hotelImg} alt={hotel.name} className="h-full w-full object-cover" />
+                  <div className="absolute left-3 top-3 flex items-center gap-1 rounded-full bg-black/75 px-3 py-1 text-xs font-semibold text-white backdrop-blur">
+                    <Sparkles className="h-3.5 w-3.5 text-cyan-300" /> {comfortScore} comfort
                   </div>
-                  <p className="text-sm text-gray-400 mb-5 flex items-center gap-1">
-                    <MapPin className="w-3.5 h-3.5" /> {h.area} · <span className="text-gray-500">{h.reviews} reviews</span>
+                  <div className="absolute right-3 top-3 rounded-full border border-brand-gold/30 bg-black/80 px-3 py-1 text-sm font-bold text-brand-gold backdrop-blur">
+                    {formatUsdPrice(hotel.price)}
+                    {hotel.price != null && hotel.price > 0 && <span className="text-[10px] font-normal text-gray-300">/night</span>}
+                  </div>
+                  {hotel.id != null && (
+                    <button
+                      type="button"
+                      disabled={favoritePending.has(hotel.id)}
+                      onClick={() => onToggleFavorite(hotel)}
+                      aria-label={`${favoriteIds.has(hotel.id) ? "Remove" : "Add"} ${hotel.name} ${favoriteIds.has(hotel.id) ? "from" : "to"} favorites`}
+                      className="absolute bottom-3 right-3 rounded-full bg-black/75 p-2 text-white backdrop-blur transition hover:text-primary disabled:opacity-50"
+                    >
+                      <Heart className={`h-4 w-4 ${favoriteIds.has(hotel.id) ? "fill-primary text-primary" : ""}`} />
+                    </button>
+                  )}
+                  {hotel.images.length > 1 && (
+                      <span className="absolute bottom-3 left-3 flex items-center gap-1 rounded-full bg-black/70 px-2 py-1 text-[10px] text-white backdrop-blur">
+                  <Images className="h-3 w-3" /> {hotel.images.length}
+                </span>
+                  )}
+                </div>
+                <div className="flex flex-1 flex-col p-5">
+                  <div className="mb-2 flex items-start justify-between gap-2">
+                    <h3 className="text-lg font-bold leading-tight text-white">{hotel.name}</h3>
+                    <span className="flex shrink-0 items-center gap-1 font-semibold text-brand-gold">
+                  <Star className="h-4 w-4 fill-current" /> {hotel.rating}
+                </span>
+                  </div>
+                  <p className="mb-5 flex items-center gap-1 text-sm text-gray-400">
+                    <MapPin className="h-3.5 w-3.5" /> {hotel.area} · {hotel.reviews} reviews
                   </p>
-                </div>
-
-                <div className="flex items-center justify-between mt-auto">
-                  <div className="flex gap-4 text-gray-400">
-                    {h.amenities.includes("wifi") && <span title="Free WiFi"><Wifi className="w-4 h-4" /></span>}
-                    {h.amenities.includes("parking") && <span title="Parking"><Car className="w-4 h-4" /></span>}
-                    {h.amenities.includes("restaurant") && <span title="Restaurant"><UtensilsCrossed className="w-4 h-4" /></span>}
-                    {!h.amenities.includes("wifi") && !h.amenities.includes("parking") && !h.amenities.includes("restaurant") && (
-                      <span className="text-xs text-gray-500">No amenities</span>
+                  {hotel.description && (
+                      <p className="mb-4 line-clamp-2 text-xs leading-5 text-gray-400">{hotel.description}</p>
+                  )}
+                  <div className="mb-4 flex flex-wrap gap-1.5">
+                    {hotel.amenities.slice(0, 2).map((amenity) => (
+                        <span key={amenity} className="rounded-full bg-white/5 px-2 py-1 text-[10px] text-gray-300">{amenity}</span>
+                    ))}
+                    {hotel.amenities.length > 2 && (
+                        <span className="rounded-full bg-white/5 px-2 py-1 text-[10px] text-gray-400">+{hotel.amenities.length - 2}</span>
                     )}
+                    {hotel.amenities.length === 0 && <span className="text-[10px] text-gray-500">Amenities not supplied</span>}
                   </div>
-                  <button
-                    onClick={() => onSelectHotel(h)}
-                    className="px-4 py-1.5 border border-[#8A2BE2]/60 text-[#8A2BE2] hover:bg-[#8A2BE2]/10 rounded-lg text-xs font-semibold transition shrink-0"
-                  >
-                    View Details
-                  </button>
+                  {lowestTaxInclusivePrice != null && (
+                      <p className="mb-3 text-[10px] text-gray-500">
+                        Platform offer: <span className="text-gray-300">{formatUsdPrice(lowestTaxInclusivePrice)} including tax</span>
+                      </p>
+                  )}
+                  <div className="mt-auto flex items-center justify-between gap-3">
+                    <div className="flex gap-3 text-gray-400">
+                      {hotel.amenities.some((item) => item.toLowerCase().includes("wifi")) && <Wifi className="h-4 w-4" />}
+                      {hotel.amenities.some((item) => item.toLowerCase().includes("parking")) && <Car className="h-4 w-4" />}
+                      {hotel.amenities.some((item) => item.toLowerCase().includes("restaurant")) && <UtensilsCrossed className="h-4 w-4" />}
+                    </div>
+                    <button
+                        onClick={() => onSelectHotel(hotel)}
+                        className="rounded-lg border border-primary/60 px-4 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary/10"
+                    >
+                      View details
+                    </button>
+                  </div>
+                  {price.nights > 0 && (
+                      <div className="mt-3 border-t border-white/5 pt-2 text-xs text-gray-500">
+                        {price.total == null
+                            ? "Price unavailable for this stay."
+                            : <><strong className="text-brand-gold">{formatUsdPrice(price.total)}</strong> total for {price.nights} nights</>}
+                      </div>
+                  )}
                 </div>
-
-                {p.nights > 0 && (
-                  <div className="text-xs text-gray-500 mt-3 border-t border-white/5 pt-2">
-                    <span className="text-brand-gold font-semibold">${p.total}</span> total · ${p.adjustedNightly}/night × {p.nights} night{p.nights > 1 ? "s" : ""}
-                    {p.discountPercent > 0 && <span className="text-green-400 ml-1"> · -{p.discountPercent * 100}% off</span>}
-                  </div>
-                )}
-              </div>
-            </motion.div>
+              </motion.article>
           );
         })}
       </AnimatePresence>
     </div>
-  );
-};
+);
 
 export default WhereToStayPage;
