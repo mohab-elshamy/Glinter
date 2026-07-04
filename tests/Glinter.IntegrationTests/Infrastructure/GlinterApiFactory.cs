@@ -2,12 +2,16 @@ using System.Text;
 using System.Security.Cryptography;
 using Glinter.Modules.Communication.Infrastructure.Persistence;
 using Glinter.Modules.Experiences.Infrastructure.Persistence;
+using Glinter.Modules.Experiences.Application.Abstractions;
+using Glinter.Modules.Experiences.Application.Dtos;
 using Glinter.Modules.IdentityAccess.Domain.Entities;
 using Glinter.Modules.IdentityAccess.Infrastructure.Persistence;
 using Glinter.Modules.IdentityAccess.Infrastructure.Security;
 using Glinter.Modules.Profiles.Infrastructure.Persistence;
 using Glinter.Modules.Regions.Infrastructure.Persistence;
 using Glinter.Modules.SafetyIndex.Infrastructure.Persistence;
+using Glinter.Modules.SafetyIndex.Application.Abstractions;
+using Glinter.Modules.SafetyIndex.Application.Dtos;
 using Glinter.Modules.Stays.Infrastructure.Persistence;
 using Glinter.Modules.Stays.Application.Abstractions;
 using Glinter.Modules.Stays.Application.Dtos;
@@ -173,12 +177,18 @@ public sealed class GlinterApiFactory : WebApplicationFactory<Program>, IAsyncLi
             services.AddSingleton<IPasswordHasher<ApplicationUser>, FastTestPasswordHasher>();
             services.RemoveAll<IHotelRecommendationGroqClient>();
             services.AddSingleton<IHotelRecommendationGroqClient, NullHotelRecommendationGroqClient>();
+            services.RemoveAll<IExperienceRecommendationGroqClient>();
+            services.AddSingleton<IExperienceRecommendationGroqClient, NullExperienceRecommendationGroqClient>();
             services.RemoveAll<IItineraryGroqClient>();
             services.AddSingleton<IItineraryGroqClient, NullItineraryGroqClient>();
             services.RemoveAll<IItineraryRoutePlanner>();
             services.AddSingleton<IItineraryRoutePlanner, TestItineraryRoutePlanner>();
             services.RemoveAll<IWeatherForecastService>();
             services.AddSingleton<IWeatherForecastService, TestWeatherForecastService>();
+            services.RemoveAll<IGoogleNewsRssClient>();
+            services.AddSingleton<IGoogleNewsRssClient, EmptyGoogleNewsRssClient>();
+            services.RemoveAll<ISafetyScoringClient>();
+            services.AddSingleton<ISafetyScoringClient, NullSafetyScoringClient>();
         });
     }
 
@@ -362,6 +372,42 @@ public sealed class GlinterApiFactory : WebApplicationFactory<Program>, IAsyncLi
             string? preferredLanguage,
             CancellationToken cancellationToken) =>
             Task.FromResult<ItineraryPlanPreferences?>(null);
+    }
+
+    private sealed class NullExperienceRecommendationGroqClient
+        : IExperienceRecommendationGroqClient
+    {
+        public Task<ExperienceRecommendationPreferences?> ClassifyAsync(
+            string text,
+            string? preferredLanguage,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<ExperienceRecommendationPreferences?>(null);
+
+        public Task<IReadOnlyDictionary<int, ExperienceRecommendationExplanationResponse>?>
+            GenerateExplanationsAsync(
+                ExperienceRecommendationPreferences preferences,
+                IReadOnlyList<ExperienceRecommendationItemResponse> rankedItems,
+                CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyDictionary<int, ExperienceRecommendationExplanationResponse>?>(null);
+    }
+
+    private sealed class EmptyGoogleNewsRssClient : IGoogleNewsRssClient
+    {
+        public Task<List<NewsItemDto>> SearchAsync(
+            string arabicAreaName,
+            int? lookbackDays,
+            CancellationToken ct = default) =>
+            Task.FromResult(new List<NewsItemDto>());
+    }
+
+    private sealed class NullSafetyScoringClient : ISafetyScoringClient
+    {
+        public Task<SafetyScoreEstimateDto?> EstimateAsync(
+            string areaNameAr,
+            IReadOnlyCollection<string> titles,
+            SafetyScorePeriod period,
+            CancellationToken ct = default) =>
+            Task.FromResult<SafetyScoreEstimateDto?>(null);
     }
 
     private sealed class TestItineraryRoutePlanner : IItineraryRoutePlanner

@@ -23,10 +23,17 @@ public class ExperienceReviewConfiguration : IEntityTypeConfiguration<Experience
             .HasMaxLength(50);
 
         builder.HasIndex(x => x.ExperienceId);
+        builder.HasIndex(x => x.BookingId)
+            .IsUnique();
         builder.HasIndex(x => new { x.ExperienceId, x.ExternalReviewId })
             .IsUnique();
         builder.HasIndex(x => x.PublishedAtDate);
         builder.HasIndex(x => x.Rating);
         builder.HasIndex(x => x.CreatedByUserId);
+
+        builder.HasOne(x => x.Booking)
+            .WithOne(x => x.Review)
+            .HasForeignKey<ExperienceReview>(x => x.BookingId)
+            .OnDelete(DeleteBehavior.SetNull);
     }
 }

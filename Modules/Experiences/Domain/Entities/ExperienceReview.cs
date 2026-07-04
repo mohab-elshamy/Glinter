@@ -4,6 +4,7 @@ public class ExperienceReview
 {
     public int Id { get; set; }
     public int ExperienceId { get; set; }
+    public Guid? BookingId { get; set; }
     public string? ExternalReviewId { get; set; }
     public string? ReviewerName { get; set; }
     public int? Rating { get; set; }
@@ -14,4 +15,5 @@ public class ExperienceReview
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 
     public Experience Experience { get; set; } = null!;
+    public ExperienceBooking? Booking { get; set; }
 }

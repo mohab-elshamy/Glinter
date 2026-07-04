@@ -30,6 +30,9 @@ public class IdentityAccessDbContext
             entity.ToTable("users");
             entity.Property(x => x.FullName).HasMaxLength(200);
             entity.Property(x => x.IsActive).HasDefaultValue(true);
+            entity.HasIndex(x => x.NormalizedEmail)
+                .HasDatabaseName("EmailIndex")
+                .IsUnique();
             entity.HasIndex(x => x.CreatedAtUtc);
             entity.HasIndex(x => x.IsActive);
         });

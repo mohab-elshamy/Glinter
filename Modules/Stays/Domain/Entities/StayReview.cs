@@ -4,6 +4,7 @@ public class StayReview
 {
     public int Id { get; set; }
     public int StayId { get; set; }
+    public Guid? BookingId { get; set; }
     public Guid? CreatedByUserId { get; set; }
     public string? ExternalReviewId { get; set; }
     public string? ReviewerName { get; set; }
@@ -14,4 +15,5 @@ public class StayReview
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 
     public Stay Stay { get; set; } = null!;
+    public StayBooking? Booking { get; set; }
 }

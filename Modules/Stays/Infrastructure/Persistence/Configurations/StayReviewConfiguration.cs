@@ -23,9 +23,16 @@ public class StayReviewConfiguration : IEntityTypeConfiguration<StayReview>
             .HasMaxLength(100);
 
         builder.HasIndex(x => x.StayId);
+        builder.HasIndex(x => x.BookingId)
+            .IsUnique();
         builder.HasIndex(x => new { x.StayId, x.ExternalReviewId }).IsUnique();
         builder.HasIndex(x => x.Platform);
         builder.HasIndex(x => x.Rating);
         builder.HasIndex(x => x.PublishedAtDate);
+
+        builder.HasOne(x => x.Booking)
+            .WithOne(x => x.Review)
+            .HasForeignKey<StayReview>(x => x.BookingId)
+            .OnDelete(DeleteBehavior.SetNull);
     }
 }

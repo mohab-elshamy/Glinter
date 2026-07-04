@@ -17,4 +17,5 @@ public class StayBooking
     public StayBookingStatus Status { get; set; } = StayBookingStatus.Pending;
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
     public DateTime? UpdatedAtUtc { get; set; }
+    public StayReview? Review { get; set; }
 }

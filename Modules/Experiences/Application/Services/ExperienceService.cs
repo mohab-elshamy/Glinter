@@ -623,10 +623,29 @@ public class ExperienceService
             return null;
         }
 
+        var userId = RequireCurrentUserId();
+        var now = DateTime.UtcNow;
+        var eligibleBooking = await _dbContext.ExperienceBookings
+            .Where(x =>
+                x.ExperienceId == experienceId &&
+                x.CreatedByUserId == userId &&
+                x.Status == ExperienceBookingStatus.Completed &&
+                x.Availability.EndTimeUtc <= now &&
+                !_dbContext.ExperienceReviews.Any(review => review.BookingId == x.Id))
+            .OrderByDescending(x => x.Availability.EndTimeUtc)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (eligibleBooking is null)
+        {
+            throw new InvalidOperationException(
+                "A completed experience booking that has ended is required, and each booking can only be reviewed once.");
+        }
+
         var review = new ExperienceReview
         {
             ExperienceId = experienceId,
-            CreatedByUserId = RequireCurrentUserId(),
+            BookingId = eligibleBooking.Id,
+            CreatedByUserId = userId,
             ReviewerName = _currentUserService.Email,
             Rating = request.Rating,
             ReviewText = CleanText(request.ReviewText),
