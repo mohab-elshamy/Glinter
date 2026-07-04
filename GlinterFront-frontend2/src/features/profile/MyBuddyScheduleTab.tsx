@@ -2,11 +2,10 @@ import { useCallback, useEffect, useState } from "react";
 import { Calendar, Clock3, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { authStorage } from "@/shared/lib/auth";
-import { profilesApi } from "@/shared/services/api-profiles";
+import { buddyApi } from "@/shared/services/api-buddy";
 import type {
   BuddyAvailabilityDto,
   BuddyBookingDto,
-  BuddyBookingStatus,
 } from "@/shared/types/api";
 import type { LoadState } from "@/shared/types/async-state";
 import { Dialog } from "@/components/ui/dialog";
@@ -26,13 +25,14 @@ const MyBuddyScheduleTab = () => {
   const [editEnd, setEditEnd] = useState("");
   const [editPrice, setEditPrice] = useState(0);
   const [editSaving, setEditSaving] = useState(false);
+  const [pendingRequestId, setPendingRequestId] = useState<string>();
 
   const load = useCallback(async () => {
     setState({ status: "loading" });
     try {
       const [loadedSlots, loadedBookings] = await Promise.all([
-        profilesApi.getManagedBuddyAvailability(userId),
-        profilesApi.getBuddyBookings(userId),
+        buddyApi.getManagedAvailability(userId),
+        buddyApi.getIncoming(),
       ]);
       setSlots(loadedSlots);
       setBookings(loadedBookings);
@@ -52,7 +52,7 @@ const MyBuddyScheduleTab = () => {
   const createSlot = async () => {
     if (!startTime || !endTime) return;
     try {
-      const created = await profilesApi.createBuddyAvailability(userId, {
+      const created = await buddyApi.createAvailability(userId, {
         startTimeUtc: localInputToUtc(startTime),
         endTimeUtc: localInputToUtc(endTime),
         price,
@@ -69,7 +69,7 @@ const MyBuddyScheduleTab = () => {
 
   const toggleSlot = async (slot: BuddyAvailabilityDto) => {
     try {
-      const updated = await profilesApi.setBuddyAvailabilityActive(slot.id, !slot.isActive);
+      const updated = await buddyApi.setAvailabilityActive(slot.id, !slot.isActive);
       setSlots((current) => current.map((item) => item.id === updated.id ? updated : item));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not update availability.");
@@ -97,7 +97,7 @@ const MyBuddyScheduleTab = () => {
     }
     setEditSaving(true);
     try {
-      const updated = await profilesApi.updateBuddyAvailability(editing.id, {
+      const updated = await buddyApi.updateAvailability(editing.id, {
         startTimeUtc: localInputToUtc(editStart),
         endTimeUtc: localInputToUtc(editEnd),
         price: editPrice,
@@ -112,13 +112,21 @@ const MyBuddyScheduleTab = () => {
     }
   };
 
-  const updateBooking = async (booking: BuddyBookingDto, status: BuddyBookingStatus) => {
+  const updateBooking = async (
+    booking: BuddyBookingDto,
+    decision: "Accepted" | "Rejected",
+  ) => {
+    setPendingRequestId(booking.id);
     try {
-      const updated = await profilesApi.updateBuddyBookingStatus(booking.id, status);
+      const updated = decision === "Accepted"
+        ? await buddyApi.accept(booking.id)
+        : await buddyApi.reject(booking.id);
       setBookings((current) => current.map((item) => item.id === updated.id ? updated : item));
-      toast.success(`Request ${status.toLowerCase()}.`);
+      toast.success(`Request ${decision.toLowerCase()}.`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not update request.");
+    } finally {
+      setPendingRequestId(undefined);
     }
   };
 
@@ -195,12 +203,11 @@ const MyBuddyScheduleTab = () => {
                 {booking.notes && <p className="mt-2 text-xs">{booking.notes}</p>}
                 {booking.status === "Pending" && (
                   <div className="mt-3 flex gap-3">
-                    <button onClick={() => void updateBooking(booking, "Accepted")} className="text-xs text-green-400">Accept</button>
-                    <button onClick={() => void updateBooking(booking, "Rejected")} className="text-xs text-red-400">Reject</button>
+                    <button disabled={pendingRequestId === booking.id} onClick={() => void updateBooking(booking, "Accepted")} className="text-xs text-green-400 disabled:opacity-50">
+                      {pendingRequestId === booking.id ? "Updating…" : "Accept"}
+                    </button>
+                    <button disabled={pendingRequestId === booking.id} onClick={() => void updateBooking(booking, "Rejected")} className="text-xs text-red-400 disabled:opacity-50">Reject</button>
                   </div>
-                )}
-                {booking.status === "Accepted" && (
-                  <button onClick={() => void updateBooking(booking, "Completed")} className="mt-3 text-xs text-blue-400">Mark completed</button>
                 )}
               </article>
             ))}

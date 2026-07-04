@@ -1,4 +1,4 @@
-namespace Glinter.Modules.Profiles.Application.Profiles.Dtos;
+namespace Glinter.Modules.Buddy.Application.Requests.Dtos;
 
 public sealed class BuddyAvailabilityRequest
 {
@@ -18,6 +18,13 @@ public sealed class BuddyAvailabilityResponse
     public bool IsBooked { get; set; }
 }
 
+public sealed class CreateBuddyRequest
+{
+    public Guid LocalBuddyUserId { get; set; }
+    public Guid AvailabilityId { get; set; }
+    public string? Notes { get; set; }
+}
+
 public sealed class CreateBuddyBookingRequest
 {
     public Guid AvailabilityId { get; set; }
@@ -29,14 +36,16 @@ public sealed class UpdateBuddyBookingStatusRequest
     public string Status { get; set; } = string.Empty;
 }
 
-public sealed class BuddyBookingResponse
+public sealed class BuddyRequestResponse
 {
     public Guid Id { get; set; }
     public Guid AvailabilityId { get; set; }
     public Guid LocalBuddyUserId { get; set; }
-    public string BuddyName { get; set; } = string.Empty;
+    public string LocalBuddyDisplayName { get; set; } = string.Empty;
+    public string BuddyName => LocalBuddyDisplayName;
     public Guid TravelerUserId { get; set; }
-    public string TravelerName { get; set; } = string.Empty;
+    public string TravelerDisplayName { get; set; } = string.Empty;
+    public string TravelerName => TravelerDisplayName;
     public DateTime StartTimeUtc { get; set; }
     public DateTime EndTimeUtc { get; set; }
     public decimal TotalPrice { get; set; }
@@ -44,23 +53,8 @@ public sealed class BuddyBookingResponse
     public string Status { get; set; } = string.Empty;
     public DateTime CreatedAtUtc { get; set; }
     public DateTime? UpdatedAtUtc { get; set; }
-}
-
-public sealed class CreateBuddyReviewRequest
-{
-    public Guid BookingId { get; set; }
-    public int Rating { get; set; }
-    public string ReviewText { get; set; } = string.Empty;
-}
-
-public sealed class BuddyReviewResponse
-{
-    public Guid Id { get; set; }
-    public Guid BookingId { get; set; }
-    public Guid LocalBuddyUserId { get; set; }
-    public Guid TravelerUserId { get; set; }
-    public string ReviewerName { get; set; } = string.Empty;
-    public int Rating { get; set; }
-    public string ReviewText { get; set; } = string.Empty;
-    public DateTime CreatedAtUtc { get; set; }
+    public DateTime? RespondedAtUtc { get; set; }
+    public bool CanCancel { get; set; }
+    public bool CanReview { get; set; }
+    public bool HasReview { get; set; }
 }

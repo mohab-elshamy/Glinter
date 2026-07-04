@@ -7,12 +7,8 @@ import type {
   InterestResponse,
   PagedResponse,
   FollowStatusResponse,
-  BuddyAvailabilityDto,
-  BuddyAvailabilityRequest,
-  BuddyBookingDto,
-  BuddyBookingStatus,
-  BuddyReviewDto,
 } from "@/shared/types/api";
+import { buddyApi } from "@/shared/services/api-buddy";
 
 export interface BusinessProfileResponse {
   profileId: string;
@@ -148,59 +144,33 @@ export const profilesApi = {
   getFollowStatus: (userId: string) =>
     request<FollowStatusResponse>(`/profiles/users/${userId}/follow-status`),
 
-  getBuddyAvailability: (userId: string) =>
-    request<BuddyAvailabilityDto[]>(`/local-buddies/${userId}/availability`),
-
-  getManagedBuddyAvailability: (userId: string) =>
-    request<BuddyAvailabilityDto[]>(`/local-buddies/${userId}/availability/manage`),
-
-  createBuddyAvailability: (userId: string, data: BuddyAvailabilityRequest) =>
-    request<BuddyAvailabilityDto>(`/local-buddies/${userId}/availability`, {
-      method: "POST",
-      body: data,
-    }),
-
-  updateBuddyAvailability: (availabilityId: string, data: BuddyAvailabilityRequest) =>
-    request<BuddyAvailabilityDto>(`/buddy-availability/${availabilityId}`, {
-      method: "PUT",
-      body: data,
-    }),
-
-  setBuddyAvailabilityActive: (availabilityId: string, active: boolean) =>
-    request<BuddyAvailabilityDto>(
-      `/buddy-availability/${availabilityId}/${active ? "activate" : "deactivate"}`,
-      { method: "PATCH" },
-    ),
-
-  createBuddyBooking: (userId: string, availabilityId: string, notes?: string) =>
-    request<BuddyBookingDto>(`/local-buddies/${userId}/bookings`, {
-      method: "POST",
-      body: { availabilityId, notes },
-    }),
-
-  getMyBuddyBookings: () =>
-    request<BuddyBookingDto[]>("/buddy-bookings/my"),
-
-  getBuddyBookings: (userId: string) =>
-    request<BuddyBookingDto[]>(`/local-buddies/${userId}/bookings`),
-
-  updateBuddyBookingStatus: (bookingId: string, status: BuddyBookingStatus) =>
-    request<BuddyBookingDto>(`/buddy-bookings/${bookingId}/status`, {
-      method: "PATCH",
-      body: { status },
-    }),
-
-  cancelBuddyBooking: (bookingId: string) =>
-    request<BuddyBookingDto>(`/buddy-bookings/${bookingId}/cancel`, { method: "PATCH" }),
-
-  getBuddyReviews: (userId: string) =>
-    request<BuddyReviewDto[]>(`/local-buddies/${userId}/reviews`),
-
+  // Compatibility aliases. New Buddy code imports buddyApi directly.
+  getBuddyAvailability: buddyApi.getAvailability,
+  getManagedBuddyAvailability: buddyApi.getManagedAvailability,
+  createBuddyAvailability: buddyApi.createAvailability,
+  updateBuddyAvailability: buddyApi.updateAvailability,
+  setBuddyAvailabilityActive: buddyApi.setAvailabilityActive,
+  createBuddyBooking: buddyApi.createRequest,
+  getMyBuddyBookings: buddyApi.getMine,
+  getBuddyBookings: (_userId: string) => buddyApi.getIncoming(),
+  updateBuddyBookingStatus: (
+    bookingId: string,
+    status: "Accepted" | "Rejected" | "Completed",
+  ) => status === "Accepted"
+    ? buddyApi.accept(bookingId)
+    : status === "Rejected"
+      ? buddyApi.reject(bookingId)
+      : request(`/buddy-bookings/${bookingId}/status`, {
+          method: "PATCH",
+          body: { status },
+        }),
+  cancelBuddyBooking: buddyApi.cancel,
+  getBuddyReviews: buddyApi.getReviews,
   createBuddyReview: (
-    userId: string,
+    _userId: string,
     data: { bookingId: string; rating: number; reviewText: string },
-  ) => request<BuddyReviewDto>(`/local-buddies/${userId}/reviews`, {
-    method: "POST",
-    body: data,
+  ) => buddyApi.createReview(data.bookingId, {
+    rating: data.rating,
+    reviewText: data.reviewText,
   }),
 };

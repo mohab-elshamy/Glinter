@@ -2,6 +2,7 @@ using System.Security.Claims;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using Glinter.Modules.Communication.Infrastructure.DependencyInjection;
+using Glinter.Modules.Buddy.Infrastructure.DependencyInjection;
 using Glinter.Modules.IdentityAccess.Domain.Entities;
 using Glinter.Modules.IdentityAccess.Infrastructure.DependencyInjection;
 using Glinter.Modules.IdentityAccess.Infrastructure.Identity;
@@ -118,6 +119,9 @@ builder.Services.AddIdentityAccessModule(
 
 // Module 2: Profiles
 builder.Services.AddProfilesModule(builder.Configuration);
+
+// Module 3: Buddy
+builder.Services.AddBuddyModule(builder.Configuration);
 
 // Module 4: Stays
 builder.Services.AddStaysModule(builder.Configuration);

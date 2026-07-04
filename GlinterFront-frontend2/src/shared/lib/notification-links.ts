@@ -40,6 +40,13 @@ export const getSafeNotificationLink = (value?: string | null): string | undefin
       if (tab && !profileTabs.has(tab)) return undefined;
       return `${url.pathname}${url.search}`;
     }
+
+    const profileId = url.pathname.startsWith("/profile/")
+      ? url.pathname.slice("/profile/".length)
+      : "";
+    if (guidPattern.test(profileId) && keys.length === 0) {
+      return url.pathname;
+    }
   } catch {
     return undefined;
   }

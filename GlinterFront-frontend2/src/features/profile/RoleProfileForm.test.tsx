@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { profilesApi, type MyProfileResponse } from "@/shared/services/api-profiles";
+import type { LocalBuddyProfileResponse } from "@/shared/types/api";
 import RoleProfileForm from "./RoleProfileForm";
 
 vi.mock("@/shared/services/api-profiles", () => ({
@@ -111,7 +112,7 @@ describe("role profile form", () => {
   });
 
   it("edits a local buddy with existing backend interests", async () => {
-    const initialProfile: MyProfileResponse = {
+    const initialProfile: LocalBuddyProfileResponse = {
       profileId: "profile-2",
       userId: "user-2",
       profileType: "LocalBuddy",
@@ -123,6 +124,7 @@ describe("role profile form", () => {
       interests: [{ id: "interest-food", name: "Food" }],
       followersCount: 0,
       followingCount: 0,
+      isFollowing: false,
       createdAtUtc: "2026-06-30T00:00:00Z",
     };
     vi.mocked(profilesApi.updateLocalBuddyProfile).mockResolvedValue(initialProfile);
@@ -144,6 +146,83 @@ describe("role profile form", () => {
         }),
       );
     });
+  });
+
+  it("normalizes local buddy languages into chips and a stable API string", async () => {
+    const savedProfile: LocalBuddyProfileResponse = {
+      profileId: "profile-languages",
+      userId: "user-languages",
+      profileType: "LocalBuddy",
+      displayName: "Cairo Buddy",
+      city: "Cairo",
+      languages: "Arabic, English",
+      rating: 0,
+      reviewsCount: 0,
+      verificationStatus: "Approved",
+      interests: [],
+      followersCount: 0,
+      followingCount: 0,
+      isFollowing: false,
+      createdAtUtc: "2026-07-04T00:00:00Z",
+    };
+    vi.mocked(profilesApi.updateLocalBuddyProfile).mockResolvedValue(savedProfile);
+    renderForm("LocalBuddy", savedProfile);
+
+    expect(screen.getByText("Arabic")).toBeInTheDocument();
+    const input = screen.getByLabelText("Languages");
+    fireEvent.change(input, { target: { value: "arabic" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    fireEvent.change(input, { target: { value: "French" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await screen.findByRole("button", { name: "Culture" });
+    fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
+
+    await waitFor(() => expect(profilesApi.updateLocalBuddyProfile)
+      .toHaveBeenCalledWith(expect.objectContaining({
+        languages: "Arabic, English, French",
+      })));
+  });
+
+  it("synchronizes form state when an asynchronously loaded profile changes", () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const first: MyProfileResponse = {
+      profileId: "profile-first",
+      userId: "user-1",
+      profileType: "Traveler",
+      displayName: "First Name",
+      interests: [],
+      followersCount: 0,
+      followingCount: 0,
+      createdAtUtc: "2026-07-04T00:00:00Z",
+    };
+    const second = { ...first, displayName: "Loaded Name", nationality: "Egyptian" };
+    const view = render(
+      <QueryClientProvider client={queryClient}>
+        <RoleProfileForm
+          role="Traveler"
+          defaultName="Account Name"
+          initialProfile={first}
+          submitLabel="Save profile"
+          onSaved={() => undefined}
+        />
+      </QueryClientProvider>,
+    );
+
+    view.rerender(
+      <QueryClientProvider client={queryClient}>
+        <RoleProfileForm
+          role="Traveler"
+          defaultName="Account Name"
+          initialProfile={second}
+          submitLabel="Save profile"
+          onSaved={() => undefined}
+        />
+      </QueryClientProvider>,
+    );
+    expect(screen.getByLabelText("Display name")).toHaveValue("Loaded Name");
+    expect(screen.getByLabelText("Nationality")).toHaveValue("Egyptian");
   });
 
   it.each([

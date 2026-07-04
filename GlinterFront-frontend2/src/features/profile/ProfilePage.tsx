@@ -19,6 +19,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { toast } from "sonner";
 import { profilesApi } from "@/shared/services/api-profiles";
+import { buddyApi } from "@/shared/services/api-buddy";
 import { authStorage } from "@/shared/lib/auth";
 import type {
   BuddyAvailabilityDto,
@@ -58,10 +59,10 @@ const ProfilePage = () => {
     setLoadState({ status: "loading" });
     Promise.all([
       profilesApi.getLocalBuddy(id),
-      profilesApi.getBuddyAvailability(id),
-      profilesApi.getBuddyReviews(id),
+      buddyApi.getAvailability(id),
+      buddyApi.getReviews(id),
       authStorage.hasAnyRole(["Traveler"])
-        ? profilesApi.getMyBuddyBookings()
+        ? buddyApi.getMine()
         : Promise.resolve([]),
     ])
       .then(([loadedProfile, loadedAvailability, loadedReviews, loadedBookings]) => {
@@ -93,9 +94,9 @@ const ProfilePage = () => {
   const reviewableBooking = useMemo(() => myBookings.find(
     (booking) =>
       booking.localBuddyUserId === id &&
-      booking.status === "Completed" &&
-      !reviews.some((review) => review.bookingId === booking.id),
-  ), [id, myBookings, reviews]);
+      booking.canReview &&
+      !booking.hasReview,
+  ), [id, myBookings]);
   const isOwnProfile = authStorage.getUser()?.userId === id;
 
   const toggleFollow = async () => {
@@ -129,11 +130,12 @@ const ProfilePage = () => {
     if (!profile || !selectedAvailabilityId) return;
     if (!authStorage.hasAnyRole(["Traveler"])) {
       toast.error("Sign in with a traveler account to request a buddy.");
+      if (!authStorage.isAuthenticated()) navigate("/auth");
       return;
     }
     setActionPending(true);
     try {
-      const booking = await profilesApi.createBuddyBooking(
+      const booking = await buddyApi.createRequest(
         profile.userId,
         selectedAvailabilityId,
         bookingNotes || undefined,
@@ -155,8 +157,7 @@ const ProfilePage = () => {
     if (!profile || !reviewableBooking || !reviewText.trim()) return;
     setActionPending(true);
     try {
-      const review = await profilesApi.createBuddyReview(profile.userId, {
-        bookingId: reviewableBooking.id,
+      const review = await buddyApi.createReview(reviewableBooking.id, {
         rating: reviewRating,
         reviewText,
       });
@@ -212,7 +213,11 @@ const ProfilePage = () => {
             <div role="alert" className="rounded-2xl border border-destructive/30 bg-destructive/10 p-8 text-center">
               <AlertTriangle className="mx-auto mb-3 h-8 w-8 text-destructive" />
               <h1 className="font-semibold">Profile unavailable</h1>
-              <p className="mt-2 text-sm text-muted-foreground">{loadState.message}</p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {loadState.status === "error"
+                  ? loadState.message
+                  : "Profile data was not returned."}
+              </p>
               <button
                 onClick={() => setRetryVersion((value) => value + 1)}
                 className="mt-5 inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm"
@@ -300,7 +305,15 @@ const ProfilePage = () => {
 
             <section className="card-glass p-6">
               <h2 className="mb-3 flex items-center gap-2 font-bold"><Languages className="h-4 w-4" /> Languages</h2>
-              <p className="text-sm text-muted-foreground">{profile.languages || "Not specified"}</p>
+              {profile.languages ? (
+                <div className="flex flex-wrap gap-2">
+                  {profile.languages.split(/[,;]/).map((language) => language.trim()).filter(Boolean).map((language) => (
+                    <span key={language.toLocaleLowerCase()} className="rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs">
+                      {language}
+                    </span>
+                  ))}
+                </div>
+              ) : <p className="text-sm text-muted-foreground">Not specified</p>}
             </section>
 
             <section className="card-glass p-6">
@@ -323,8 +336,8 @@ const ProfilePage = () => {
               {reviewableBooking && (
                 <div className="mt-5 border-t border-border pt-4">
                   <h3 className="mb-2 text-sm font-semibold">Review your completed buddy experience</h3>
-                  <div className="flex gap-2">
-                    <select value={reviewRating} onChange={(event) => setReviewRating(Number(event.target.value))} className="rounded-lg bg-secondary px-2 text-sm">
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <select aria-label="Review rating" value={reviewRating} onChange={(event) => setReviewRating(Number(event.target.value))} className="input-glass sm:w-24">
                       {[5, 4, 3, 2, 1].map((rating) => <option key={rating} value={rating}>{rating}/5</option>)}
                     </select>
                     <input value={reviewText} onChange={(event) => setReviewText(event.target.value)} placeholder="Share your experience" className="input-glass min-w-0 flex-1" />
@@ -345,7 +358,7 @@ const ProfilePage = () => {
                   <select
                     value={selectedAvailabilityId}
                     onChange={(event) => setSelectedAvailabilityId(event.target.value)}
-                    className="w-full rounded-lg border border-border bg-secondary px-3 py-2 text-xs"
+                    className="input-glass w-full text-xs"
                     aria-label="Buddy availability"
                   >
                     <option value="">Choose a time</option>
@@ -364,13 +377,26 @@ const ProfilePage = () => {
                   />
                   <div className="mt-3 flex items-center justify-between">
                     <span className="text-lg font-bold">{selectedSlot ? `$${selectedSlot.price}` : "—"}</span>
-                    <button
-                      disabled={!selectedAvailabilityId || actionPending || isOwnProfile}
-                      onClick={() => void requestBuddy()}
-                      className="btn-accent rounded-lg px-4 py-2 text-sm disabled:opacity-50"
-                    >
-                      Send request
-                    </button>
+                    {authStorage.hasAnyRole(["Traveler"]) ? (
+                      <button
+                        disabled={!selectedAvailabilityId || actionPending || isOwnProfile}
+                        onClick={() => void requestBuddy()}
+                        className="btn-accent rounded-lg px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {actionPending ? "Sending…" : "Send request"}
+                      </button>
+                    ) : !authStorage.isAuthenticated() ? (
+                      <button
+                        onClick={() => navigate("/auth")}
+                        className="btn-accent rounded-lg px-4 py-2 text-sm"
+                      >
+                        Sign in to request
+                      </button>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">
+                        Traveler accounts can send requests.
+                      </span>
+                    )}
                   </div>
                 </>
               )}

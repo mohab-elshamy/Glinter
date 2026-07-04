@@ -1,10 +1,11 @@
-using Glinter.Modules.Profiles.Domain.Entities;
+using Glinter.Modules.Buddy.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
-namespace Glinter.Modules.Profiles.Infrastructure.Persistence.Configurations;
+namespace Glinter.Modules.Buddy.Infrastructure.Persistence.Configurations;
 
-public sealed class BuddyReviewConfiguration : IEntityTypeConfiguration<BuddyReview>
+public sealed class BuddyReviewConfiguration
+    : IEntityTypeConfiguration<BuddyReview>
 {
     public void Configure(EntityTypeBuilder<BuddyReview> builder)
     {

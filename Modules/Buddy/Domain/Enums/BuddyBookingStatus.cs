@@ -1,4 +1,4 @@
-namespace Glinter.Modules.Profiles.Domain.Enums;
+namespace Glinter.Modules.Buddy.Domain.Enums;
 
 public enum BuddyBookingStatus
 {

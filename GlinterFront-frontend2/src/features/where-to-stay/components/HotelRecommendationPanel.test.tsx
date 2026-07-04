@@ -34,6 +34,8 @@ const successfulResponse: HotelRecommendationResponse = {
     preferredLanguage: "en",
   },
   totalCandidates: 1,
+  totalMatchingCandidates: 1,
+  evaluatedCandidates: 1,
   returnedCount: 1,
   items: [{
     ranking: 1,

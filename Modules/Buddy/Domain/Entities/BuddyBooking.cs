@@ -1,6 +1,6 @@
-using Glinter.Modules.Profiles.Domain.Enums;
+using Glinter.Modules.Buddy.Domain.Enums;
 
-namespace Glinter.Modules.Profiles.Domain.Entities;
+namespace Glinter.Modules.Buddy.Domain.Entities;
 
 public sealed class BuddyBooking
 {

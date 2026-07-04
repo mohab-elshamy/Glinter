@@ -16,6 +16,7 @@ using Glinter.Modules.Itineraries.Application.Dtos;
 using Glinter.Modules.Itineraries.Domain.Enums;
 using Glinter.Modules.Itineraries.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Glinter.Modules.Buddy.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -144,6 +145,7 @@ public sealed class GlinterApiFactory : WebApplicationFactory<Program>, IAsyncLi
         {
             ReplaceDbContext<IdentityAccessDbContext>(services, false);
             ReplaceDbContext<ProfilesDbContext>(services, false);
+            ReplaceDbContext<BuddyDbContext>(services, false);
             ReplaceDbContext<RegionsDbContext>(services, true);
             ReplaceDbContext<SafetyIndexDbContext>(services, false);
             ReplaceDbContext<StaysDbContext>(services, false);
@@ -240,6 +242,12 @@ public sealed class GlinterApiFactory : WebApplicationFactory<Program>, IAsyncLi
             .UseNpgsql(ConnectionString)
             .Options;
         await using (var context = new ProfilesDbContext(profileOptions))
+            await context.Database.MigrateAsync();
+
+        var buddyOptions = new DbContextOptionsBuilder<BuddyDbContext>()
+            .UseNpgsql(ConnectionString)
+            .Options;
+        await using (var context = new BuddyDbContext(buddyOptions))
             await context.Database.MigrateAsync();
 
         var regionOptions = new DbContextOptionsBuilder<RegionsDbContext>()

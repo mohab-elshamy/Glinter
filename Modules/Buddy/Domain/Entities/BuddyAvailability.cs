@@ -1,4 +1,4 @@
-namespace Glinter.Modules.Profiles.Domain.Entities;
+namespace Glinter.Modules.Buddy.Domain.Entities;
 
 public sealed class BuddyAvailability
 {

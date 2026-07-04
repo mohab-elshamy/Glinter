@@ -1,10 +1,11 @@
-using Glinter.Modules.Profiles.Domain.Entities;
+using Glinter.Modules.Buddy.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
-namespace Glinter.Modules.Profiles.Infrastructure.Persistence.Configurations;
+namespace Glinter.Modules.Buddy.Infrastructure.Persistence.Configurations;
 
-public sealed class BuddyBookingConfiguration : IEntityTypeConfiguration<BuddyBooking>
+public sealed class BuddyBookingConfiguration
+    : IEntityTypeConfiguration<BuddyBooking>
 {
     public void Configure(EntityTypeBuilder<BuddyBooking> builder)
     {

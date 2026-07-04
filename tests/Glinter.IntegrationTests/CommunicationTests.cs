@@ -155,6 +155,10 @@ public sealed class CommunicationTests : ApiTestBase
         Assert.Equal(
             "/profile/me?tab=bookings",
             validator.Invoke(null, ["/profile/me?tab=bookings"]));
+        var publicProfileLink = $"/profile/{Guid.NewGuid()}";
+        Assert.Equal(
+            publicProfileLink,
+            validator.Invoke(null, [publicProfileLink]));
 
         var user = await CreateUserAsync("Traveler", "notification");
         var notificationId = Guid.NewGuid();
