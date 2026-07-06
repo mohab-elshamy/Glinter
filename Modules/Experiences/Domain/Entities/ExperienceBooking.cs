@@ -17,4 +17,5 @@ public class ExperienceBooking
     public ExperienceBookingStatus Status { get; set; } = ExperienceBookingStatus.Pending;
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
     public DateTime? UpdatedAtUtc { get; set; }
+    public ExperienceReview? Review { get; set; }
 }

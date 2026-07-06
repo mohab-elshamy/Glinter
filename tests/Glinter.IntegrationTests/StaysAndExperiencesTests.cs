@@ -306,6 +306,7 @@ public sealed class StaysAndExperiencesTests : ApiTestBase
               {
                 "name": "Imported Duplicate First {{suffix}}",
                 "cid": "{{duplicateCid}}",
+                "price_range": "$$",
                 "coordinates": { "latitude": 30.05, "longitude": 31.25 }
               },
               {
@@ -332,6 +333,7 @@ public sealed class StaysAndExperiencesTests : ApiTestBase
               {
                 "name": "Imported Duplicate Existing {{suffix}}",
                 "cid": "{{duplicateCid}}",
+                "price_range": "$20-$40",
                 "coordinates": { "latitude": 30.07, "longitude": 31.27 }
               },
               {
@@ -345,8 +347,8 @@ public sealed class StaysAndExperiencesTests : ApiTestBase
         secondImport.EnsureSuccessStatusCode();
         using var secondJson = await ReadJsonAsync(secondImport);
         Assert.Equal(1, secondJson.RootElement.GetProperty("created").GetInt32());
-        Assert.Equal(0, secondJson.RootElement.GetProperty("updated").GetInt32());
-        Assert.Equal(1, secondJson.RootElement.GetProperty("skipped").GetInt32());
+        Assert.Equal(1, secondJson.RootElement.GetProperty("updated").GetInt32());
+        Assert.Equal(0, secondJson.RootElement.GetProperty("skipped").GetInt32());
     }
 
     [Fact]
@@ -463,12 +465,39 @@ public sealed class StaysAndExperiencesTests : ApiTestBase
         using var myBookingsJson = await ReadJsonAsync(myBookings);
         Assert.Equal("Confirmed", myBookingsJson.RootElement[0].GetProperty("status").GetString());
 
+        var earlyReview = await SendAsync(
+            HttpMethod.Post,
+            $"/api/stays/{stayId}/reviews",
+            traveler.Token,
+            new { rating = 5, reviewText = "Excellent integration stay." });
+        Assert.Equal(HttpStatusCode.BadRequest, earlyReview.StatusCode);
+
+        await Factory.ExecuteAsync(
+            $"""
+             UPDATE stays.stay_bookings
+             SET "CheckInDate" = CURRENT_DATE - 3,
+                 "CheckOutDate" = CURRENT_DATE - 1
+             WHERE "Id" = '{bookingId}'
+             """);
+        (await SendAsync(
+            HttpMethod.Patch,
+            $"/api/stay-bookings/{bookingId}/status",
+            owner.Token,
+            new { status = "Completed" })).EnsureSuccessStatusCode();
+
         var review = await SendAsync(
             HttpMethod.Post,
             $"/api/stays/{stayId}/reviews",
             traveler.Token,
             new { rating = 5, reviewText = "Excellent integration stay." });
         review.EnsureSuccessStatusCode();
+        Assert.Equal(
+            HttpStatusCode.BadRequest,
+            (await SendAsync(
+                HttpMethod.Post,
+                $"/api/stays/{stayId}/reviews",
+                traveler.Token,
+                new { rating = 4, reviewText = "Duplicate review." })).StatusCode);
 
         var reviews = await Client.GetAsync($"/api/stays/{stayId}/reviews");
         reviews.EnsureSuccessStatusCode();
@@ -507,6 +536,9 @@ public sealed class StaysAndExperiencesTests : ApiTestBase
         Assert.Equal(HttpStatusCode.Created, create.StatusCode);
         using var createJson = await ReadJsonAsync(create);
         var experienceId = createJson.RootElement.GetProperty("id").GetInt32();
+        Assert.Equal(20, createJson.RootElement.GetProperty("priceRangeMin").GetInt32());
+        Assert.Equal(40, createJson.RootElement.GetProperty("priceRangeMax").GetInt32());
+        Assert.Equal("$20-$40", createJson.RootElement.GetProperty("priceRange").GetString());
 
         var adminToken = await GetAdminTokenAsync();
         (await SendAsync(
@@ -536,6 +568,9 @@ public sealed class StaysAndExperiencesTests : ApiTestBase
         update.EnsureSuccessStatusCode();
         using var updateJson = await ReadJsonAsync(update);
         Assert.Equal("Nature", updateJson.RootElement.GetProperty("category").GetString());
+        Assert.Equal(30, updateJson.RootElement.GetProperty("priceRangeMin").GetInt32());
+        Assert.Equal(50, updateJson.RootElement.GetProperty("priceRangeMax").GetInt32());
+        Assert.Equal("$30-$50", updateJson.RootElement.GetProperty("priceRange").GetString());
         Assert.Equal(
             "https://example.test/updated-experience.jpg",
             updateJson.RootElement.GetProperty("featuredImages")[0].GetProperty("link").GetString());
@@ -709,12 +744,39 @@ public sealed class StaysAndExperiencesTests : ApiTestBase
         using var myBookingsJson = await ReadJsonAsync(myBookings);
         Assert.Equal("Confirmed", myBookingsJson.RootElement[0].GetProperty("status").GetString());
 
+        var earlyReview = await SendAsync(
+            HttpMethod.Post,
+            $"/api/experiences/{experienceId}/reviews",
+            traveler.Token,
+            new { rating = 5, reviewText = "Excellent integration experience." });
+        Assert.Equal(HttpStatusCode.BadRequest, earlyReview.StatusCode);
+
+        await Factory.ExecuteAsync(
+            $"""
+             UPDATE experiences.experience_availability
+             SET "StartTimeUtc" = NOW() - INTERVAL '3 hours',
+                 "EndTimeUtc" = NOW() - INTERVAL '1 hour'
+             WHERE "Id" = '{availabilityId}'
+             """);
+        (await SendAsync(
+            HttpMethod.Patch,
+            $"/api/experience-bookings/{bookingId}/status",
+            provider.Token,
+            new { status = "Completed" })).EnsureSuccessStatusCode();
+
         var review = await SendAsync(
             HttpMethod.Post,
             $"/api/experiences/{experienceId}/reviews",
             traveler.Token,
             new { rating = 5, reviewText = "Excellent integration experience." });
         review.EnsureSuccessStatusCode();
+        Assert.Equal(
+            HttpStatusCode.BadRequest,
+            (await SendAsync(
+                HttpMethod.Post,
+                $"/api/experiences/{experienceId}/reviews",
+                traveler.Token,
+                new { rating = 4, reviewText = "Duplicate review." })).StatusCode);
 
         var reviews = await Client.GetAsync($"/api/experiences/{experienceId}/reviews");
         reviews.EnsureSuccessStatusCode();

@@ -51,7 +51,6 @@ export interface ItineraryStop {
   durationMinutes: number;
   estimatedCost?: number;
   explanation?: string;
-  category?: string;
   rating?: number;
   imageUrl?: string;
   travelModeFromPrevious?: string;
@@ -152,6 +151,18 @@ export interface SavedItineraryItem {
   estimatedDurationMinutes?: number;
   estimatedCost?: number;
   explanation?: string;
+  category?: ExperienceCategory;
+  rating?: number;
+  imageUrl?: string;
+  travelModeFromPrevious?: string;
+  routeProviderFromPrevious?: string;
+  routeGeometryFromPrevious?: {
+    type: "LineString";
+    coordinates: number[][];
+  };
+  routeWarningsFromPrevious?: string[];
+  distanceKmFromPrevious?: number;
+  travelDurationMinutesFromPrevious?: number;
 }
 
 export interface SavedItinerary {

@@ -25,6 +25,8 @@ import HeatmapPanel from "./components/HeatmapPanel";
 import FiltersPanel from "./components/FiltersPanel";
 import RegionStatsPanel from "./components/RegionStatsPanel";
 import { useWhereToStay } from "./hooks";
+import { useStayMapComfort } from "./use-stay-map-comfort";
+import { useStayMapPrice } from "./use-stay-map-price";
 import { useStayMapSafety } from "./use-stay-map-safety";
 import { detectedRegionLabel, useCurrentLocation } from "./use-current-location";
 import { computePrice } from "./pricing";
@@ -148,6 +150,14 @@ const WhereToStayPage = () => {
       region,
       viewMode === "map" && mapMode === "safety",
       safetyPeriod,
+  );
+  const price = useStayMapPrice(
+      region,
+      viewMode === "map" && mapMode === "price",
+  );
+  const comfort = useStayMapComfort(
+      region,
+      viewMode === "map" && mapMode === "comfort",
   );
   const currentLocation = useCurrentLocation();
   const currentRegionLabel = detectedRegionLabel(currentLocation.state.detectedRegion);
@@ -329,11 +339,12 @@ const WhereToStayPage = () => {
             onViewDetails={selectHotelById}
           />
 
-          <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             <Metric label="Matching stays" value={isLoadingStays ? "…" : totalCount} />
             <Metric label="Mapped now" value={filteredHotels.filter((hotel) => hotel.latitude != null && hotel.longitude != null).length} />
-            <Metric label="Regional average" value={formatUsdPrice(regionalSummary.averagePrice, "—")} />
-            <Metric label="Average comfort" value={regionalSummary.averageComfort == null ? "—" : `${regionalSummary.averageComfort}/100`} />
+            <Metric label="Price index" value={price.currentIndex?.combined.indexValue == null ? "—" : Math.round(price.currentIndex.combined.indexValue)} />
+            <Metric label="Regional average" value={formatUsdPrice(price.currentIndex?.combined.averagePrice ?? regionalSummary.averagePrice, "—")} />
+            <Metric label="Comfort index" value={comfort.currentIndex?.combined.indexValue == null ? (regionalSummary.averageComfort == null ? "—" : `${regionalSummary.averageComfort}/100`) : Math.round(comfort.currentIndex.combined.indexValue)} />
           </div>
 
           {viewMode === "map" ? (
@@ -429,6 +440,36 @@ const WhereToStayPage = () => {
                       {safety.state.message}
                     </p>
                 )}
+                {mapMode === "price" && price.state.status === "loading" && (
+                    <p className="mb-3 rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-gray-300">
+                      Loading price index heatmap…
+                    </p>
+                )}
+                {mapMode === "price" && price.state.status === "error" && (
+                    <p role="alert" className="mb-3 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-200">
+                      {price.state.message}
+                    </p>
+                )}
+                {mapMode === "price" && price.state.status === "ready" && price.overlayAreas.length === 0 && (
+                    <p className="mb-3 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-xs text-amber-100">
+                      Price index is available, but no region boundaries are available for this view.
+                    </p>
+                )}
+                {mapMode === "comfort" && comfort.state.status === "loading" && (
+                    <p className="mb-3 rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-gray-300">
+                      Loading comfort index heatmap…
+                    </p>
+                )}
+                {mapMode === "comfort" && comfort.state.status === "error" && (
+                    <p role="alert" className="mb-3 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-200">
+                      {comfort.state.message}
+                    </p>
+                )}
+                {mapMode === "comfort" && comfort.state.status === "ready" && comfort.overlayAreas.length === 0 && (
+                    <p className="mb-3 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-xs text-amber-100">
+                      Comfort index is available, but no region boundaries are available for this view.
+                    </p>
+                )}
                 {isMapEmpty && (
                     <p className="mb-3 rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-gray-300">
                       No mapped stays match the synchronized search and filters.
@@ -440,6 +481,10 @@ const WhereToStayPage = () => {
                     selectedHotel={previewHotel}
                     mode={mapMode}
                     averagePrice={regionalSummary.averagePrice}
+                    comfortIndex={comfort.currentIndex}
+                    comfortAreas={comfort.overlayAreas}
+                    priceIndex={price.currentIndex}
+                    priceAreas={price.overlayAreas}
                     safetyScores={safety.scoreByDistrict}
                     safetyAreas={safety.overlayAreas}
                     currentLocation={currentLocation.state.position}

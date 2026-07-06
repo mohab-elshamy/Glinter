@@ -72,12 +72,13 @@ const HotelRecommendationPanel = ({
   const [detailsLoadingId, setDetailsLoadingId] = useState<number>();
 
   useEffect(() => {
-    if (manuallyChangedBudget.current || profileQuery.data?.profileType !== "Traveler") return;
-    const profileBudget = parseBudgetLevel(profileQuery.data.preferredBudgetLevel);
+    const profile = profileQuery.data;
+    if (manuallyChangedBudget.current || profile?.profileType !== "Traveler") return;
+    const profileBudget = parseBudgetLevel(profile.preferredBudgetLevel);
     if (profileBudget) setBudgetLevel(profileBudget);
     setSelectedCategories((current) => current.length > 0
       ? current
-      : mapInterestsToCategories(profileQuery.data.interests.map((interest) => interest.name)));
+      : mapInterestsToCategories(profile.interests.map((interest) => interest.name)));
   }, [profileQuery.data]);
 
   useEffect(() => {

@@ -4,6 +4,8 @@ import { formatUsdPrice } from "@/shared/lib/price";
 import type { Hotel } from "../types";
 import hotelImg from "@/assets/hotel-1.jpg";
 import { overlayLayers } from "@/shared/lib/overlay-layers";
+import type { ComfortIndexResponse } from "@/shared/types/comfort-index";
+import type { PriceIndexResponse } from "@/shared/types/price-index";
 import {
   getComfortScore,
   getPriceColor,
@@ -16,6 +18,10 @@ interface HeatmapPanelProps {
   selectedHotel: Hotel | null;
   mode: StayMapMode;
   averagePrice?: number;
+  comfortIndex?: ComfortIndexResponse | null;
+  comfortAreas: MapOverlayArea[];
+  priceIndex?: PriceIndexResponse | null;
+  priceAreas: MapOverlayArea[];
   safetyScores: Map<number, number | null | undefined>;
   safetyAreas: MapOverlayArea[];
   currentLocation?: {
@@ -44,17 +50,18 @@ const legendByMode: Record<StayMapMode, Array<{ color: string; label: string }>>
     { color: "#64748b", label: "Unavailable" },
   ],
   comfort: [
-    { color: "#22c55e", label: "80–100 excellent" },
-    { color: "#84cc16", label: "60–79 comfortable" },
-    { color: "#f59e0b", label: "40–59 basic" },
-    { color: "#ef4444", label: "Below 40" },
+    { color: "#22c55e", label: "Index above 125" },
+    { color: "#84cc16", label: "Index 100–125" },
+    { color: "#f59e0b", label: "Index 75–99" },
+    { color: "#ef4444", label: "Index below 75" },
+    { color: "#64748b", label: "No rated data" },
   ],
   price: [
-    { color: "#22c55e", label: "25%+ below regional average" },
-    { color: "#84cc16", label: "Below regional average" },
-    { color: "#f59e0b", label: "Up to 25% above average" },
-    { color: "#ef4444", label: "25%+ above average" },
-    { color: "#64748b", label: "Price unavailable" },
+    { color: "#22c55e", label: "Index 75 or lower" },
+    { color: "#84cc16", label: "Index 76–100" },
+    { color: "#f59e0b", label: "Index 101–125" },
+    { color: "#ef4444", label: "Index above 125" },
+    { color: "#64748b", label: "No priced data" },
   ],
 };
 
@@ -73,6 +80,10 @@ const HeatmapPanel = ({
   selectedHotel,
   mode,
   averagePrice,
+  comfortIndex,
+  comfortAreas,
+  priceIndex,
+  priceAreas,
   safetyScores,
   safetyAreas,
   currentLocation,
@@ -132,7 +143,13 @@ const HeatmapPanel = ({
         }}
         onMapClick={onMapClick}
         selectedMarker={selectedMarker}
-        overlayAreas={mode === "safety" ? safetyAreas : []}
+        overlayAreas={mode === "safety"
+          ? safetyAreas
+          : mode === "price"
+            ? priceAreas
+            : mode === "comfort"
+              ? comfortAreas
+              : []}
         currentLocation={currentLocation}
         recenterSequence={recenterSequence}
         showLegend={false}
@@ -154,11 +171,19 @@ const HeatmapPanel = ({
             </div>
           ))}
           {mode === "safety" && <p className="border-t border-white/10 pt-1 text-gray-400">Dashed boundary = stale score</p>}
-          {mode === "comfort" && <p className="border-t border-white/10 pt-1 text-gray-400">Rating + review confidence + amenities</p>}
+          {mode === "comfort" && (
+            <div className="border-t border-white/10 pt-1 text-gray-400">
+              <p>Combined index: {comfortIndex?.combined.indexValue == null ? "Unavailable" : Math.round(comfortIndex.combined.indexValue)}</p>
+              <p>Combined avg: {comfortIndex?.combined.averageScore == null ? "Unavailable" : `${comfortIndex.combined.averageScore.toFixed(2)} score`}</p>
+              <p>Formula: rating x log(reviews).</p>
+            </div>
+          )}
           {mode === "price" && (
-            <p className="border-t border-white/10 pt-1 text-gray-400">
-              Regional average: {formatUsdPrice(averagePrice, "Unavailable")}
-            </p>
+            <div className="border-t border-white/10 pt-1 text-gray-400">
+              <p>Combined index: {priceIndex?.combined.indexValue == null ? "Unavailable" : Math.round(priceIndex.combined.indexValue)}</p>
+              <p>Combined avg: {formatUsdPrice(priceIndex?.combined.averagePrice ?? averagePrice, "Unavailable")}</p>
+              <p>Markers show hotel nightly price.</p>
+            </div>
           )}
           {currentLocation && (
             <div className="flex items-center gap-2 border-t border-white/10 pt-1 text-sky-300">

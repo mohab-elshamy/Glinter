@@ -43,8 +43,10 @@ describe("useCurrentLocation", () => {
             altitudeAccuracy: null,
             heading: null,
             speed: null,
+            toJSON: () => ({}),
           },
           timestamp: Date.now(),
+          toJSON: () => ({}),
         }),
       },
     });

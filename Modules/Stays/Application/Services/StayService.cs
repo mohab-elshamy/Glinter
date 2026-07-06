@@ -773,9 +773,27 @@ public class StayService
         var userId = _currentUserService.UserId
             ?? throw new InvalidOperationException("Authenticated user id is missing.");
 
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var eligibleBooking = await _dbContext.StayBookings
+            .Where(x =>
+                x.StayId == stayId &&
+                x.CreatedByUserId == userId &&
+                x.Status == StayBookingStatus.Completed &&
+                x.CheckOutDate <= today &&
+                !_dbContext.StayReviews.Any(review => review.BookingId == x.Id))
+            .OrderByDescending(x => x.CheckOutDate)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (eligibleBooking is null)
+        {
+            throw new InvalidOperationException(
+                "A completed stay booking that has ended is required, and each booking can only be reviewed once.");
+        }
+
         var review = new StayReview
         {
             StayId = stayId,
+            BookingId = eligibleBooking.Id,
             CreatedByUserId = userId,
             ReviewerName = _currentUserService.Email,
             Rating = request.Rating,

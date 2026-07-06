@@ -122,6 +122,7 @@ namespace Glinter.Modules.IdentityAccess.Infrastructure.Persistence.Migrations
                     b.HasIndex("IsActive");
 
                     b.HasIndex("NormalizedEmail")
+                        .IsUnique()
                         .HasDatabaseName("EmailIndex");
 
                     b.HasIndex("NormalizedUserName")

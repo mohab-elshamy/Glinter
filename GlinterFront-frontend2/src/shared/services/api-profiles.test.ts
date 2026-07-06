@@ -49,39 +49,6 @@ describe("profilesApi", () => {
     });
   });
 
-  it("wires buddy availability, booking, and review routes", async () => {
-    vi.mocked(request).mockResolvedValue({});
-
-    await profilesApi.getBuddyAvailability("buddy-id");
-    expect(request).toHaveBeenLastCalledWith("/local-buddies/buddy-id/availability");
-
-    await profilesApi.createBuddyBooking("buddy-id", "slot-id", "Museum");
-    expect(request).toHaveBeenLastCalledWith("/local-buddies/buddy-id/bookings", {
-      method: "POST",
-      body: { availabilityId: "slot-id", notes: "Museum" },
-    });
-
-    await profilesApi.updateBuddyBookingStatus("booking-id", "Accepted");
-    expect(request).toHaveBeenLastCalledWith("/buddy-bookings/booking-id/status", {
-      method: "PATCH",
-      body: { status: "Accepted" },
-    });
-
-    await profilesApi.createBuddyReview("buddy-id", {
-      bookingId: "booking-id",
-      rating: 5,
-      reviewText: "Great guide",
-    });
-    expect(request).toHaveBeenLastCalledWith("/local-buddies/buddy-id/reviews", {
-      method: "POST",
-      body: {
-        bookingId: "booking-id",
-        rating: 5,
-        reviewText: "Great guide",
-      },
-    });
-  });
-
   it("uploads profile images using multipart form data", async () => {
     const file = new File(["image"], "profile.png", { type: "image/png" });
     await profilesApi.uploadProfileImage(file);

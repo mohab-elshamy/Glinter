@@ -316,6 +316,9 @@ namespace Glinter.Modules.Stays.Infrastructure.Persistence.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<Guid?>("BookingId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -348,6 +351,9 @@ namespace Glinter.Modules.Stays.Infrastructure.Persistence.Migrations
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("BookingId")
+                        .IsUnique();
 
                     b.HasIndex("Platform");
 
@@ -447,11 +453,18 @@ namespace Glinter.Modules.Stays.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("Glinter.Modules.Stays.Domain.Entities.StayReview", b =>
                 {
+                    b.HasOne("Glinter.Modules.Stays.Domain.Entities.StayBooking", "Booking")
+                        .WithOne("Review")
+                        .HasForeignKey("Glinter.Modules.Stays.Domain.Entities.StayReview", "BookingId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("Glinter.Modules.Stays.Domain.Entities.Stay", "Stay")
                         .WithMany("StayReviews")
                         .HasForeignKey("StayId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Booking");
 
                     b.Navigation("Stay");
                 });
@@ -480,6 +493,11 @@ namespace Glinter.Modules.Stays.Infrastructure.Persistence.Migrations
                     b.Navigation("ReviewsPerRatings");
 
                     b.Navigation("StayReviews");
+                });
+
+            modelBuilder.Entity("Glinter.Modules.Stays.Domain.Entities.StayBooking", b =>
+                {
+                    b.Navigation("Review");
                 });
 #pragma warning restore 612, 618
         }

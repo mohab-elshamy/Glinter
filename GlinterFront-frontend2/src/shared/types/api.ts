@@ -79,8 +79,10 @@ export interface BuddyBookingDto {
   availabilityId: string;
   localBuddyUserId: string;
   buddyName: string;
+  localBuddyDisplayName?: string;
   travelerUserId: string;
   travelerName: string;
+  travelerDisplayName?: string;
   startTimeUtc: string;
   endTimeUtc: string;
   totalPrice: number;
@@ -88,6 +90,10 @@ export interface BuddyBookingDto {
   status: BuddyBookingStatus;
   createdAtUtc: string;
   updatedAtUtc?: string;
+  respondedAtUtc?: string;
+  canCancel: boolean;
+  canReview: boolean;
+  hasReview: boolean;
 }
 
 export interface BuddyReviewDto {
@@ -96,6 +102,7 @@ export interface BuddyReviewDto {
   localBuddyUserId: string;
   travelerUserId: string;
   reviewerName: string;
+  travelerDisplayName?: string;
   rating: number;
   reviewText: string;
   createdAtUtc: string;
@@ -132,6 +139,11 @@ export interface TravelerProfileRequest {
   comfortLevel?: string;
   safetyPriority?: string;
   interestIds: string[];
+}
+
+export interface BuddyReviewSummaryDto {
+  averageRating: number;
+  reviewsCount: number;
 }
 
 // ============================================================
@@ -243,6 +255,8 @@ export interface ExperienceResponseDto {
   }>;
   phoneInternational?: string;
   priceRange?: string;
+  priceRangeMin?: number;
+  priceRangeMax?: number;
   startingPricePerPerson?: number;
   reviews?: number;
   rating?: number;
@@ -279,6 +293,8 @@ export interface CreateExperienceRequest {
   popularTimes: Array<{ dayOfWeek: string; hourOfDay: number; popularityPercentage: number }>;
   phoneInternational?: string;
   priceRange?: string;
+  priceRangeMin?: number;
+  priceRangeMax?: number;
   website?: string;
   amenities: string[];
 }

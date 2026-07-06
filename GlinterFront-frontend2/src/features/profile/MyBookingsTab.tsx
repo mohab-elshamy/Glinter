@@ -5,7 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { staysApi } from "@/shared/services/api-stays";
 import { experiencesApi } from "@/shared/services/api-experiences";
-import { profilesApi } from "@/shared/services/api-profiles";
+import { buddyApi } from "@/shared/services/api-buddy";
 import { formatUsdPrice } from "@/shared/lib/price";
 import type { LoadState } from "@/shared/types/async-state";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -17,7 +17,11 @@ interface BookingView {
   startsAt: string;
   endsAt: string;
   totalPrice: number;
-  status: "Pending" | "Confirmed" | "Completed" | "Cancelled";
+  status: "Pending" | "Confirmed" | "Rejected" | "Completed" | "Cancelled";
+  canCancel?: boolean;
+  canReview?: boolean;
+  notes?: string;
+  localBuddyUserId?: string;
 }
 
 const getStatusColor = (status: string) => {
@@ -25,6 +29,7 @@ const getStatusColor = (status: string) => {
     case "Confirmed": return "bg-green-500/20 text-green-400";
     case "Pending": return "bg-yellow-500/20 text-yellow-400";
     case "Completed": return "bg-blue-500/20 text-blue-400";
+    case "Rejected":
     case "Cancelled": return "bg-red-500/20 text-red-400";
     default: return "bg-gray-500/20 text-gray-400";
   }
@@ -40,7 +45,7 @@ const MyBookingsTab = () => {
     Promise.all([
       staysApi.getMyBookings(),
       experiencesApi.getMyBookings(),
-      profilesApi.getMyBuddyBookings(),
+      buddyApi.getMine(),
     ])
       .then(([stayBookings, experienceBookings, buddyBookings]) => {
         setBookings([
@@ -70,6 +75,10 @@ const MyBookingsTab = () => {
             endsAt: booking.endTimeUtc,
             totalPrice: booking.totalPrice,
             status: booking.status === "Accepted" ? "Confirmed" : booking.status,
+            canCancel: booking.canCancel,
+            canReview: booking.canReview,
+            notes: booking.notes,
+            localBuddyUserId: booking.localBuddyUserId,
           })),
         ]);
         setLoadState({ status: "ready" });
@@ -88,7 +97,7 @@ const MyBookingsTab = () => {
       } else if (booking.type === "experience") {
         await experiencesApi.cancelBooking(booking.id);
       } else {
-        await profilesApi.cancelBuddyBooking(booking.id);
+        await buddyApi.cancel(booking.id);
       }
       setBookings(prev => prev.map(b => b.id === booking.id ? { ...b, status: "Cancelled" } : b));
       toast.info("Booking cancelled");
@@ -136,6 +145,9 @@ const MyBookingsTab = () => {
                     <p className="text-xs text-muted-foreground flex items-center gap-1">
                       <Calendar className="w-3 h-3" /> {booking.startsAt} → {booking.endsAt}
                     </p>
+                    {booking.notes && (
+                      <p className="mt-1 text-xs text-foreground/80">{booking.notes}</p>
+                    )}
                   </div>
                 </div>
                 <div className="text-right">
@@ -144,7 +156,9 @@ const MyBookingsTab = () => {
                     {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
                   </span>
                 </div>
-                {booking.status !== "Cancelled" && booking.status !== "Completed" && (
+                {booking.status !== "Cancelled" &&
+                  booking.status !== "Completed" &&
+                  (booking.type !== "buddy" || booking.canCancel) && (
                   <button
                     onClick={() => setPendingCancellation(booking)}
                     className="text-xs text-red-500 hover:text-red-400 ml-2"
@@ -152,6 +166,16 @@ const MyBookingsTab = () => {
                     Cancel
                   </button>
                 )}
+                {booking.type === "buddy" &&
+                  booking.canReview &&
+                  booking.localBuddyUserId && (
+                    <button
+                      onClick={() => navigate(`/profile/${booking.localBuddyUserId}`)}
+                      className="ml-2 text-xs font-medium text-primary hover:underline"
+                    >
+                      Write review
+                    </button>
+                  )}
               </div>
             ))}
           </div>

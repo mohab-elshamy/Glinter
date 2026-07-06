@@ -222,6 +222,13 @@ public class CreateNotificationHandler
             return;
         }
 
+        if (path.StartsWith("/profile/", StringComparison.Ordinal) &&
+            Guid.TryParse(path["/profile/".Length..], out _) &&
+            parameters.Count == 0)
+        {
+            return;
+        }
+
         if (path == "/messages")
         {
             if (parameters.Keys.Any(x => x != "thread") ||

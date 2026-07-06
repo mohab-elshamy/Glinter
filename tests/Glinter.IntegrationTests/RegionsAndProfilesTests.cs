@@ -417,6 +417,14 @@ public sealed class RegionsAndProfilesTests : ApiTestBase
             new { status = "Completed" });
         completed.EnsureSuccessStatusCode();
 
+        await Factory.ExecuteAsync(
+            $"""
+             UPDATE buddy_availability
+             SET "StartTimeUtc" = NOW() - INTERVAL '2 hours',
+                 "EndTimeUtc" = NOW() - INTERVAL '1 hour'
+             WHERE "Id" = '{availabilityId}'
+             """);
+
         var review = await SendAsync(
             HttpMethod.Post,
             $"/api/local-buddies/{buddy.UserId}/reviews",
@@ -429,7 +437,7 @@ public sealed class RegionsAndProfilesTests : ApiTestBase
             $"/api/local-buddies/{buddy.UserId}/reviews",
             traveler.Token,
             new { bookingId, rating = 4, reviewText = "Duplicate review." });
-        await AssertProblemAsync(duplicateReview, 400, "validation_error");
+        await AssertProblemAsync(duplicateReview, 409, "conflict");
 
         var publicProfile = await Client.GetAsync($"/api/local-buddies/{buddy.UserId}");
         publicProfile.EnsureSuccessStatusCode();

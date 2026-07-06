@@ -103,9 +103,11 @@ namespace Glinter.Modules.Experiences.Infrastructure.Persistence.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
-                    b.Property<string>("PriceRange")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+                    b.Property<int?>("PriceRangeMax")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("PriceRangeMin")
+                        .HasColumnType("integer");
 
                     b.Property<Guid?>("ProviderProfileId")
                         .HasColumnType("uuid");
@@ -380,6 +382,9 @@ namespace Glinter.Modules.Experiences.Infrastructure.Persistence.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<Guid?>("BookingId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -412,6 +417,9 @@ namespace Glinter.Modules.Experiences.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(50)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("BookingId")
+                        .IsUnique();
 
                     b.HasIndex("CreatedByUserId");
 
@@ -530,11 +538,18 @@ namespace Glinter.Modules.Experiences.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("Glinter.Modules.Experiences.Domain.Entities.ExperienceReview", b =>
                 {
+                    b.HasOne("Glinter.Modules.Experiences.Domain.Entities.ExperienceBooking", "Booking")
+                        .WithOne("Review")
+                        .HasForeignKey("Glinter.Modules.Experiences.Domain.Entities.ExperienceReview", "BookingId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("Glinter.Modules.Experiences.Domain.Entities.Experience", "Experience")
                         .WithMany("ExperienceReviews")
                         .HasForeignKey("ExperienceId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Booking");
 
                     b.Navigation("Experience");
                 });
@@ -572,6 +587,11 @@ namespace Glinter.Modules.Experiences.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("Glinter.Modules.Experiences.Domain.Entities.ExperienceAvailability", b =>
                 {
                     b.Navigation("Bookings");
+                });
+
+            modelBuilder.Entity("Glinter.Modules.Experiences.Domain.Entities.ExperienceBooking", b =>
+                {
+                    b.Navigation("Review");
                 });
 #pragma warning restore 612, 618
         }

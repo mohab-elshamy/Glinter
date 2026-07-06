@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, ImagePlus, Loader2, Save } from "lucide-react";
 import type { ProfileRole } from "@/shared/lib/auth-routing";
 import { useInterests } from "@/shared/hooks/use-interests";
@@ -12,6 +12,9 @@ import {
   parseBudgetLevel,
   type BudgetLevel,
 } from "@/shared/lib/budget-levels";
+import { formControlClass } from "@/components/ui/form-control";
+import { TagInput } from "@/components/ui/tag-input";
+import { parseTags } from "@/components/ui/tag-utils";
 
 interface RoleProfileFormProps {
   role: ProfileRole;
@@ -21,9 +24,7 @@ interface RoleProfileFormProps {
   onSaved: (profile: MyProfileResponse) => void;
 }
 
-const inputClass =
-  "mt-1 w-full rounded-lg border border-border bg-secondary px-3 py-2.5 text-sm " +
-  "text-foreground focus:outline-none focus:ring-1 focus:ring-primary";
+const inputClass = `mt-1 ${formControlClass}`;
 
 const RoleProfileForm = ({
   role,
@@ -57,7 +58,9 @@ const RoleProfileForm = ({
     traveler?.travelStyle ?? "Solo",
   );
   const [city, setCity] = useState(buddy?.city ?? "");
-  const [languages, setLanguages] = useState(buddy?.languages ?? "");
+  const [languages, setLanguages] = useState<string[]>(
+    parseTags(buddy?.languages),
+  );
   const [businessName, setBusinessName] = useState(
     business?.businessName ?? defaultName,
   );
@@ -77,6 +80,40 @@ const RoleProfileForm = ({
   const [saving, setSaving] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    const nextTraveler = initialProfile?.profileType === "Traveler"
+      ? initialProfile
+      : undefined;
+    const nextBuddy = initialProfile?.profileType === "LocalBuddy"
+      ? initialProfile
+      : undefined;
+    const nextBusiness = initialProfile?.profileType === "HotelOwner" ||
+      initialProfile?.profileType === "ExperienceProvider"
+      ? initialProfile
+      : undefined;
+
+    setDisplayName(
+      nextTraveler?.displayName ?? nextBuddy?.displayName ?? defaultName,
+    );
+    setBio(nextTraveler?.bio ?? nextBuddy?.bio ?? "");
+    setNationality(nextTraveler?.nationality ?? "");
+    setBudget(parseBudgetLevel(nextTraveler?.preferredBudgetLevel) ?? 3);
+    setTravelStyle(nextTraveler?.travelStyle ?? "Solo");
+    setCity(nextBuddy?.city ?? "");
+    setLanguages(parseTags(nextBuddy?.languages));
+    setBusinessName(nextBusiness?.businessName ?? defaultName);
+    setContactPersonName(nextBusiness?.contactPersonName ?? defaultName);
+    setPhoneNumber(nextBusiness?.phoneNumber ?? "");
+    setDescription(nextBusiness?.description ?? "");
+    setProfileImageUrl(initialProfile?.profileImageUrl ?? "");
+    setSelectedInterestIds(
+      nextTraveler?.interests.map((interest) => interest.id) ??
+      nextBuddy?.interests.map((interest) => interest.id) ??
+      [],
+    );
+    setError("");
+  }, [defaultName, initialProfile, role]);
 
   const toggleInterest = (interestId: string) => {
     setSelectedInterestIds((current) => current.includes(interestId)
@@ -129,7 +166,7 @@ const RoleProfileForm = ({
           displayName: displayName.trim(),
           bio: bio.trim() || undefined,
           city: city.trim(),
-          languages: languages.trim() || undefined,
+          languages: languages.join(", ") || undefined,
           interestIds: selectedInterestIds,
         });
       } else {
@@ -244,16 +281,17 @@ const RoleProfileForm = ({
               className={inputClass}
             />
           </label>
-          <label className="block text-sm font-medium">
+          <div className="block text-sm font-medium">
             Languages
-            <input
-              maxLength={500}
+            <TagInput
+              aria-label="Languages"
               value={languages}
-              onChange={(event) => setLanguages(event.target.value)}
-              placeholder="Arabic, English"
-              className={inputClass}
+              onChange={setLanguages}
+              placeholder="Type a language"
+              maxItems={10}
+              maxItemLength={40}
             />
-          </label>
+          </div>
         </>
       )}
 

@@ -2,11 +2,14 @@ using System.Security.Claims;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using Glinter.Modules.Communication.Infrastructure.DependencyInjection;
+using Glinter.Modules.Buddy.Infrastructure.DependencyInjection;
+using Glinter.Modules.ComfortIndex.Infrastructure.DependencyInjection;
 using Glinter.Modules.IdentityAccess.Domain.Entities;
 using Glinter.Modules.IdentityAccess.Infrastructure.DependencyInjection;
 using Glinter.Modules.IdentityAccess.Infrastructure.Identity;
 using Glinter.Modules.Experiences.Infrastructure.DependencyInjection;
 using Glinter.Modules.Itineraries.Infrastructure.DependencyInjection;
+using Glinter.Modules.PriceIndex.Infrastructure.DependencyInjection;
 using Glinter.Modules.Profiles.Infrastructure.DependencyInjection;
 using Glinter.Modules.Profiles.Infrastructure.Persistence;
 using Glinter.Modules.Regions.Infrastructure.DependencyInjection;
@@ -83,7 +86,7 @@ if (maxRequestBodyBytes <= 0)
 
 var rateLimitPermitLimit =
     builder.Configuration.GetValue<int?>("RateLimiting:PermitLimit")
-    ?? 120;
+    ?? 300;
 
 var rateLimitWindowMinutes =
     builder.Configuration.GetValue<int?>("RateLimiting:WindowMinutes")
@@ -119,6 +122,9 @@ builder.Services.AddIdentityAccessModule(
 // Module 2: Profiles
 builder.Services.AddProfilesModule(builder.Configuration);
 
+// Module 3: Buddy
+builder.Services.AddBuddyModule(builder.Configuration);
+
 // Module 4: Stays
 builder.Services.AddStaysModule(builder.Configuration);
 
@@ -134,7 +140,13 @@ builder.Services.AddRegionsModule(builder.Configuration);
 // Module 8: Safety Index
 builder.Services.AddSafetyIndexModule(builder.Configuration);
 
-// Module 9: Communication
+// Module 9: Price Index
+builder.Services.AddPriceIndexModule();
+
+// Module 10: Comfort Index
+builder.Services.AddComfortIndexModule();
+
+// Module 11: Communication
 builder.Services.AddCommunicationModule(builder.Configuration);
 
 builder.Services

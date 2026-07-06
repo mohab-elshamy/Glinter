@@ -2,12 +2,16 @@ using System.Text;
 using System.Security.Cryptography;
 using Glinter.Modules.Communication.Infrastructure.Persistence;
 using Glinter.Modules.Experiences.Infrastructure.Persistence;
+using Glinter.Modules.Experiences.Application.Abstractions;
+using Glinter.Modules.Experiences.Application.Dtos;
 using Glinter.Modules.IdentityAccess.Domain.Entities;
 using Glinter.Modules.IdentityAccess.Infrastructure.Persistence;
 using Glinter.Modules.IdentityAccess.Infrastructure.Security;
 using Glinter.Modules.Profiles.Infrastructure.Persistence;
 using Glinter.Modules.Regions.Infrastructure.Persistence;
 using Glinter.Modules.SafetyIndex.Infrastructure.Persistence;
+using Glinter.Modules.SafetyIndex.Application.Abstractions;
+using Glinter.Modules.SafetyIndex.Application.Dtos;
 using Glinter.Modules.Stays.Infrastructure.Persistence;
 using Glinter.Modules.Stays.Application.Abstractions;
 using Glinter.Modules.Stays.Application.Dtos;
@@ -16,6 +20,7 @@ using Glinter.Modules.Itineraries.Application.Dtos;
 using Glinter.Modules.Itineraries.Domain.Enums;
 using Glinter.Modules.Itineraries.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Glinter.Modules.Buddy.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -144,6 +149,7 @@ public sealed class GlinterApiFactory : WebApplicationFactory<Program>, IAsyncLi
         {
             ReplaceDbContext<IdentityAccessDbContext>(services, false);
             ReplaceDbContext<ProfilesDbContext>(services, false);
+            ReplaceDbContext<BuddyDbContext>(services, false);
             ReplaceDbContext<RegionsDbContext>(services, true);
             ReplaceDbContext<SafetyIndexDbContext>(services, false);
             ReplaceDbContext<StaysDbContext>(services, false);
@@ -171,12 +177,18 @@ public sealed class GlinterApiFactory : WebApplicationFactory<Program>, IAsyncLi
             services.AddSingleton<IPasswordHasher<ApplicationUser>, FastTestPasswordHasher>();
             services.RemoveAll<IHotelRecommendationGroqClient>();
             services.AddSingleton<IHotelRecommendationGroqClient, NullHotelRecommendationGroqClient>();
+            services.RemoveAll<IExperienceRecommendationGroqClient>();
+            services.AddSingleton<IExperienceRecommendationGroqClient, NullExperienceRecommendationGroqClient>();
             services.RemoveAll<IItineraryGroqClient>();
             services.AddSingleton<IItineraryGroqClient, NullItineraryGroqClient>();
             services.RemoveAll<IItineraryRoutePlanner>();
             services.AddSingleton<IItineraryRoutePlanner, TestItineraryRoutePlanner>();
             services.RemoveAll<IWeatherForecastService>();
             services.AddSingleton<IWeatherForecastService, TestWeatherForecastService>();
+            services.RemoveAll<IGoogleNewsRssClient>();
+            services.AddSingleton<IGoogleNewsRssClient, EmptyGoogleNewsRssClient>();
+            services.RemoveAll<ISafetyScoringClient>();
+            services.AddSingleton<ISafetyScoringClient, NullSafetyScoringClient>();
         });
     }
 
@@ -240,6 +252,12 @@ public sealed class GlinterApiFactory : WebApplicationFactory<Program>, IAsyncLi
             .UseNpgsql(ConnectionString)
             .Options;
         await using (var context = new ProfilesDbContext(profileOptions))
+            await context.Database.MigrateAsync();
+
+        var buddyOptions = new DbContextOptionsBuilder<BuddyDbContext>()
+            .UseNpgsql(ConnectionString)
+            .Options;
+        await using (var context = new BuddyDbContext(buddyOptions))
             await context.Database.MigrateAsync();
 
         var regionOptions = new DbContextOptionsBuilder<RegionsDbContext>()
@@ -354,6 +372,42 @@ public sealed class GlinterApiFactory : WebApplicationFactory<Program>, IAsyncLi
             string? preferredLanguage,
             CancellationToken cancellationToken) =>
             Task.FromResult<ItineraryPlanPreferences?>(null);
+    }
+
+    private sealed class NullExperienceRecommendationGroqClient
+        : IExperienceRecommendationGroqClient
+    {
+        public Task<ExperienceRecommendationPreferences?> ClassifyAsync(
+            string text,
+            string? preferredLanguage,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<ExperienceRecommendationPreferences?>(null);
+
+        public Task<IReadOnlyDictionary<int, ExperienceRecommendationExplanationResponse>?>
+            GenerateExplanationsAsync(
+                ExperienceRecommendationPreferences preferences,
+                IReadOnlyList<ExperienceRecommendationItemResponse> rankedItems,
+                CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyDictionary<int, ExperienceRecommendationExplanationResponse>?>(null);
+    }
+
+    private sealed class EmptyGoogleNewsRssClient : IGoogleNewsRssClient
+    {
+        public Task<List<NewsItemDto>> SearchAsync(
+            string arabicAreaName,
+            int? lookbackDays,
+            CancellationToken ct = default) =>
+            Task.FromResult(new List<NewsItemDto>());
+    }
+
+    private sealed class NullSafetyScoringClient : ISafetyScoringClient
+    {
+        public Task<SafetyScoreEstimateDto?> EstimateAsync(
+            string areaNameAr,
+            IReadOnlyCollection<string> titles,
+            SafetyScorePeriod period,
+            CancellationToken ct = default) =>
+            Task.FromResult<SafetyScoreEstimateDto?>(null);
     }
 
     private sealed class TestItineraryRoutePlanner : IItineraryRoutePlanner

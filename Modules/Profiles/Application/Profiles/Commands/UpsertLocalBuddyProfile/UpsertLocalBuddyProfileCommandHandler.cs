@@ -32,6 +32,8 @@ public class UpsertLocalBuddyProfileCommandHandler
         var errors = _validator.Validate(command);
         if (errors.Count > 0)
             throw new ValidationException(string.Join(" | ", errors));
+        var normalizedLanguages = LanguageListNormalizer.Normalize(
+            command.Languages);
 
         if (!_currentUserService.IsAuthenticated || _currentUserService.UserId is null)
             throw new AuthenticationException("User is not authenticated.");
@@ -60,7 +62,7 @@ public class UpsertLocalBuddyProfileCommandHandler
                 DisplayName = command.DisplayName,
                 Bio = command.Bio,
                 City = command.City,
-                Languages = command.Languages,
+                Languages = normalizedLanguages,
                 Rating = 0,
                 ReviewsCount = 0,
                 CreatedAtUtc = DateTime.UtcNow
@@ -73,7 +75,7 @@ public class UpsertLocalBuddyProfileCommandHandler
             profile.DisplayName = command.DisplayName;
             profile.Bio = command.Bio;
             profile.City = command.City;
-            profile.Languages = command.Languages;
+            profile.Languages = normalizedLanguages;
             profile.UpdatedAtUtc = DateTime.UtcNow;
         }
 

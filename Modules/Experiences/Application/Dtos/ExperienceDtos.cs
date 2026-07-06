@@ -21,6 +21,8 @@ public class CreateExperienceRequest
     public List<ExperiencePopularTimeRequest> PopularTimes { get; set; } = [];
     public string? PhoneInternational { get; set; }
     public string? PriceRange { get; set; }
+    public int? PriceRangeMin { get; set; }
+    public int? PriceRangeMax { get; set; }
     public string? Website { get; set; }
     public List<string> Amenities { get; set; } = [];
 }
@@ -168,6 +170,8 @@ public class ExperienceResponse
     public List<ExperiencePopularTimeResponse> PopularTimes { get; set; } = [];
     public string? PhoneInternational { get; set; }
     public string? PriceRange { get; set; }
+    public int? PriceRangeMin { get; set; }
+    public int? PriceRangeMax { get; set; }
     public decimal? StartingPricePerPerson { get; set; }
     public int? Reviews { get; set; }
     public decimal? Rating { get; set; }

@@ -11,7 +11,12 @@ import {
   useMapEvents,
 } from "react-leaflet";
 import L from "leaflet";
-import type { Feature, GeoJsonObject, Geometry } from "geojson";
+import type {
+  Feature,
+  FeatureCollection,
+  GeoJsonObject,
+  Geometry,
+} from "geojson";
 import "leaflet.markercluster";
 import "leaflet-geosearch/dist/geosearch.css";
 import { GeoSearchControl, OpenStreetMapProvider } from "leaflet-geosearch";
@@ -77,6 +82,7 @@ export interface MapOverlayArea {
   id: number;
   name: string;
   value?: number | null;
+  tooltip?: string;
   color: string;
   geometry: Geometry | Feature;
   fillOpacity?: number;
@@ -200,7 +206,7 @@ const toGeoJson = (area: MapOverlayArea): GeoJsonObject => {
     type: "Feature",
     properties: { id: area.id },
     geometry: area.geometry as Geometry,
-  } satisfies Feature;
+  } as Feature;
 };
 
 // Component to handle markers, clustering larger datasets for responsiveness.
@@ -354,10 +360,11 @@ function OverlayBounds({ areas }: { areas: MapOverlayArea[] }) {
 
   useEffect(() => {
     if (areas.length === 0) return;
-    const group = L.geoJSON({
+    const collection: FeatureCollection = {
       type: "FeatureCollection",
       features: areas.map((area) => toGeoJson(area) as Feature),
-    });
+    };
+    const group = L.geoJSON(collection as GeoJsonObject);
     const bounds = group.getBounds();
     if (bounds.isValid()) map.fitBounds(bounds, { padding: [32, 32], maxZoom: 11 });
   }, [areas, map]);
@@ -558,7 +565,7 @@ const LeafletMap: React.FC<LeafletMapProps> = ({
             data={toGeoJson(area)}
             onEachFeature={(_feature, layer) => {
               const tooltip = document.createElement("span");
-              tooltip.textContent = `${area.name}: ${area.value ?? "No data"}`;
+              tooltip.textContent = area.tooltip ?? `${area.name}: ${area.value ?? "No data"}`;
               layer.bindTooltip(tooltip);
             }}
             style={{

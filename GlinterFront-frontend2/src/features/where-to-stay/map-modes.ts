@@ -25,3 +25,21 @@ export function getPriceColor(price?: number, averagePrice?: number): string {
   if (ratio <= 1.25) return "#f59e0b";
   return "#ef4444";
 }
+
+export function getIndexColor(indexValue?: number | null): string {
+  if (indexValue == null) return "#64748b";
+  if (indexValue <= 75) return "#22c55e";
+  if (indexValue <= 100) return "#84cc16";
+  if (indexValue <= 125) return "#f59e0b";
+  return "#ef4444";
+}
+
+export const getPriceIndexColor = getIndexColor;
+
+export function getComfortIndexColor(indexValue?: number | null): string {
+  if (indexValue == null) return "#64748b";
+  if (indexValue >= 125) return "#22c55e";
+  if (indexValue >= 100) return "#84cc16";
+  if (indexValue >= 75) return "#f59e0b";
+  return "#ef4444";
+}

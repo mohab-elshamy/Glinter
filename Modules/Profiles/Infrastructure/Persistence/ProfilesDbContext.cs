@@ -1,5 +1,7 @@
 using Glinter.Modules.Profiles.Application.Abstractions;
 using Glinter.Modules.Profiles.Domain.Entities;
+using Glinter.Modules.Buddy.Domain.Entities;
+using Glinter.Modules.Buddy.Infrastructure.Persistence.Configurations;
 using Microsoft.EntityFrameworkCore;
 
 namespace Glinter.Modules.Profiles.Infrastructure.Persistence;
@@ -41,5 +43,11 @@ public class ProfilesDbContext : DbContext, IProfilesDbContext
             typeof(ProfilesDbContext).Assembly,
             type => type.Namespace != null &&
                     type.Namespace.StartsWith("Glinter.Modules.Profiles.Infrastructure.Persistence.Configurations"));
+
+        // Compatibility migration owner: the Buddy tables were introduced by
+        // Profiles migrations and remain in that history to preserve production data.
+        modelBuilder.ApplyConfiguration(new BuddyAvailabilityConfiguration());
+        modelBuilder.ApplyConfiguration(new BuddyBookingConfiguration());
+        modelBuilder.ApplyConfiguration(new BuddyReviewConfiguration());
     }
 }

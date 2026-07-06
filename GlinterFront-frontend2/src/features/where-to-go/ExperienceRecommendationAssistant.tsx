@@ -51,10 +51,11 @@ export default function ExperienceRecommendationAssistant({
   }, []);
 
   useEffect(() => {
-    if (profileQuery.data?.profileType !== "Traveler") return;
+    const profile = profileQuery.data;
+    if (profile?.profileType !== "Traveler") return;
     setSelected((current) => current.length > 0
       ? current
-      : mapInterestsToCategories(profileQuery.data.interests.map((interest) => interest.name)));
+      : mapInterestsToCategories(profile.interests.map((interest) => interest.name)));
   }, [profileQuery.data]);
 
   const toggleFavorite = async (experienceId: number) => {

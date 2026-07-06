@@ -21,6 +21,7 @@ using Glinter.Modules.Profiles.Application.Profiles.Queries;
 using Glinter.Modules.Profiles.Infrastructure.Services;
 using Glinter.Modules.Profiles.Application.Profiles.Services;
 using Glinter.Modules.Profiles.Infrastructure.Files;
+using Glinter.Modules.Buddy.Application.Abstractions;
 namespace Glinter.Modules.Profiles.Infrastructure.DependencyInjection;
 
 public static class ProfilesModule
@@ -39,6 +40,7 @@ public static class ProfilesModule
             sp.GetRequiredService<ProfilesDbContext>());
         services.AddScoped<IProfilesReadService, ProfilesReadService>();
         services.AddScoped<IProfilesAdminReadService, ProfilesAdminReadService>();
+        services.AddScoped<IBuddyProfileReader, BuddyProfileReader>();
         services.AddScoped<UpsertTravelerProfileCommandHandler>();
         services.AddScoped<GetMyProfileQueryHandler>();
         services.AddScoped<UpsertLocalBuddyProfileCommandHandler>();
@@ -54,7 +56,6 @@ public static class ProfilesModule
         services.AddScoped<UpdateProfileImageCommandHandler>();
         services.AddScoped<UpdateLocalBuddyVerificationCommandHandler>();
         services.AddScoped<GetLocalBuddyVerificationHistoryHandler>();
-        services.AddScoped<BuddyEngagementService>();
         services.AddScoped<ExperienceFavoriteService>();
         services.AddSingleton<ProfileImageStorage>();
 
