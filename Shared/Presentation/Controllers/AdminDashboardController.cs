@@ -33,6 +33,7 @@ public sealed class AdminDashboardController(
         {
             TotalUsers = identitySnapshot.TotalUsers,
             ActiveUsers = identitySnapshot.ActiveUsers,
+            PendingAccountReviews = identitySnapshot.PendingAccountReviews,
             PendingBuddyVerifications = profileSnapshot.PendingBuddyVerifications,
             ApprovedBuddies = profileSnapshot.ApprovedBuddies,
             PendingExperiences = experienceSnapshot.PendingExperiences,

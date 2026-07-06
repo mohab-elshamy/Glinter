@@ -2,6 +2,7 @@ using Glinter.Modules.IdentityAccess.Application.Abstractions;
 using Glinter.Modules.IdentityAccess.Application.Auth.Dtos;
 using Glinter.Modules.IdentityAccess.Domain.Constants;
 using Glinter.Modules.IdentityAccess.Domain.Entities;
+using Glinter.Modules.IdentityAccess.Domain.Enums;
 using Microsoft.AspNetCore.Identity;
 
 namespace Glinter.Modules.IdentityAccess.Application.Auth.Commands.Login;
@@ -37,7 +38,15 @@ public class LoginCommandHandler
             throw new AuthenticationException("Invalid email or password.");
 
         if (!user.IsActive)
+        {
+            if (user.AccountReviewStatus == AccountReviewStatus.Pending)
+                throw new AuthenticationException("Your account is waiting for administrator review.");
+
+            if (user.AccountReviewStatus == AccountReviewStatus.Rejected)
+                throw new AuthenticationException("Your registration was rejected by an administrator.");
+
             throw new AuthenticationException("User is inactive.");
+        }
 
         var result = await _signInManager.CheckPasswordSignInAsync(
             user,

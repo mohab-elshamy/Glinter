@@ -1,5 +1,6 @@
 using Glinter.Modules.IdentityAccess.Application.Auth.Commands.AssignRole;
 using Glinter.Modules.IdentityAccess.Application.Auth.Commands.ChangeUserStatus;
+using Glinter.Modules.IdentityAccess.Application.Auth.Commands.ReviewUserRegistration;
 using Glinter.Modules.IdentityAccess.Application.Auth.Dtos;
 using Glinter.Modules.IdentityAccess.Application.Auth.Queries.GetRoles;
 using Glinter.Modules.IdentityAccess.Application.Auth.Queries.GetUserById;
@@ -21,19 +22,22 @@ public class AdminUsersController : ControllerBase
     private readonly GetRolesQueryHandler _getRolesQueryHandler;
     private readonly AssignRoleCommandHandler _assignRoleCommandHandler;
     private readonly ChangeUserStatusCommandHandler _changeUserStatusCommandHandler;
+    private readonly ReviewUserRegistrationCommandHandler _reviewUserRegistrationCommandHandler;
 
     public AdminUsersController(
         GetUsersQueryHandler getUsersQueryHandler,
         GetUserByIdQueryHandler getUserByIdQueryHandler,
         GetRolesQueryHandler getRolesQueryHandler,
         AssignRoleCommandHandler assignRoleCommandHandler,
-        ChangeUserStatusCommandHandler changeUserStatusCommandHandler)
+        ChangeUserStatusCommandHandler changeUserStatusCommandHandler,
+        ReviewUserRegistrationCommandHandler reviewUserRegistrationCommandHandler)
     {
         _getUsersQueryHandler = getUsersQueryHandler;
         _getUserByIdQueryHandler = getUserByIdQueryHandler;
         _getRolesQueryHandler = getRolesQueryHandler;
         _assignRoleCommandHandler = assignRoleCommandHandler;
         _changeUserStatusCommandHandler = changeUserStatusCommandHandler;
+        _reviewUserRegistrationCommandHandler = reviewUserRegistrationCommandHandler;
     }
 
     [HttpGet]
@@ -80,6 +84,21 @@ public class AdminUsersController : ControllerBase
         {
             UserId = id,
             IsActive = request.IsActive
+        });
+
+        return Ok(result);
+    }
+
+    [HttpPatch("{id:guid}/registration-review")]
+    public async Task<IActionResult> ReviewRegistration(
+        Guid id,
+        [FromBody] ReviewUserRegistrationRequest request)
+    {
+        var result = await _reviewUserRegistrationCommandHandler.HandleAsync(new ReviewUserRegistrationCommand
+        {
+            UserId = id,
+            ReviewStatus = request.ReviewStatus,
+            Notes = request.Notes
         });
 
         return Ok(result);

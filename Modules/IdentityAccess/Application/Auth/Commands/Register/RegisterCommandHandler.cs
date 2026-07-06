@@ -1,12 +1,21 @@
 using Glinter.Modules.IdentityAccess.Application.Abstractions;
 using Glinter.Modules.IdentityAccess.Application.Auth.Dtos;
+using Glinter.Modules.IdentityAccess.Domain.Constants;
 using Glinter.Modules.IdentityAccess.Domain.Entities;
+using Glinter.Modules.IdentityAccess.Domain.Enums;
 using Microsoft.AspNetCore.Identity;
 
 namespace Glinter.Modules.IdentityAccess.Application.Auth.Commands.Register;
 
 public class RegisterCommandHandler
 {
+    private static readonly string[] RolesRequiringReview =
+    [
+        RoleNames.LocalBuddy,
+        RoleNames.HotelOwner,
+        RoleNames.ExperienceProvider
+    ];
+
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IIdentityEmailSender _emailSender;
     private readonly IWebHostEnvironment _environment;
@@ -32,6 +41,7 @@ public class RegisterCommandHandler
         if (existingUser is not null)
             throw new ConflictException("Email already exists.");
 
+        var requiresReview = RolesRequiringReview.Contains(command.Role);
         var user = new ApplicationUser
         {
             Id = Guid.NewGuid(),
@@ -39,7 +49,13 @@ public class RegisterCommandHandler
             Email = command.Email,
             UserName = command.Email,
             EmailConfirmed = false,
-            IsActive = true
+            IsActive = !requiresReview,
+            AccountReviewStatus = requiresReview
+                ? AccountReviewStatus.Pending
+                : AccountReviewStatus.NotRequired,
+            IdentityDocumentUrl = requiresReview ? command.IdentityDocumentUrl?.Trim() : null,
+            IdentityDocumentFileName = requiresReview ? command.IdentityDocumentFileName?.Trim() : null,
+            IdentityDocumentContentType = requiresReview ? command.IdentityDocumentContentType?.Trim() : null
         };
 
         var result = await _userManager.CreateAsync(user, command.Password);
@@ -62,7 +78,9 @@ public class RegisterCommandHandler
         {
             UserId = user.Id,
             Email = user.Email ?? string.Empty,
-            Message = "Registration succeeded. Confirm your email before signing in.",
+            Message = requiresReview
+                ? "Registration submitted. Confirm your email, then wait for an administrator to review your identity document."
+                : "Registration succeeded. Confirm your email before signing in.",
             DevelopmentConfirmationToken = _environment.IsDevelopment()
                 ? confirmationToken
                 : null

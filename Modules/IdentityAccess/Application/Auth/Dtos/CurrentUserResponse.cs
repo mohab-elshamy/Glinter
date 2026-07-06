@@ -7,4 +7,5 @@ public class CurrentUserResponse
     public string Email { get; set; } = string.Empty;
     public bool IsActive { get; set; }
     public List<string> Roles { get; set; } = [];
+    public string AccountReviewStatus { get; set; } = string.Empty;
 }

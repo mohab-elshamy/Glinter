@@ -5,6 +5,7 @@ import type {
   AdminRoleResponse,
   AdminAssignRoleRequest,
   AdminChangeUserStatusRequest,
+  AdminReviewUserRegistrationRequest,
   AdminGetExperiencesRequest,
   AdminModerateExperienceRequest,
   AdminUpdateBuddyVerificationRequest,
@@ -31,6 +32,9 @@ export const adminApi = {
 
   changeUserStatus: (userId: string, data: AdminChangeUserStatusRequest) =>
     request<AdminUserResponse>(`/admin/users/${userId}/status`, { method: "PATCH", body: data }),
+
+  reviewUserRegistration: (userId: string, data: AdminReviewUserRegistrationRequest) =>
+    request<AdminUserResponse>(`/admin/users/${userId}/registration-review`, { method: "PATCH", body: data }),
 
   getExperiences: (params?: AdminGetExperiencesRequest) => {
     const query = params

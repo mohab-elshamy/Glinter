@@ -561,6 +561,13 @@ export interface AdminUserListItem {
   email: string;
   isActive: boolean;
   role: string;
+  accountReviewStatus: "NotRequired" | "Pending" | "Approved" | "Rejected";
+  identityDocumentUrl?: string;
+  identityDocumentFileName?: string;
+  identityDocumentContentType?: string;
+  accountReviewNotes?: string;
+  accountReviewedByUserId?: string;
+  accountReviewedAtUtc?: string;
 }
 
 export interface AdminUserResponse {
@@ -570,6 +577,13 @@ export interface AdminUserResponse {
   isActive: boolean;
   createdAtUtc: string;
   roles: string[];
+  accountReviewStatus: "NotRequired" | "Pending" | "Approved" | "Rejected";
+  identityDocumentUrl?: string;
+  identityDocumentFileName?: string;
+  identityDocumentContentType?: string;
+  accountReviewNotes?: string;
+  accountReviewedByUserId?: string;
+  accountReviewedAtUtc?: string;
 }
 
 export interface AdminRoleResponse {
@@ -582,6 +596,11 @@ export interface AdminAssignRoleRequest {
 
 export interface AdminChangeUserStatusRequest {
   isActive: boolean;
+}
+
+export interface AdminReviewUserRegistrationRequest {
+  reviewStatus: "Approved" | "Rejected";
+  notes?: string;
 }
 
 export interface AdminGetExperiencesRequest {
@@ -626,6 +645,7 @@ export interface BuddyVerificationEvent {
 export interface AdminDashboard {
   totalUsers: number;
   activeUsers: number;
+  pendingAccountReviews: number;
   pendingBuddyVerifications: number;
   approvedBuddies: number;
   pendingExperiences: number;

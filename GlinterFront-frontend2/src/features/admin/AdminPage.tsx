@@ -5,6 +5,7 @@ import {
   BarChart3,
   CheckCircle,
   ClipboardList,
+  FileText,
   Shield,
   Sparkles,
   UserCheck,
@@ -169,6 +170,39 @@ const AdminPage = () => {
     }
   };
 
+  const reviewUserRegistration = async (
+    user: AdminUserListItem,
+    reviewStatus: "Approved" | "Rejected",
+  ) => {
+    try {
+      const updated = await adminApi.reviewUserRegistration(user.userId, {
+        reviewStatus,
+        notes: reviewStatus === "Rejected"
+          ? "Rejected by an administrator."
+          : undefined,
+      });
+      setUsers((current) =>
+        current.map((item) => item.userId === updated.userId
+          ? {
+              ...item,
+              isActive: updated.isActive,
+              role: updated.roles[0] ?? item.role,
+              accountReviewStatus: updated.accountReviewStatus,
+              accountReviewNotes: updated.accountReviewNotes,
+              accountReviewedByUserId: updated.accountReviewedByUserId,
+              accountReviewedAtUtc: updated.accountReviewedAtUtc,
+            }
+          : item),
+      );
+      if (selectedUser?.userId === updated.userId) {
+        setSelectedUser(updated);
+      }
+      toast.success(`Registration ${reviewStatus.toLowerCase()}.`);
+    } catch (error) {
+      toast.error(errorMessage(error));
+    }
+  };
+
   const assignRole = async (user: AdminUserListItem, role: string) => {
     if (!role || role === user.role) return;
     try {
@@ -253,7 +287,9 @@ const AdminPage = () => {
   const filteredUsers = users.filter((user) =>
     !normalizedSearch ||
     user.fullName.toLowerCase().includes(normalizedSearch) ||
-    user.email.toLowerCase().includes(normalizedSearch));
+    user.email.toLowerCase().includes(normalizedSearch) ||
+    user.role.toLowerCase().includes(normalizedSearch) ||
+    user.accountReviewStatus.toLowerCase().includes(normalizedSearch));
   const filteredBuddies = buddies.filter((buddy) =>
     !normalizedSearch ||
     buddy.displayName.toLowerCase().includes(normalizedSearch) ||
@@ -355,6 +391,7 @@ const AdminPage = () => {
                   {[
                     { label: "Total users", value: dashboard.totalUsers, icon: Users },
                     { label: "Active users", value: dashboard.activeUsers, icon: UserCheck },
+                    { label: "Pending account reviews", value: dashboard.pendingAccountReviews, icon: FileText },
                     { label: "Pending buddies", value: dashboard.pendingBuddyVerifications, icon: Shield },
                     { label: "Pending experiences", value: dashboard.pendingExperiences, icon: Sparkles },
                     { label: "Approved experiences", value: dashboard.approvedExperiences, icon: CheckCircle },
@@ -379,7 +416,7 @@ const AdminPage = () => {
               {section === "Users & Roles" && (
                 <div className="space-y-3">
                   <TableShell empty={filteredUsers.length === 0}>
-                    <thead><tr><th>User</th><th>Role</th><th>Status</th><th>Actions</th></tr></thead>
+                    <thead><tr><th>User</th><th>Role</th><th>Status</th><th>Review</th><th>Actions</th></tr></thead>
                     <tbody>
                       {pagedUsers.map((user) => (
                         <tr key={user.userId}>
@@ -391,9 +428,35 @@ const AdminPage = () => {
                             </select>
                           </td>
                           <td><StatusBadge value={user.isActive ? "Active" : "Inactive"} /></td>
+                          <td>
+                            <div className="flex flex-col items-start gap-1">
+                              <StatusBadge value={formatReviewStatus(user.accountReviewStatus)} />
+                              {user.identityDocumentUrl && (
+                                <a
+                                  href={user.identityDocumentUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-1 text-xs text-accent"
+                                  title={user.identityDocumentFileName}
+                                  download={user.identityDocumentFileName}
+                                >
+                                  <FileText className="h-3 w-3" />
+                                  Document
+                                </a>
+                              )}
+                            </div>
+                          </td>
                           <td className="space-x-3">
                             <button disabled={userDetailsLoading} onClick={() => void showUserDetails(user.userId)} className="text-xs text-accent disabled:opacity-40">Details</button>
-                            <button onClick={() => void changeUserStatus(user)} className="text-xs text-accent">{user.isActive ? "Deactivate" : "Activate"}</button>
+                            {canChangeUserStatus(user) && (
+                              <button onClick={() => void changeUserStatus(user)} className="text-xs text-accent">{user.isActive ? "Deactivate" : "Activate"}</button>
+                            )}
+                            {user.accountReviewStatus !== "NotRequired" && (
+                              <>
+                                <button onClick={() => void reviewUserRegistration(user, "Approved")} className="text-xs text-green-400">Approve</button>
+                                <button onClick={() => void reviewUserRegistration(user, "Rejected")} className="text-xs text-red-400">Reject</button>
+                              </>
+                            )}
                           </td>
                         </tr>
                       ))}
@@ -542,8 +605,38 @@ const AdminPage = () => {
             <dl className="mt-5 grid gap-4 sm:grid-cols-2">
               <div><dt className="text-xs text-muted-foreground">User ID</dt><dd className="mt-1 break-all text-sm">{selectedUser.userId}</dd></div>
               <div><dt className="text-xs text-muted-foreground">Status</dt><dd className="mt-1"><StatusBadge value={selectedUser.isActive ? "Active" : "Inactive"} /></dd></div>
+              <div><dt className="text-xs text-muted-foreground">Review</dt><dd className="mt-1"><StatusBadge value={formatReviewStatus(selectedUser.accountReviewStatus)} /></dd></div>
               <div><dt className="text-xs text-muted-foreground">Created</dt><dd className="mt-1 text-sm">{new Date(selectedUser.createdAtUtc).toLocaleString()}</dd></div>
               <div><dt className="text-xs text-muted-foreground">Roles</dt><dd className="mt-1 flex flex-wrap gap-1">{selectedUser.roles.map((role) => <span key={role} className="rounded-full bg-secondary px-2 py-1 text-xs">{role}</span>)}</dd></div>
+              {selectedUser.identityDocumentUrl && (
+                <div className="sm:col-span-2">
+                  <dt className="text-xs text-muted-foreground">Identity document</dt>
+                  <dd className="mt-1">
+                    <a
+                      href={selectedUser.identityDocumentUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-2 text-sm text-accent"
+                      download={selectedUser.identityDocumentFileName}
+                    >
+                      <FileText className="h-4 w-4" />
+                      {selectedUser.identityDocumentFileName ?? "Open document"}
+                    </a>
+                  </dd>
+                </div>
+              )}
+              {selectedUser.accountReviewNotes && (
+                <div className="sm:col-span-2">
+                  <dt className="text-xs text-muted-foreground">Review notes</dt>
+                  <dd className="mt-1 text-sm">{selectedUser.accountReviewNotes}</dd>
+                </div>
+              )}
+              {selectedUser.accountReviewedAtUtc && (
+                <div>
+                  <dt className="text-xs text-muted-foreground">Reviewed</dt>
+                  <dd className="mt-1 text-sm">{new Date(selectedUser.accountReviewedAtUtc).toLocaleString()}</dd>
+                </div>
+              )}
             </dl>
           </section>
         </div>
@@ -609,19 +702,30 @@ const ListPagination = ({
 const StatusBadge = ({ value }: { value: string }) => {
   const good = value === "Active" || value === "Approved";
   const pending = value === "Pending";
+  const neutral = value === "Not required";
   return (
     <span className={`rounded-full px-2 py-1 text-[10px] ${
       good
         ? "bg-green-500/20 text-green-400"
         : pending
           ? "bg-yellow-500/20 text-yellow-400"
-          : "bg-red-500/20 text-red-400"
+          : neutral
+            ? "bg-secondary text-muted-foreground"
+            : "bg-red-500/20 text-red-400"
     }`}>
       {good ? <CheckCircle className="mr-1 inline h-3 w-3" /> : <XCircle className="mr-1 inline h-3 w-3" />}
       {value}
     </span>
   );
 };
+
+const formatReviewStatus = (status: string) =>
+  status === "NotRequired" ? "Not required" : status;
+
+const canChangeUserStatus = (user: AdminUserListItem) =>
+  user.isActive ||
+  user.accountReviewStatus === "NotRequired" ||
+  user.accountReviewStatus === "Approved";
 
 const MetricBreakdown = ({
   title,

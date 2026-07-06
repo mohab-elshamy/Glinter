@@ -10,5 +10,6 @@ public interface IIdentityAdminReadService
 public sealed record IdentityAdminSnapshot(
     int TotalUsers,
     int ActiveUsers,
+    int PendingAccountReviews,
     IReadOnlyDictionary<string, int> UsersByRole,
     int RecentAuditEvents);

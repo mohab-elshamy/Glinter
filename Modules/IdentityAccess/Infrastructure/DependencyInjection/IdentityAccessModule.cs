@@ -22,6 +22,7 @@ using Glinter.Modules.IdentityAccess.Application.Auth.Queries.GetUserById;
 using Glinter.Modules.IdentityAccess.Application.Auth.Queries.GetUsers;
 using Glinter.Modules.IdentityAccess.Application.Auth.Queries.GetRoles;
 using Glinter.Modules.IdentityAccess.Application.Auth.Commands.SecurityFlows;
+using Glinter.Modules.IdentityAccess.Application.Auth.Commands.ReviewUserRegistration;
 using Glinter.Modules.IdentityAccess.Infrastructure.Email;
 
 
@@ -213,6 +214,7 @@ public static class IdentityAccessModule
         services.AddScoped<GetCurrentUserQueryHandler>();
         services.AddScoped<AssignRoleCommandHandler>();
         services.AddScoped<ChangeUserStatusCommandHandler>();
+        services.AddScoped<ReviewUserRegistrationCommandHandler>();
         services.AddScoped<GetUsersQueryHandler>();
         services.AddScoped<GetUserByIdQueryHandler>();
         services.AddScoped<GetRolesQueryHandler>();

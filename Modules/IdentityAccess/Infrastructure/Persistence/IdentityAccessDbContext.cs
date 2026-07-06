@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Glinter.Shared.Application.Auditing;
+using Glinter.Modules.IdentityAccess.Domain.Enums;
 
 namespace Glinter.Modules.IdentityAccess.Infrastructure.Persistence;
 
@@ -30,11 +31,19 @@ public class IdentityAccessDbContext
             entity.ToTable("users");
             entity.Property(x => x.FullName).HasMaxLength(200);
             entity.Property(x => x.IsActive).HasDefaultValue(true);
+            entity.Property(x => x.AccountReviewStatus)
+                .HasConversion<string>()
+                .HasMaxLength(40)
+                .HasDefaultValue(AccountReviewStatus.NotRequired);
+            entity.Property(x => x.IdentityDocumentFileName).HasMaxLength(260);
+            entity.Property(x => x.IdentityDocumentContentType).HasMaxLength(100);
+            entity.Property(x => x.AccountReviewNotes).HasMaxLength(1000);
             entity.HasIndex(x => x.NormalizedEmail)
                 .HasDatabaseName("EmailIndex")
                 .IsUnique();
             entity.HasIndex(x => x.CreatedAtUtc);
             entity.HasIndex(x => x.IsActive);
+            entity.HasIndex(x => x.AccountReviewStatus);
         });
 
         builder.Entity<ApplicationRole>(entity =>

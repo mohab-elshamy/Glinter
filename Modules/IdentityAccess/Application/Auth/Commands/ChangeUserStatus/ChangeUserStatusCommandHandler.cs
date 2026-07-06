@@ -2,6 +2,7 @@ using Glinter.Modules.IdentityAccess.Application.Abstractions;
 using Glinter.Modules.IdentityAccess.Application.Auth.Dtos;
 using Glinter.Modules.IdentityAccess.Application.Common.Mapping;
 using Glinter.Modules.IdentityAccess.Domain.Entities;
+using Glinter.Modules.IdentityAccess.Domain.Enums;
 using Microsoft.AspNetCore.Identity;
 using Glinter.Shared.Application.Auditing;
 
@@ -33,6 +34,13 @@ public class ChangeUserStatusCommandHandler
         var user = await _userManager.FindByIdAsync(command.UserId.ToString());
         if (user is null)
             throw new NotFoundException("User not found.");
+
+        if (command.IsActive &&
+            user.AccountReviewStatus is AccountReviewStatus.Pending or AccountReviewStatus.Rejected)
+        {
+            throw new ValidationException(
+                "Registration must be approved before this user can be activated.");
+        }
 
         var previousIsActive = user.IsActive;
         user.IsActive = command.IsActive;

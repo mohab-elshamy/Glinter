@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { KeyRound, Loader2, ShieldCheck, Sparkles } from "lucide-react";
+import { FileText, KeyRound, Loader2, ShieldCheck, Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
 import {
   authApi,
@@ -11,6 +11,19 @@ import {
 import { authStorage } from "@/shared/lib/auth";
 
 const ROLES = ["Traveler", "LocalBuddy", "HotelOwner", "ExperienceProvider"] as const;
+const ROLES_REQUIRING_REVIEW = new Set<typeof ROLES[number]>([
+  "LocalBuddy",
+  "HotelOwner",
+  "ExperienceProvider",
+]);
+const MAX_IDENTITY_DOCUMENT_BYTES = 5 * 1024 * 1024;
+
+const roleLabel = (role: typeof ROLES[number]) => {
+  if (role === "LocalBuddy") return "Local Buddy";
+  if (role === "HotelOwner") return "Hotel Provider";
+  if (role === "ExperienceProvider") return "Experience Provider";
+  return role;
+};
 
 type AuthView =
   | "login"
@@ -45,6 +58,12 @@ const Auth = ({ initialView }: AuthProps) => {
   const [signupEmail, setSignupEmail] = useState("");
   const [signupPassword, setSignupPassword] = useState("");
   const [signupRole, setSignupRole] = useState<typeof ROLES[number]>("Traveler");
+  const [identityDocument, setIdentityDocument] = useState<{
+    url: string;
+    fileName: string;
+    contentType: string;
+  } | null>(null);
+  const [identityDocumentLoading, setIdentityDocumentLoading] = useState(false);
 
   const [confirmationUserId, setConfirmationUserId] = useState(
     searchParams.get("userId") ?? "",
@@ -88,6 +107,7 @@ const Auth = ({ initialView }: AuthProps) => {
       email: session.email,
       roles: session.roles,
       isActive: true,
+      accountReviewStatus: session.accountReviewStatus,
     });
     window.dispatchEvent(new Event("auth-change"));
   };
@@ -167,6 +187,12 @@ const Auth = ({ initialView }: AuthProps) => {
   const handleSignup = async (event: React.FormEvent) => {
     event.preventDefault();
     clearFeedback();
+    const requiresReview = ROLES_REQUIRING_REVIEW.has(signupRole);
+    if (requiresReview && !identityDocument) {
+      setError("Identity document is required for this account type.");
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -175,6 +201,9 @@ const Auth = ({ initialView }: AuthProps) => {
         email: signupEmail,
         password: signupPassword,
         role: signupRole,
+        identityDocumentUrl: requiresReview ? identityDocument?.url : undefined,
+        identityDocumentFileName: requiresReview ? identityDocument?.fileName : undefined,
+        identityDocumentContentType: requiresReview ? identityDocument?.contentType : undefined,
       });
       setConfirmationUserId(response.userId);
       setConfirmationToken(response.developmentConfirmationToken ?? "");
@@ -189,6 +218,39 @@ const Auth = ({ initialView }: AuthProps) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleIdentityDocument = (files: FileList | null) => {
+    const file = files?.[0];
+    setIdentityDocument(null);
+    if (!file) return;
+
+    clearFeedback();
+    if (!["application/pdf", "image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      setError("Identity document must be a PDF, JPEG, PNG, or WebP file.");
+      return;
+    }
+
+    if (file.size > MAX_IDENTITY_DOCUMENT_BYTES) {
+      setError("Identity document must be 5 MB or smaller.");
+      return;
+    }
+
+    setIdentityDocumentLoading(true);
+    const reader = new FileReader();
+    reader.onload = () => {
+      setIdentityDocument({
+        url: String(reader.result ?? ""),
+        fileName: file.name,
+        contentType: file.type,
+      });
+      setIdentityDocumentLoading(false);
+    };
+    reader.onerror = () => {
+      setError("Identity document could not be read.");
+      setIdentityDocumentLoading(false);
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleConfirmation = async () => {
@@ -364,6 +426,7 @@ const Auth = ({ initialView }: AuthProps) => {
     }
 
     if (view === "signup") {
+      const requiresReview = ROLES_REQUIRING_REVIEW.has(signupRole);
       return (
         <>
           <div className="mb-6 flex rounded-lg bg-secondary p-1">
@@ -393,12 +456,46 @@ const Auth = ({ initialView }: AuthProps) => {
               <select value={signupRole} onChange={(event) => setSignupRole(event.target.value as typeof signupRole)} className={`${inputClass} mt-1`}>
                 {ROLES.map((role) => (
                   <option key={role} value={role}>
-                    {role === "LocalBuddy" ? "Local Buddy" : role.replace(/([A-Z])/g, " $1").trim()}
+                    {roleLabel(role)}
                   </option>
                 ))}
               </select>
             </label>
-            {submitButton("Create Account", "Creating account...")}
+            {requiresReview && (
+              <div className="rounded-lg border border-border bg-secondary/40 p-3">
+                <label className="block text-sm font-medium">
+                  Identity document
+                  <span className="mt-1 flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm">
+                    {identityDocumentLoading
+                      ? <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                      : <FileText className="h-4 w-4 text-primary" />}
+                    <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                      {identityDocument?.fileName ?? "Upload PDF or image"}
+                    </span>
+                    <span className="text-xs text-primary">Choose</span>
+                    <input
+                      type="file"
+                      required={requiresReview}
+                      accept="application/pdf,image/jpeg,image/png,image/webp"
+                      disabled={identityDocumentLoading}
+                      onChange={(event) => handleIdentityDocument(event.target.files)}
+                      className="sr-only"
+                    />
+                  </span>
+                </label>
+                <p className="mt-2 text-[11px] text-muted-foreground">
+                  Admins review this before activating Local Buddy, Hotel Provider, and Experience Provider accounts.
+                </p>
+              </div>
+            )}
+            <button
+              type="submit"
+              disabled={loading || identityDocumentLoading}
+              className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-3 font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+              {loading ? "Creating account..." : "Create Account"}
+            </button>
           </form>
         </>
       );

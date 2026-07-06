@@ -18,6 +18,7 @@ public static class IdentityAccessMappings
             FullName = user.FullName,
             Email = user.Email ?? string.Empty,
             Roles = roles.ToList(),
+            AccountReviewStatus = user.AccountReviewStatus.ToString(),
             Token = token,
             RefreshToken = refreshToken,
             RefreshTokenExpiresAtUtc = refreshTokenExpiresAtUtc
@@ -34,7 +35,8 @@ public static class IdentityAccessMappings
             FullName = user.FullName,
             Email = user.Email ?? string.Empty,
             IsActive = user.IsActive,
-            Roles = roles.ToList()
+            Roles = roles.ToList(),
+            AccountReviewStatus = user.AccountReviewStatus.ToString()
         };
     }
 
@@ -49,7 +51,14 @@ public static class IdentityAccessMappings
             Email = user.Email ?? string.Empty,
             IsActive = user.IsActive,
             CreatedAtUtc = user.CreatedAtUtc,
-            Roles = roles.ToList()
+            Roles = roles.ToList(),
+            AccountReviewStatus = user.AccountReviewStatus.ToString(),
+            IdentityDocumentUrl = user.IdentityDocumentUrl,
+            IdentityDocumentFileName = user.IdentityDocumentFileName,
+            IdentityDocumentContentType = user.IdentityDocumentContentType,
+            AccountReviewNotes = user.AccountReviewNotes,
+            AccountReviewedByUserId = user.AccountReviewedByUserId,
+            AccountReviewedAtUtc = user.AccountReviewedAtUtc
         };
     }
 
@@ -63,7 +72,14 @@ public static class IdentityAccessMappings
             FullName = user.FullName,
             Email = user.Email ?? string.Empty,
             IsActive = user.IsActive,
-            Role = roles.FirstOrDefault() ?? string.Empty
+            Role = roles.FirstOrDefault() ?? string.Empty,
+            AccountReviewStatus = user.AccountReviewStatus.ToString(),
+            IdentityDocumentUrl = user.IdentityDocumentUrl,
+            IdentityDocumentFileName = user.IdentityDocumentFileName,
+            IdentityDocumentContentType = user.IdentityDocumentContentType,
+            AccountReviewNotes = user.AccountReviewNotes,
+            AccountReviewedByUserId = user.AccountReviewedByUserId,
+            AccountReviewedAtUtc = user.AccountReviewedAtUtc
         };
     }
 

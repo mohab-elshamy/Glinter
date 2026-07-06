@@ -4,6 +4,7 @@ public sealed class AdminDashboardResponse
 {
     public int TotalUsers { get; set; }
     public int ActiveUsers { get; set; }
+    public int PendingAccountReviews { get; set; }
     public int PendingBuddyVerifications { get; set; }
     public int ApprovedBuddies { get; set; }
     public int PendingExperiences { get; set; }

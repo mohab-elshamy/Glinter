@@ -49,7 +49,10 @@ public class AuthController : ControllerBase
             FullName = request.FullName,
             Email = request.Email,
             Password = request.Password,
-            Role = request.Role
+            Role = request.Role,
+            IdentityDocumentUrl = request.IdentityDocumentUrl,
+            IdentityDocumentFileName = request.IdentityDocumentFileName,
+            IdentityDocumentContentType = request.IdentityDocumentContentType
         });
 
         return Ok(result);

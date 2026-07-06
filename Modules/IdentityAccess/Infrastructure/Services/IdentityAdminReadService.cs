@@ -1,4 +1,5 @@
 using Glinter.Modules.IdentityAccess.Application.Abstractions;
+using Glinter.Modules.IdentityAccess.Domain.Enums;
 using Glinter.Modules.IdentityAccess.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -20,6 +21,9 @@ public sealed class IdentityAdminReadService(
         return new IdentityAdminSnapshot(
             await dbContext.Users.CountAsync(cancellationToken),
             await dbContext.Users.CountAsync(x => x.IsActive, cancellationToken),
+            await dbContext.Users.CountAsync(
+                x => x.AccountReviewStatus == AccountReviewStatus.Pending,
+                cancellationToken),
             usersByRole,
             await dbContext.AdminAuditEvents.CountAsync(
                 x => x.CreatedAtUtc >= auditSinceUtc,

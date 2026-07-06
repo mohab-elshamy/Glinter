@@ -10,6 +10,9 @@ export interface RegisterRequest {
   email: string;
   password: string;
   role: "Traveler" | "LocalBuddy" | "HotelOwner" | "ExperienceProvider";
+  identityDocumentUrl?: string;
+  identityDocumentFileName?: string;
+  identityDocumentContentType?: string;
 }
 
 export interface AuthResponse {
@@ -17,6 +20,7 @@ export interface AuthResponse {
   fullName: string;
   email: string;
   roles: string[];
+  accountReviewStatus?: string;
   token: string;
   refreshToken: string;
   refreshTokenExpiresAtUtc: string;
@@ -59,6 +63,7 @@ export interface CurrentUserResponse {
   email: string;
   isActive: boolean;
   roles: string[];
+  accountReviewStatus?: string;
 }
 
 export type LoginResponse = AuthResponse | MfaChallengeResponse;

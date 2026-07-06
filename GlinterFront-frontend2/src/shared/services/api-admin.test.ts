@@ -26,6 +26,12 @@ describe("admin API", () => {
       method: "PATCH",
       body: { isActive: false },
     });
+
+    await adminApi.reviewUserRegistration("user-id", { reviewStatus: "Approved" });
+    expect(request).toHaveBeenLastCalledWith("/admin/users/user-id/registration-review", {
+      method: "PATCH",
+      body: { reviewStatus: "Approved" },
+    });
   });
 
   it("wires buddy verification and experience moderation", async () => {
