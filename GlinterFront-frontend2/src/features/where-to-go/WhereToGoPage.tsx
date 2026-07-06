@@ -149,6 +149,51 @@ const WhereToGo = () => {
     ? currentLocation.state.position
     : undefined;
   const currentRegionLabel = detectedRegionLabel(currentLocation.state.detectedRegion);
+  const customStartPoint = useMemo(() => {
+    if (customStartLatitude === "" || customStartLongitude === "") return undefined;
+    const latitude = Number(customStartLatitude);
+    const longitude = Number(customStartLongitude);
+    if (
+      !Number.isFinite(latitude) ||
+      !Number.isFinite(longitude) ||
+      latitude < -90 ||
+      latitude > 90 ||
+      longitude < -180 ||
+      longitude > 180
+    ) {
+      return undefined;
+    }
+
+    return {
+      latitude,
+      longitude,
+    };
+  }, [customStartLatitude, customStartLongitude]);
+  const planningStartPosition = customStartPoint ?? currentPosition;
+  const startPickerCenter = useMemo<[number, number]>(() => {
+    if (customStartPoint) return [customStartPoint.latitude, customStartPoint.longitude];
+    if (currentPosition) return [currentPosition.latitude, currentPosition.longitude];
+    return [26.8206, 30.8025];
+  }, [currentPosition, customStartPoint]);
+  const startPickerMarker = useMemo<MapMarker | null>(() => {
+    if (!customStartPoint) return null;
+
+    return {
+      lat: customStartPoint.latitude,
+      lng: customStartPoint.longitude,
+      name: "Selected start point",
+      label: "Start",
+      color: "#38bdf8",
+    };
+  }, [customStartPoint]);
+  const setCustomStartPoint = useCallback((latitude: number, longitude: number) => {
+    setCustomStartLatitude(latitude.toFixed(6));
+    setCustomStartLongitude(longitude.toFixed(6));
+  }, []);
+  const clearCustomStartPoint = useCallback(() => {
+    setCustomStartLatitude("");
+    setCustomStartLongitude("");
+  }, []);
 
   useEffect(() => {
     if (profileQuery.data?.profileType !== "Traveler") return;
@@ -168,15 +213,15 @@ const WhereToGo = () => {
     [experiencePool, usedIds],
   );
   const sortedUnusedExperiences = useMemo(() => {
-    if (!prioritizeNearest || !currentPosition) return unusedExperiences;
+    if (!prioritizeNearest || !planningStartPosition) return unusedExperiences;
     return [...unusedExperiences].sort((left, right) => {
-      const leftDistance = calculateDistanceKm(currentPosition, left);
-      const rightDistance = calculateDistanceKm(currentPosition, right);
+      const leftDistance = calculateDistanceKm(planningStartPosition, left);
+      const rightDistance = calculateDistanceKm(planningStartPosition, right);
       if (leftDistance == null) return rightDistance == null ? 0 : 1;
       if (rightDistance == null) return -1;
       return leftDistance - rightDistance;
     });
-  }, [currentPosition, prioritizeNearest, unusedExperiences]);
+  }, [planningStartPosition, prioritizeNearest, unusedExperiences]);
 
   const itineraryByDay = useMemo(
     () => tripDates.map((date) => ({
@@ -203,14 +248,14 @@ const WhereToGo = () => {
         data: {
           rating: item.experience.rating ?? 0,
           area: `${formatDay(item.date)} · ${item.time}${
-            currentPosition
-              ? ` · ${formatDistance(calculateDistanceKm(currentPosition, item.experience))}`
+            planningStartPosition
+              ? ` · ${formatDistance(calculateDistanceKm(planningStartPosition, item.experience))}`
               : ""
           }`,
         },
       }];
     }),
-    [currentPosition, itinerary, tripDates],
+    [itinerary, planningStartPosition, tripDates],
   );
 
   const routeLines: MapRouteLine[] = useMemo(
@@ -227,7 +272,7 @@ const WhereToGo = () => {
   }, [markers]);
 
   const selectedMarker = markers.find((marker) => marker.id === selectedExperienceId) ?? null;
-  const activitiesWithoutCoordinates = currentPosition
+  const activitiesWithoutCoordinates = planningStartPosition
     ? itinerary.filter(
       (item) => item.experience.latitude == null || item.experience.longitude == null,
     ).length
@@ -257,10 +302,10 @@ const WhereToGo = () => {
         adm1Gid: region.adm1Gid,
         adm2Gid: region.adm2Gid,
         adm3Gid: region.adm3Gid,
-        sortBy: prioritizeNearest && currentPosition ? "Distance" : "Recommended",
-        sortDirection: prioritizeNearest && currentPosition ? "Asc" : "Desc",
-        currentLatitude: prioritizeNearest ? currentPosition?.latitude : undefined,
-        currentLongitude: prioritizeNearest ? currentPosition?.longitude : undefined,
+        sortBy: prioritizeNearest && planningStartPosition ? "Distance" : "Recommended",
+        sortDirection: prioritizeNearest && planningStartPosition ? "Asc" : "Desc",
+        currentLatitude: prioritizeNearest ? planningStartPosition?.latitude : undefined,
+        currentLongitude: prioritizeNearest ? planningStartPosition?.longitude : undefined,
         page: 1,
         pageSize: 100,
       } as const;
@@ -273,12 +318,11 @@ const WhereToGo = () => {
       });
       const approved = [...uniqueExperiences.values()];
       const hasSelectedRegion = Object.values(region).some((value) => value != null);
-      const hasCustomStart = customStartLatitude !== "" && customStartLongitude !== "";
-      let origin = hasCustomStart
+      let origin = customStartPoint
         ? {
-            latitude: Number(customStartLatitude),
-            longitude: Number(customStartLongitude),
-            label: "Explicit start point",
+            latitude: customStartPoint.latitude,
+            longitude: customStartPoint.longitude,
+            label: "Pinned start point",
           }
         : currentPosition
         ? {
@@ -391,7 +435,7 @@ const WhereToGo = () => {
           interests,
           activityLevel,
           prioritizeNearest,
-          currentPosition,
+          currentPosition: planningStartPosition,
         });
         setExperiencePool(fallbackResult.items);
         setItinerary(fallback);
@@ -412,14 +456,10 @@ const WhereToGo = () => {
       toast.error("Sign in as a traveler to save this itinerary.");
       return;
     }
-    if ((customStartLatitude === "") !== (customStartLongitude === "")) {
-      toast.error("Enter both custom start coordinates or leave both blank.");
-      return;
-    }
-    if (customStartLatitude !== "" &&
-        (Number(customStartLatitude) < -90 || Number(customStartLatitude) > 90 ||
-         Number(customStartLongitude) < -180 || Number(customStartLongitude) > 180)) {
-      toast.error("Custom start coordinates are outside their valid range.");
+    if ((customStartLatitude === "") !== (customStartLongitude === "") || (
+      customStartLatitude !== "" && !customStartPoint
+    )) {
+      toast.error("Select a valid pinned start point or clear the pin.");
       return;
     }
     try {
@@ -664,7 +704,7 @@ const WhereToGo = () => {
             <section className="mt-5 rounded-xl border border-sky-500/20 bg-sky-500/5 p-3">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-xs font-semibold">Your current location</h3>
+                  <h3 className="text-xs font-semibold">Trip start location</h3>
                   <p className="mt-1 text-[11px] text-muted-foreground">
                     Used only for map context and optional distance ordering.
                   </p>
@@ -694,24 +734,43 @@ const WhereToGo = () => {
                   {currentLocation.state.regionMessage}
                 </p>
               )}
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <label className="text-[11px]">Custom start latitude
-                  <input type="number" min="-90" max="90" step="any" value={customStartLatitude} onChange={(event) => setCustomStartLatitude(event.target.value)} className="mt-1 w-full rounded-lg border border-border bg-background px-2 py-2" />
-                </label>
-                <label className="text-[11px]">Custom start longitude
-                  <input type="number" min="-180" max="180" step="any" value={customStartLongitude} onChange={(event) => setCustomStartLongitude(event.target.value)} className="mt-1 w-full rounded-lg border border-border bg-background px-2 py-2" />
-                </label>
+              <div className="mt-3 overflow-hidden rounded-xl border border-border bg-background">
+                <LeafletMap
+                  center={startPickerCenter}
+                  zoom={customStartPoint || currentPosition ? 13 : 6}
+                  markers={startPickerMarker ? [startPickerMarker] : []}
+                  selectedMarker={startPickerMarker}
+                  onMapClick={setCustomStartPoint}
+                  currentLocation={currentPosition}
+                  showLegend={false}
+                  showFullscreen={false}
+                  showSearch
+                  height="14rem"
+                />
               </div>
-              <p className="mt-2 text-[10px] text-muted-foreground">
-                Start priority: custom point, allowed browser location, then selected region centroid.
-              </p>
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[10px] text-muted-foreground">
+                <span>
+                  {customStartPoint
+                    ? `Pinned start: ${customStartPoint.latitude.toFixed(5)}, ${customStartPoint.longitude.toFixed(5)}`
+                    : "Start priority: browser location, then selected region centroid."}
+                </span>
+                {customStartPoint && (
+                  <button
+                    type="button"
+                    onClick={clearCustomStartPoint}
+                    className="inline-flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-[10px] text-foreground hover:bg-secondary"
+                  >
+                    <Trash2 className="h-3 w-3" /> Clear pin
+                  </button>
+                )}
+              </div>
               <label className={`mt-3 flex items-start gap-2 text-xs ${
-                currentPosition ? "cursor-pointer" : "cursor-not-allowed text-muted-foreground"
+                planningStartPosition ? "cursor-pointer" : "cursor-not-allowed text-muted-foreground"
               }`}>
                 <input
                   type="checkbox"
                   checked={prioritizeNearest}
-                  disabled={!currentPosition}
+                  disabled={!planningStartPosition}
                   onChange={(event) => setPrioritizeNearest(event.target.checked)}
                   className="mt-0.5"
                 />
@@ -1024,7 +1083,7 @@ const WhereToGo = () => {
                               onMove={(direction) => setItinerary((current) =>
                                 moveItineraryItem(current, item.experience.id, direction))}
                               onDetails={() => void openExperienceDetails(item.experience.id)}
-                              currentPosition={currentPosition}
+                              currentPosition={planningStartPosition}
                             />
                           ))}
                           {items.length === 0 && (
@@ -1065,8 +1124,8 @@ const WhereToGo = () => {
                             {sortedUnusedExperiences.slice(0, 50).map((experience) => (
                               <option key={experience.id} value={experience.id}>
                                 {experience.name} · {experience.category} · {formatExperiencePrice(experience.startingPricePerPerson, experience.priceRange)}
-                                {currentPosition
-                                  ? ` · ${formatDistance(calculateDistanceKm(currentPosition, experience))}`
+                                {planningStartPosition
+                                  ? ` · ${formatDistance(calculateDistanceKm(planningStartPosition, experience))}`
                                   : ""}
                               </option>
                             ))}

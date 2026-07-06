@@ -82,6 +82,7 @@ export interface MapOverlayArea {
   id: number;
   name: string;
   value?: number | null;
+  tooltip?: string;
   color: string;
   geometry: Geometry | Feature;
   fillOpacity?: number;
@@ -564,7 +565,7 @@ const LeafletMap: React.FC<LeafletMapProps> = ({
             data={toGeoJson(area)}
             onEachFeature={(_feature, layer) => {
               const tooltip = document.createElement("span");
-              tooltip.textContent = `${area.name}: ${area.value ?? "No data"}`;
+              tooltip.textContent = area.tooltip ?? `${area.name}: ${area.value ?? "No data"}`;
               layer.bindTooltip(tooltip);
             }}
             style={{

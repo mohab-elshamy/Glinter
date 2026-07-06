@@ -26,7 +26,8 @@ public class Experience
 
     public string? GoogleMapsLink { get; set; }
     public string? PhoneInternational { get; set; }
-    public string? PriceRange { get; set; }
+    public int? PriceRangeMin { get; set; }
+    public int? PriceRangeMax { get; set; }
     public int? Reviews { get; set; }
     public decimal? Rating { get; set; }
     public string? Website { get; set; }

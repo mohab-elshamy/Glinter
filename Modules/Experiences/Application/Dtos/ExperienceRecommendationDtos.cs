@@ -116,6 +116,8 @@ public class ExperienceRecommendationItemResponse
     public decimal? Rating { get; set; }
     public int? Reviews { get; set; }
     public string? PriceRange { get; set; }
+    public int? PriceRangeMin { get; set; }
+    public int? PriceRangeMax { get; set; }
     public decimal? StartingPricePerPerson { get; set; }
     public string? PrimaryImage { get; set; }
     public int EstimatedDurationMinutes { get; set; }

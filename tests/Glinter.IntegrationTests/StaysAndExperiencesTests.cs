@@ -306,6 +306,7 @@ public sealed class StaysAndExperiencesTests : ApiTestBase
               {
                 "name": "Imported Duplicate First {{suffix}}",
                 "cid": "{{duplicateCid}}",
+                "price_range": "$$",
                 "coordinates": { "latitude": 30.05, "longitude": 31.25 }
               },
               {
@@ -332,6 +333,7 @@ public sealed class StaysAndExperiencesTests : ApiTestBase
               {
                 "name": "Imported Duplicate Existing {{suffix}}",
                 "cid": "{{duplicateCid}}",
+                "price_range": "$20-$40",
                 "coordinates": { "latitude": 30.07, "longitude": 31.27 }
               },
               {
@@ -345,8 +347,8 @@ public sealed class StaysAndExperiencesTests : ApiTestBase
         secondImport.EnsureSuccessStatusCode();
         using var secondJson = await ReadJsonAsync(secondImport);
         Assert.Equal(1, secondJson.RootElement.GetProperty("created").GetInt32());
-        Assert.Equal(0, secondJson.RootElement.GetProperty("updated").GetInt32());
-        Assert.Equal(1, secondJson.RootElement.GetProperty("skipped").GetInt32());
+        Assert.Equal(1, secondJson.RootElement.GetProperty("updated").GetInt32());
+        Assert.Equal(0, secondJson.RootElement.GetProperty("skipped").GetInt32());
     }
 
     [Fact]
@@ -534,6 +536,9 @@ public sealed class StaysAndExperiencesTests : ApiTestBase
         Assert.Equal(HttpStatusCode.Created, create.StatusCode);
         using var createJson = await ReadJsonAsync(create);
         var experienceId = createJson.RootElement.GetProperty("id").GetInt32();
+        Assert.Equal(20, createJson.RootElement.GetProperty("priceRangeMin").GetInt32());
+        Assert.Equal(40, createJson.RootElement.GetProperty("priceRangeMax").GetInt32());
+        Assert.Equal("$20-$40", createJson.RootElement.GetProperty("priceRange").GetString());
 
         var adminToken = await GetAdminTokenAsync();
         (await SendAsync(
@@ -563,6 +568,9 @@ public sealed class StaysAndExperiencesTests : ApiTestBase
         update.EnsureSuccessStatusCode();
         using var updateJson = await ReadJsonAsync(update);
         Assert.Equal("Nature", updateJson.RootElement.GetProperty("category").GetString());
+        Assert.Equal(30, updateJson.RootElement.GetProperty("priceRangeMin").GetInt32());
+        Assert.Equal(50, updateJson.RootElement.GetProperty("priceRangeMax").GetInt32());
+        Assert.Equal("$30-$50", updateJson.RootElement.GetProperty("priceRange").GetString());
         Assert.Equal(
             "https://example.test/updated-experience.jpg",
             updateJson.RootElement.GetProperty("featuredImages")[0].GetProperty("link").GetString());

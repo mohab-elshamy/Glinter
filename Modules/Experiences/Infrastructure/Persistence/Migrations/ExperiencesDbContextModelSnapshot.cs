@@ -103,9 +103,11 @@ namespace Glinter.Modules.Experiences.Infrastructure.Persistence.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
-                    b.Property<string>("PriceRange")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+                    b.Property<int?>("PriceRangeMax")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("PriceRangeMin")
+                        .HasColumnType("integer");
 
                     b.Property<Guid?>("ProviderProfileId")
                         .HasColumnType("uuid");

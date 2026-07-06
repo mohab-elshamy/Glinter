@@ -54,6 +54,8 @@ export interface ExperienceRecommendationItem {
   rating?: number;
   reviews?: number;
   priceRange?: string;
+  priceRangeMin?: number;
+  priceRangeMax?: number;
   startingPricePerPerson?: number;
   primaryImage?: string;
   estimatedDurationMinutes: number;

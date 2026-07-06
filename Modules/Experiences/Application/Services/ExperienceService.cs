@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Glinter.Modules.Experiences.Application.Dtos;
 using Glinter.Modules.Experiences.Domain.Entities;
 using Glinter.Modules.Experiences.Domain.Enums;
@@ -87,6 +88,11 @@ public class ExperienceService
                 cancellationToken);
         }
 
+        var priceRange = ResolvePriceRange(
+            request.PriceRange,
+            request.PriceRangeMin,
+            request.PriceRangeMax);
+
         var experience = new Experience
         {
             Category = request.Category,
@@ -105,7 +111,8 @@ public class ExperienceService
             Adm3Gid = request.Adm3Gid,
             GoogleMapsLink = NormalizeString(request.GoogleMapsLink),
             PhoneInternational = NormalizeString(request.PhoneInternational),
-            PriceRange = NormalizeString(request.PriceRange),
+            PriceRangeMin = priceRange.Min,
+            PriceRangeMax = priceRange.Max,
             Website = NormalizeString(request.Website)
         };
 
@@ -232,7 +239,12 @@ public class ExperienceService
         experience.Adm3Gid = request.Adm3Gid;
         experience.GoogleMapsLink = NormalizeString(request.GoogleMapsLink);
         experience.PhoneInternational = NormalizeString(request.PhoneInternational);
-        experience.PriceRange = NormalizeString(request.PriceRange);
+        var priceRange = ResolvePriceRange(
+            request.PriceRange,
+            request.PriceRangeMin,
+            request.PriceRangeMax);
+        experience.PriceRangeMin = priceRange.Min;
+        experience.PriceRangeMax = priceRange.Max;
         experience.Website = NormalizeString(request.Website);
         experience.UpdatedAtUtc = DateTime.UtcNow;
 
@@ -695,10 +707,7 @@ public class ExperienceService
 
             if (!string.IsNullOrWhiteSpace(cid))
             {
-                if (!importedCids.Add(cid) ||
-                    await _dbContext.Experiences
-                        .AsNoTracking()
-                        .AnyAsync(x => x.Cid == cid, cancellationToken))
+                if (!importedCids.Add(cid))
                 {
                     response.Skipped++;
                     continue;
@@ -730,7 +739,9 @@ public class ExperienceService
             experience.Longitude = longitude;
             experience.GoogleMapsLink = NormalizeString(GetString(item, "link"));
             experience.PhoneInternational = NormalizeString(GetString(item, "phone_international"));
-            experience.PriceRange = NormalizeString(GetString(item, "price_range"));
+            var priceRange = ParsePriceRange(GetString(item, "price_range"));
+            experience.PriceRangeMin = priceRange.Min;
+            experience.PriceRangeMax = priceRange.Max;
             experience.Reviews = GetInt(item, "reviews");
             experience.Rating = GetDecimal(item, "rating");
             experience.Website = NormalizeString(GetString(item, "website"));
@@ -1153,8 +1164,8 @@ public class ExperienceService
                     slot.PricePerPerson == 0) ||
                 (!x.AvailabilitySlots.Any(slot =>
                      slot.IsActive && slot.StartTimeUtc > nowUtc) &&
-                 x.PriceRange != null &&
-                 x.PriceRange.ToLower() == "free"));
+                 x.PriceRangeMin == 0 &&
+                 (x.PriceRangeMax == null || x.PriceRangeMax == 0)));
         }
 
         if (request.Adm0Gid is not null)
@@ -1427,7 +1438,9 @@ public class ExperienceService
                 })
                 .ToList(),
             PhoneInternational = experience.PhoneInternational,
-            PriceRange = experience.PriceRange,
+            PriceRange = FormatPriceRange(experience.PriceRangeMin, experience.PriceRangeMax),
+            PriceRangeMin = experience.PriceRangeMin,
+            PriceRangeMax = experience.PriceRangeMax,
             StartingPricePerPerson = GetStartingPricePerPerson(experience, now),
             Reviews = experience.Reviews,
             Rating = experience.Rating,
@@ -2109,6 +2122,123 @@ public class ExperienceService
         return double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var result)
             ? result
             : null;
+    }
+
+    private static (int? Min, int? Max) ResolvePriceRange(
+        string? priceRange,
+        int? priceRangeMin,
+        int? priceRangeMax)
+    {
+        if (priceRangeMin is not null || priceRangeMax is not null)
+        {
+            return NormalizePriceRange(priceRangeMin, priceRangeMax);
+        }
+
+        return ParsePriceRange(priceRange);
+    }
+
+    private static (int? Min, int? Max) ParsePriceRange(string? value)
+    {
+        var normalized = NormalizeString(value);
+
+        if (normalized is null)
+        {
+            return (null, null);
+        }
+
+        if (string.Equals(normalized, "free", StringComparison.OrdinalIgnoreCase))
+        {
+            return (0, 0);
+        }
+
+        var asciiDigits = ToAsciiDigits(normalized);
+        var matches = Regex.Matches(
+            asciiDigits
+                .Replace(",", string.Empty, StringComparison.Ordinal)
+                .Replace("\u066C", string.Empty, StringComparison.Ordinal),
+            @"[0-9]+");
+
+        if (matches.Count == 0)
+        {
+            var priceLevel = normalized.Count(c => c == '$');
+
+            if (priceLevel > 0)
+            {
+                return NormalizePriceRange(priceLevel, priceLevel);
+            }
+
+            return (null, null);
+        }
+
+        var min = int.Parse(matches[0].Value, CultureInfo.InvariantCulture);
+        var max = matches.Count > 1
+            ? int.Parse(matches[1].Value, CultureInfo.InvariantCulture)
+            : min;
+
+        return NormalizePriceRange(min, max);
+    }
+
+    private static (int? Min, int? Max) NormalizePriceRange(int? min, int? max)
+    {
+        if (min is null && max is null)
+        {
+            return (null, null);
+        }
+
+        if (min is null)
+        {
+            min = max;
+        }
+
+        if (max is null)
+        {
+            max = min;
+        }
+
+        if (min < 0 || max < 0)
+        {
+            throw new ArgumentException("Price range values cannot be negative.");
+        }
+
+        return min > max
+            ? (max, min)
+            : (min, max);
+    }
+
+    private static string? FormatPriceRange(int? min, int? max)
+    {
+        if (min is null && max is null)
+        {
+            return null;
+        }
+
+        var normalized = NormalizePriceRange(min, max);
+
+        if (normalized.Min == 0 && normalized.Max == 0)
+        {
+            return "Free";
+        }
+
+        return normalized.Min == normalized.Max
+            ? $"${normalized.Min}"
+            : $"${normalized.Min}-${normalized.Max}";
+    }
+
+    private static string ToAsciiDigits(string value)
+    {
+        var builder = new StringBuilder(value.Length);
+
+        foreach (var character in value)
+        {
+            builder.Append(character switch
+            {
+                >= '\u0660' and <= '\u0669' => (char)('0' + character - '\u0660'),
+                >= '\u06F0' and <= '\u06F9' => (char)('0' + character - '\u06F0'),
+                _ => character
+            });
+        }
+
+        return builder.ToString();
     }
 
     private static string? NormalizeString(string? value)

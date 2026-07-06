@@ -302,7 +302,9 @@ public class ExperienceRecommendationService : IExperienceRecommendationService
                 Latitude = x.Latitude!.Value,
                 Longitude = x.Longitude!.Value,
                 GoogleMapsLink = x.GoogleMapsLink,
-                PriceRange = x.PriceRange,
+                PriceRange = FormatPriceRange(x.PriceRangeMin, x.PriceRangeMax),
+                PriceRangeMin = x.PriceRangeMin,
+                PriceRangeMax = x.PriceRangeMax,
                 Reviews = x.Reviews,
                 Rating = x.Rating,
                 Website = x.Website,
@@ -412,6 +414,8 @@ public class ExperienceRecommendationService : IExperienceRecommendationService
             Rating = candidate.Rating,
             Reviews = candidate.Reviews,
             PriceRange = candidate.PriceRange,
+            PriceRangeMin = candidate.PriceRangeMin,
+            PriceRangeMax = candidate.PriceRangeMax,
             StartingPricePerPerson = candidate.StartingPricePerPerson,
             PrimaryImage = candidate.PrimaryImage,
             EstimatedDurationMinutes = estimatedDuration,
@@ -1098,6 +1102,31 @@ public class ExperienceRecommendationService : IExperienceRecommendationService
         return Math.Round(value, 4, MidpointRounding.AwayFromZero);
     }
 
+    private static string? FormatPriceRange(int? min, int? max)
+    {
+        if (min is null && max is null)
+        {
+            return null;
+        }
+
+        min ??= max;
+        max ??= min;
+
+        if (min > max)
+        {
+            (min, max) = (max, min);
+        }
+
+        if (min == 0 && max == 0)
+        {
+            return "Free";
+        }
+
+        return min == max
+            ? $"${min}"
+            : $"${min}-${max}";
+    }
+
     private static string? Truncate(string? value, int maxLength)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -1146,6 +1175,8 @@ public class ExperienceRecommendationService : IExperienceRecommendationService
         public double Longitude { get; set; }
         public string? GoogleMapsLink { get; set; }
         public string? PriceRange { get; set; }
+        public int? PriceRangeMin { get; set; }
+        public int? PriceRangeMax { get; set; }
         public int? Reviews { get; set; }
         public decimal? Rating { get; set; }
         public string? Website { get; set; }

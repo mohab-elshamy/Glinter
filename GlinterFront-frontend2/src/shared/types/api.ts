@@ -255,6 +255,8 @@ export interface ExperienceResponseDto {
   }>;
   phoneInternational?: string;
   priceRange?: string;
+  priceRangeMin?: number;
+  priceRangeMax?: number;
   startingPricePerPerson?: number;
   reviews?: number;
   rating?: number;
@@ -291,6 +293,8 @@ export interface CreateExperienceRequest {
   popularTimes: Array<{ dayOfWeek: string; hourOfDay: number; popularityPercentage: number }>;
   phoneInternational?: string;
   priceRange?: string;
+  priceRangeMin?: number;
+  priceRangeMax?: number;
   website?: string;
   amenities: string[];
 }

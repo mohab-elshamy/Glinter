@@ -51,8 +51,8 @@ public class ExperienceConfiguration : IEntityTypeConfiguration<Experience>
         builder.Property(x => x.PhoneInternational)
             .HasMaxLength(50);
 
-        builder.Property(x => x.PriceRange)
-            .HasMaxLength(100);
+        builder.Property(x => x.PriceRangeMin);
+        builder.Property(x => x.PriceRangeMax);
 
         builder.Property(x => x.Website)
             .HasMaxLength(2000);
