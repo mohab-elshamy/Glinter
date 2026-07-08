@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text.Json;
+using Glinter.Modules.IdentityAccess.Domain.Constants;
 using Xunit.Sdk;
 
 namespace Glinter.IntegrationTests.Infrastructure;
@@ -23,12 +24,25 @@ public abstract class ApiTestBase
     protected async Task<TestUser> CreateUserAsync(string role, string? prefix = null)
     {
         var email = $"{prefix ?? role.ToLowerInvariant()}.{Guid.NewGuid():N}@glinter.test";
+        var requiresRegistrationReview = role is
+            RoleNames.LocalBuddy or
+            RoleNames.HotelOwner or
+            RoleNames.ExperienceProvider;
         var response = await Client.PostAsJsonAsync("/api/auth/register", new
         {
             fullName = $"Integration {role}",
             email,
             password = GlinterApiFactory.UserPassword,
-            role
+            role,
+            identityDocumentUrl = requiresRegistrationReview
+                ? "data:application/pdf;base64,JVBERi0xLjQK"
+                : null,
+            identityDocumentFileName = requiresRegistrationReview
+                ? "integration-identity.pdf"
+                : null,
+            identityDocumentContentType = requiresRegistrationReview
+                ? "application/pdf"
+                : null
         });
         response.EnsureSuccessStatusCode();
 
@@ -45,6 +59,9 @@ public abstract class ApiTestBase
             token = confirmationToken
         });
         confirmation.EnsureSuccessStatusCode();
+
+        if (requiresRegistrationReview)
+            await Factory.ApproveRegistrationAsync(userId);
 
         var login = await Client.PostAsJsonAsync("/api/auth/login", new
         {

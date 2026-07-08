@@ -5,6 +5,7 @@ using Glinter.Modules.Experiences.Infrastructure.Persistence;
 using Glinter.Modules.Experiences.Application.Abstractions;
 using Glinter.Modules.Experiences.Application.Dtos;
 using Glinter.Modules.IdentityAccess.Domain.Entities;
+using Glinter.Modules.IdentityAccess.Domain.Enums;
 using Glinter.Modules.IdentityAccess.Infrastructure.Persistence;
 using Glinter.Modules.IdentityAccess.Infrastructure.Security;
 using Glinter.Modules.Profiles.Infrastructure.Persistence;
@@ -207,6 +208,27 @@ public sealed class GlinterApiFactory : WebApplicationFactory<Program>, IAsyncLi
         await using var command = new NpgsqlCommand(sql, connection);
         var result = await command.ExecuteScalarAsync();
         return result is null or DBNull ? default : (T)result;
+    }
+
+    public async Task ApproveRegistrationAsync(Guid userId)
+    {
+        using var scope = Services.CreateScope();
+        var userManager = scope.ServiceProvider
+            .GetRequiredService<UserManager<ApplicationUser>>();
+        var user = await userManager.FindByIdAsync(userId.ToString())
+                   ?? throw new InvalidOperationException(
+                       $"Test user '{userId}' was not found.");
+
+        user.AccountReviewStatus = AccountReviewStatus.Approved;
+        user.IsActive = true;
+        user.AccountReviewedAtUtc = DateTime.UtcNow;
+
+        var result = await userManager.UpdateAsync(user);
+        if (!result.Succeeded)
+        {
+            throw new InvalidOperationException(
+                string.Join(" | ", result.Errors.Select(error => error.Description)));
+        }
     }
 
     async Task IAsyncLifetime.DisposeAsync()

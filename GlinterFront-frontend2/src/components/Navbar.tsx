@@ -1,13 +1,9 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Compass, Users, MessageSquare, Info, Settings, User, MapPin, Map, LogIn, Menu, X, Bookmark } from "lucide-react";
+import { Compass, Users, MessageSquare, Info, Settings, User, MapPin, Map, LogIn, Menu, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { authStorage } from "@/shared/lib/auth";
 import { authApi } from "@/shared/services/api-auth";
-import { getRoleHome } from "@/shared/lib/auth-routing";
-import { notificationsApi } from "@/shared/services/api-communication";
-import { ChatRealtimeClient } from "@/shared/services/chat-realtime";
-import { overlayLayers } from "@/shared/lib/overlay-layers";
 
 const navItems = [
   { path: "/explore", label: "Explore", icon: Compass },
@@ -25,8 +21,6 @@ const Navbar = ({ solid }: { solid?: boolean }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(() => authStorage.isAuthenticated());
   const [isAdmin, setIsAdmin] = useState(() => authStorage.isAdmin());
-  const [notificationUnread, setNotificationUnread] = useState(0);
-  const accountHome = getRoleHome(authStorage.getUser()?.roles ?? []);
 
   useEffect(() => {
     const check = () => {
@@ -42,37 +36,6 @@ const Navbar = ({ solid }: { solid?: boolean }) => {
   }, []);
 
   useEffect(() => {
-    if (!isLoggedIn) {
-      setNotificationUnread(0);
-      return;
-    }
-    notificationsApi.getNotifications(1, 1)
-      .then((notificationPage) => {
-        setNotificationUnread(notificationPage.unreadCount);
-      })
-      .catch((error: unknown) => {
-        console.error("Could not load notification unread count.", error);
-      });
-
-    const updateUnread = (event: Event) => {
-      setNotificationUnread((event as CustomEvent<number>).detail);
-    };
-    window.addEventListener("communication-unread-change", updateUnread);
-    const realtime = new ChatRealtimeClient({
-      notificationReceived: () => {
-        setNotificationUnread((count) => count + 1);
-      },
-    });
-    void realtime.start().catch((error: unknown) => {
-      console.error("Realtime notifications unavailable.", error);
-    });
-    return () => {
-      window.removeEventListener("communication-unread-change", updateUnread);
-      void realtime.stop();
-    };
-  }, [isLoggedIn]);
-
-  useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 0);
     window.addEventListener("scroll", onScroll);
     return () => window.removeEventListener("scroll", onScroll);
@@ -81,8 +44,8 @@ const Navbar = ({ solid }: { solid?: boolean }) => {
   const handleLogout = async () => {
     try {
       await authApi.logout();
-    } catch (error) {
-      console.error("Backend logout failed; clearing the local session.", error);
+    } catch {
+      // ignore logout errors — clear locally either way
     }
     authStorage.clearAll();
     setIsLoggedIn(false);
@@ -91,7 +54,7 @@ const Navbar = ({ solid }: { solid?: boolean }) => {
   };
 
   return (
-    <nav className={`${overlayLayers.navigation} sticky top-0 p-4`}>
+    <nav className="sticky top-0 z-50 p-4">
       <div className="container mx-auto max-w-7xl">
         <div className={`rounded-full px-6 py-3 flex items-center justify-between transition-all duration-300 ${scrolled && !solid ? 'liquid-glass' : ''}`}>
           <Link to="/" className="flex items-center gap-2">
@@ -101,7 +64,7 @@ const Navbar = ({ solid }: { solid?: boolean }) => {
             <span className="text-xl font-bold tracking-wide">Glinter</span>
           </Link>
 
-          <div className="hidden xl:flex items-center gap-6 text-sm font-medium">
+          <div className="hidden md:flex items-center gap-6 text-sm font-medium">
             {navItems.map((item) => {
               const isActive = location.pathname === item.path;
               return (
@@ -112,11 +75,6 @@ const Navbar = ({ solid }: { solid?: boolean }) => {
                 >
                   <item.icon className="w-4 h-4" />
                   {item.label}
-                  {item.path === "/messages" && notificationUnread > 0 && (
-                    <span className="rounded-full bg-accent px-1.5 py-0.5 text-[10px] text-accent-foreground">
-                      {notificationUnread}
-                    </span>
-                  )}
                 </Link>
               );
             })}
@@ -132,23 +90,14 @@ const Navbar = ({ solid }: { solid?: boolean }) => {
                 Admin
               </Link>
             )}
-            {isLoggedIn && authStorage.hasAnyRole(["Traveler"]) && (
-              <Link
-                to="/saved"
-                className="hidden lg:flex items-center gap-2 px-3 py-2 text-sm text-gray-400 hover:text-white transition-colors"
-              >
-                <Bookmark className="w-4 h-4" />
-                Saved
-              </Link>
-            )}
             {isLoggedIn ? (
               <>
-                <Link to={accountHome} className="w-9 h-9 rounded-full bg-brand-purple flex items-center justify-center border-2 border-brand-glassBorder hover:opacity-80 transition-opacity">
+                <Link to="/dashboard" className="w-9 h-9 rounded-full bg-brand-purple flex items-center justify-center border-2 border-brand-glassBorder hover:opacity-80 transition-opacity">
                   <User className="w-4 h-4 text-white" />
                 </Link>
                 <button
                   onClick={() => { handleLogout(); }}
-                  className="hidden xl:flex items-center gap-2 px-3 py-2 text-sm font-medium text-brand-gold hover:opacity-80 transition-opacity"
+                  className="hidden md:flex items-center gap-2 px-3 py-2 text-sm font-medium text-brand-gold hover:opacity-80 transition-opacity"
                 >
                   <LogIn className="w-4 h-4" />
                   Logout
@@ -157,7 +106,7 @@ const Navbar = ({ solid }: { solid?: boolean }) => {
             ) : (
               <Link
                 to="/auth"
-                className="hidden xl:flex items-center gap-2 px-3 py-2 text-sm font-medium text-brand-gold hover:opacity-80 transition-opacity"
+                className="hidden md:flex items-center gap-2 px-3 py-2 text-sm font-medium text-brand-gold hover:opacity-80 transition-opacity"
               >
                 <LogIn className="w-4 h-4" />
                 Login
@@ -165,7 +114,7 @@ const Navbar = ({ solid }: { solid?: boolean }) => {
             )}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="xl:hidden p-2 rounded-lg hover:bg-white/5 transition-colors"
+              className="md:hidden p-2 rounded-lg hover:bg-white/5 transition-colors"
             >
               {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
@@ -179,7 +128,7 @@ const Navbar = ({ solid }: { solid?: boolean }) => {
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="xl:hidden container mx-auto max-w-7xl px-4 mt-2"
+            className="md:hidden container mx-auto max-w-7xl px-4 mt-2"
           >
             <div className="liquid-glass rounded-2xl p-4 space-y-2">
               {navItems.map((item) => {
@@ -195,11 +144,6 @@ const Navbar = ({ solid }: { solid?: boolean }) => {
                   >
                     <item.icon className="w-5 h-5" />
                     {item.label}
-                    {item.path === "/messages" && notificationUnread > 0 && (
-                      <span className="ml-auto rounded-full bg-accent px-2 py-0.5 text-[10px] text-accent-foreground">
-                        {notificationUnread}
-                      </span>
-                    )}
                   </Link>
                 );
               })}
@@ -212,15 +156,9 @@ const Navbar = ({ solid }: { solid?: boolean }) => {
                         Admin
                       </Link>
                     )}
-                    {authStorage.hasAnyRole(["Traveler"]) && (
-                      <Link to="/saved" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-gray-300 hover:bg-white/5 transition-all">
-                        <Bookmark className="w-5 h-5" />
-                        Saved trips & hotels
-                      </Link>
-                    )}
-                    <Link to={accountHome} onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-gray-300 hover:bg-white/5 transition-all">
+                    <Link to="/dashboard" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-gray-300 hover:bg-white/5 transition-all">
                       <User className="w-5 h-5" />
-                      Account
+                      Dashboard
                     </Link>
                   </>
                 )}

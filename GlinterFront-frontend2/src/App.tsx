@@ -148,6 +148,7 @@ const ProfileSetupPage = lazy(() => import("./features/profile/ProfileSetupPage"
 const NotFound = lazy(() => import("./pages/NotFound"));
 const Saved = lazy(() => import("./features/saved/SavedPage"));
 const SavedItineraryDetails = lazy(() => import("./features/saved/SavedItineraryDetailsPage"));
+import CinematicHomePage from "./components/CinematicHomePage";
 
 const queryClient = new QueryClient();
 
@@ -169,7 +170,7 @@ const App = () => (
           </div>
         )}>
         <Routes>
-          <Route path="/" element={<Explore />} />
+          <Route path="/" element={<CinematicHomePage />} />
           <Route path="/auth" element={<RedirectIfAuthenticated><Auth /></RedirectIfAuthenticated>} />
           <Route path="/confirm-email" element={<Auth initialView="confirm-email" />} />
           <Route path="/reset-password" element={<Auth initialView="reset-password" />} />
